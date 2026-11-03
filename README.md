@@ -1,4 +1,4 @@
-# Neira - Automated JEE Exam Evaluation Backend
+# Ahh-Silance - Automated JEE Evaluation
 
 An automated evaluation pipeline for Joint Entrance Examination (JEE) test papers and OMR answer sheets. The platform extracts student responses across multiple-choice questions (Section A) and numerical value problems (Section B), evaluates them against master answer keys, enforces strict JEE marking schemes (including the Section B First-5 Attempt rule), and outputs instant verified scorecards.
 
