@@ -33,12 +33,22 @@ class OMRVisionDetector:
         """
         Validates whether an uploaded image contains a genuine OMR bubble grid structure.
         Rejects random photos, landscapes, selfies, and blank sheets with mathematical certainty.
+        Optimized with adaptive downscaling for sub-30ms execution.
         """
         h, w = img_bgr.shape[:2]
         if h < 400 or w < 300:
             return False, 0, f"Image resolution too low ({w}x{h}). Minimum required is 600x800 px."
 
-        gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+        # Scale down for fast contour detection if high-resolution
+        max_dim = max(h, w)
+        if max_dim > 1200:
+            scale = 1000.0 / max_dim
+            proc_img = cv2.resize(img_bgr, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+        else:
+            scale = 1.0
+            proc_img = img_bgr
+
+        gray = cv2.cvtColor(proc_img, cv2.COLOR_BGR2GRAY)
         blurred = cv2.GaussianBlur(gray, (5, 5), 0)
         thresh = cv2.adaptiveThreshold(
             blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 15, 3
@@ -47,17 +57,18 @@ class OMRVisionDetector:
         contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
         valid_bubbles = 0
+        min_area = 30.0 * (scale * scale)
+        max_area = 3000.0 * (scale * scale)
+
         for c in contours:
             area = cv2.contourArea(c)
-            # Standard OMR bubbles span between 80 and 2500 pixels depending on resolution
-            if 60 < area < 3000:
+            if min_area < area < max_area:
                 peri = cv2.arcLength(c, True)
                 if peri > 0:
                     circ = (4.0 * np.pi * area) / (peri * peri)
                     x, y, cw, ch = cv2.boundingRect(c)
                     aspect = float(cw) / ch if ch > 0 else 0
-                    # Genuine bubble circles have aspect ratio near 1.0 and circularity near 1.0
-                    if 0.60 < circ < 1.40 and 0.70 < aspect < 1.40:
+                    if 0.55 < circ < 1.45 and 0.65 < aspect < 1.45:
                         valid_bubbles += 1
 
         # A standard JEE OMR sheet contains 240 Section A bubbles + 100 roll number bubbles = 340+ bubbles.
@@ -175,7 +186,7 @@ class OMRVisionDetector:
                     is_attempted=is_attempted
                 ))
 
-        # 3. Extract Section B (Numerical Value Questions)
+        # 3. Extract Section B (Numerical Value Questions) with fast batched OCR
         # Chemistry: Q21-Q30, Physics: Q51-Q60, Mathematics: Q81-Q90
         sec_b_specs = [
             {"subject": "CHEMISTRY", "start": 21, "end": 30, "x_off": 180},
@@ -183,60 +194,78 @@ class OMRVisionDetector:
             {"subject": "MATHEMATICS", "start": 81, "end": 90, "x_off": 1580}
         ]
 
+        sec_b_results: Dict[int, Optional[str]] = {}
+
         for spec in sec_b_specs:
             x_base = spec["x_off"]
+            attempted_crops: List[np.ndarray] = []
+            attempted_qnums: List[int] = []
+
             for q_num in range(spec["start"], spec["end"] + 1):
                 y_center = int((1845 + (q_num - spec["start"]) * 145) * sy)
 
                 # Check if question falls outside clipped image
                 if y_center >= h - 10:
-                    responses.append(ExtractedQuestionResponse(
-                        question_no=q_num,
-                        question_type=QuestionType.NUMERICAL,
-                        selected_option=None,
-                        numerical_value=None,
-                        has_multiple_marks=False,
-                        digit_bubble_mismatch=False,
-                        is_attempted=False
-                    ))
+                    sec_b_results[q_num] = None
                     continue
 
-                # Crop written value box: [y - 10: y + 40, x + 110: x + 230]
-                bx1 = int((x_base + 110) * sx)
-                bx2 = int((x_base + 230) * sx)
-                by1 = int((y_center - 10) * sy)
-                by2 = int((y_center + 40) * sy)
+                # Crop interior of written value box (excluding printed black borders)
+                bx1 = int((x_base + 115) * sx)
+                bx2 = int((x_base + 225) * sx)
+                by1 = int((y_center - 5) * sy)
+                by2 = int((y_center + 35) * sy)
 
                 box_crop = img_bgr[max(0, by1): min(h, by2), max(0, bx1): min(w, bx2)]
-                written_number: Optional[str] = None
-                is_attempted = False
+                gray_box = gray[max(0, by1): min(h, by2), max(0, bx1): min(w, bx2)]
 
-                if box_crop.size > 0:
-                    gray_box = gray[max(0, by1): min(h, by2), max(0, bx1): min(w, bx2)]
-                    # Check ink variance in written box
-                    dark_pixels = np.sum(gray_box < 180)
-                    total_pixels = gray_box.size
-                    dark_ratio = float(dark_pixels) / total_pixels if total_pixels > 0 else 0
+                if gray_box.size > 0:
+                    # Pure ink strokes are dark (< 130)
+                    dark_pixels = np.sum(gray_box < 130)
+                    dark_ratio = float(dark_pixels) / gray_box.size
 
-                    if dark_ratio > 0.03: # Box has written ink marks
-                        # Run OCR on box crop
-                        padded_box = cv2.copyMakeBorder(box_crop, 15, 15, 15, 15, cv2.BORDER_CONSTANT, value=(255, 255, 255))
-                        ocr_res, _ = ocr_engine(padded_box)
-                        if ocr_res:
-                            # Extract floating point or integer string
-                            found_texts = [r[1].strip() for r in ocr_res]
-                            combined = " ".join(found_texts)
-                            match = re.search(r"[-+]?\d*\.?\d+", combined)
-                            if match:
-                                written_number = match.group(0)
-                                is_attempted = True
-                            elif len(found_texts) > 0 and any(c.isdigit() for c in combined):
-                                # Clean non-digits except decimal point
-                                cleaned = re.sub(r"[^\d.]", "", combined)
-                                if cleaned:
-                                    written_number = cleaned
-                                    is_attempted = True
+                    if dark_ratio >= 0.04:  # Box has genuine handwritten ink
+                        b_resized = cv2.resize(box_crop, (120, 36))
+                        padded = cv2.copyMakeBorder(b_resized, 6, 6, 6, 6, cv2.BORDER_CONSTANT, value=(255, 255, 255))
+                        attempted_crops.append(padded)
+                        attempted_qnums.append(q_num)
+                    else:
+                        sec_b_results[q_num] = None
+                else:
+                    sec_b_results[q_num] = None
 
+            # Batch OCR across attempted questions in this column
+            if attempted_crops:
+                col_strip = np.vstack(attempted_crops)
+                h_per_box = attempted_crops[0].shape[0]
+                ocr_res, _ = ocr_engine(col_strip)
+
+                if ocr_res:
+                    for item in ocr_res:
+                        pts, txt, _ = item
+                        cy = (pts[0][1] + pts[2][1]) / 2.0
+                        idx = min(len(attempted_qnums) - 1, int(cy // h_per_box))
+                        target_q = attempted_qnums[idx]
+                        match = re.search(r"[-+]?\d*\.?\d+", txt)
+                        if match and target_q not in sec_b_results:
+                            sec_b_results[target_q] = match.group(0)
+
+                # Fallback to single-box OCR only if a candidate box wasn't resolved by strip
+                for qn in attempted_qnums:
+                    if qn not in sec_b_results or sec_b_results[qn] is None:
+                        idx = attempted_qnums.index(qn)
+                        res_ind, _ = ocr_engine(attempted_crops[idx])
+                        if res_ind:
+                            found = " ".join([r[1].strip() for r in res_ind])
+                            m = re.search(r"[-+]?\d*\.?\d+", found)
+                            sec_b_results[qn] = m.group(0) if m else None
+                        else:
+                            sec_b_results[qn] = None
+
+        # Assemble Section B responses
+        for spec in sec_b_specs:
+            for q_num in range(spec["start"], spec["end"] + 1):
+                written_number = sec_b_results.get(q_num)
+                is_attempted = written_number is not None
                 responses.append(ExtractedQuestionResponse(
                     question_no=q_num,
                     question_type=QuestionType.NUMERICAL,

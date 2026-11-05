@@ -9,10 +9,11 @@
 import React, { useState } from "react";
 import { FileUploadDropzone } from "../components/FileUploadDropzone";
 import { CameraCapture } from "../components/CameraCapture";
+import { DocumentViewerModal } from "../components/DocumentViewerModal";
 import { evaluateApi } from "../api/evaluateApi";
 import { apiClient } from "../api/client";
 import type { EvaluationScorecard } from "../types/evaluation";
-import { FileSpreadsheet, BookOpen, AlertCircle, ArrowRight, Sparkles } from "lucide-react";
+import { FileSpreadsheet, BookOpen, AlertCircle, ArrowRight, Sparkles, Zap } from "lucide-react";
 
 interface DashboardPageProps {
   /** Callback fired when evaluation succeeds, passing the resulting scorecard */
@@ -27,6 +28,19 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onEvaluationComple
   const [sheetFile, setSheetFile] = useState<File | null>(null);
   const [answerKeyFile, setAnswerKeyFile] = useState<File | null>(null);
 
+  // Background Pre-Scanning States
+  const [sheetScanStatus, setSheetScanStatus] = useState<"idle" | "scanning" | "ready" | "error">("idle");
+  const [sheetScanMessage, setSheetScanMessage] = useState<string | null>(null);
+  const [sheetHash, setSheetHash] = useState<string | null>(null);
+
+  const [keyScanStatus, setKeyScanStatus] = useState<"idle" | "scanning" | "ready" | "error">("idle");
+  const [keyScanMessage, setKeyScanMessage] = useState<string | null>(null);
+  const [keyHash, setKeyHash] = useState<string | null>(null);
+
+  // In-App Document Viewer State
+  const [viewerFile, setViewerFile] = useState<File | null>(null);
+  const [viewerTitle, setViewerTitle] = useState<string>("Document Viewer");
+
   // Exam ID & Candidate Details
   const [examId, setExamId] = useState("JEE_Main_2025_Jan_22_Shift1");
   const [candidateName, setCandidateName] = useState("Student Candidate");
@@ -40,19 +54,80 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onEvaluationComple
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   /**
+   * Handles student sheet file selection and immediately begins background pre-scanning.
+   */
+  const handleSheetSelect = (file: File | null) => {
+    setSheetFile(file);
+    setSheetHash(null);
+
+    if (!file) {
+      setSheetScanStatus("idle");
+      setSheetScanMessage(null);
+      return;
+    }
+
+    setSheetScanStatus("scanning");
+    setSheetScanMessage("Scanning bubble grid & detecting marks in background...");
+
+    evaluateApi.prescanSheet(file)
+      .then((res) => {
+        setSheetHash(res.sheet_hash);
+        setSheetScanStatus("ready");
+        const bubbles = res.detected_bubbles || 0;
+        const attempts = res.attempted_count || 0;
+        setSheetScanMessage(`✓ Pre-scanned: ${bubbles} bubbles verified • Roll #${res.roll_number || "Detected"} • ${attempts} attempted`);
+      })
+      .catch((err) => {
+        console.warn("Background sheet pre-scan error:", err);
+        setSheetScanStatus("error");
+        setSheetScanMessage(err.response?.data?.detail || "Could not pre-verify OMR. Evaluation will process upon submission.");
+      });
+  };
+
+  /**
+   * Handles answer key file selection and immediately begins background parsing.
+   */
+  const handleKeySelect = (file: File | null) => {
+    setAnswerKeyFile(file);
+    setKeyHash(null);
+
+    if (!file) {
+      setKeyScanStatus("idle");
+      setKeyScanMessage(null);
+      return;
+    }
+
+    setKeyScanStatus("scanning");
+    setKeyScanMessage("Pre-parsing master answer key in background...");
+
+    evaluateApi.prescanKey(file, examId)
+      .then((res) => {
+        setKeyHash(res.key_hash);
+        setKeyScanStatus("ready");
+        setKeyScanMessage(`✓ Key Ready: ${res.total_questions || 90} master keys loaded • Booklet ${res.booklet_code || "SET A"}`);
+      })
+      .catch((err) => {
+        console.warn("Background key pre-parse error:", err);
+        setKeyScanStatus("error");
+        setKeyScanMessage(err.response?.data?.detail || "Could not parse key structure.");
+      });
+  };
+
+  /**
    * Handles camera snapshot capture and binds to active file state.
    */
   const handleCameraCapture = (capturedFile: File) => {
     if (cameraActiveFor === "sheet") {
-      setSheetFile(capturedFile);
+      handleSheetSelect(capturedFile);
     } else if (cameraActiveFor === "answerKey") {
-      setAnswerKeyFile(capturedFile);
+      handleKeySelect(capturedFile);
     }
     setCameraActiveFor(null);
   };
 
   /**
-   * Loads both the document and its matching answer key from the external_test dataset.
+   * Loads both the document and its matching answer key from the external_test dataset
+   * and triggers background pre-scanning immediately.
    */
   const handleLoadExternalPreset = async (presetKey: "omr1" | "omr2" | "pdf10") => {
     setErrorMessage(null);
@@ -83,8 +158,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onEvaluationComple
       const keyRes = await apiClient.get(`/evaluate/sample-file?filename=${keyName}`, { responseType: "blob" });
       const loadedKey = new File([keyRes.data], keyName, { type: keyRes.data.type || "application/json" });
 
-      setSheetFile(loadedSheet);
-      setAnswerKeyFile(loadedKey);
+      handleSheetSelect(loadedSheet);
+      handleKeySelect(loadedKey);
     } catch (e) {
       console.error("Failed to load preset:", e);
       setErrorMessage("Could not load external test preset files from the server.");
@@ -95,9 +170,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onEvaluationComple
 
   /**
    * Dispatches evaluation request to backend API.
+   * If files were pre-scanned in background, returns scorecard in <10ms.
    */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (!sheetFile) {
       setErrorMessage("Please select or photograph the student document (OMR sheet or marked question paper).");
       return;
@@ -115,6 +192,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onEvaluationComple
       const scorecard = await evaluateApi.evaluateUpload({
         sheetFile,
         answerKeyFile,
+        sheetHash: sheetHash || undefined,
+        keyHash: keyHash || undefined,
         examId,
         mode: evaluationMode,
         candidateName
@@ -280,8 +359,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onEvaluationComple
               label={evaluationMode === "omr" ? "Candidate OMR Sheet (Required)" : "Marked Question Paper PDF (Required)"}
               description="PNG, JPG, JPEG, or PDF"
               selectedFile={sheetFile}
-              onFileSelect={setSheetFile}
+              onFileSelect={handleSheetSelect}
               onTriggerCamera={() => setCameraActiveFor("sheet")}
+              onViewFile={() => {
+                setViewerFile(sheetFile);
+                setViewerTitle("Student Response Document");
+              }}
+              scanStatus={sheetScanStatus}
+              scanMessage={sheetScanMessage}
             />
           </div>
 
@@ -303,8 +388,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onEvaluationComple
               label="Master Answer Key File (Required)"
               description="Upload JSON (e.g. {'1': 'A'}), CSV ('1,A'), or TXT ('Q1: A')"
               selectedFile={answerKeyFile}
-              onFileSelect={setAnswerKeyFile}
+              onFileSelect={handleKeySelect}
               onTriggerCamera={() => setCameraActiveFor("answerKey")}
+              onViewFile={() => {
+                setViewerFile(answerKeyFile);
+                setViewerTitle("Master Answer Key");
+              }}
+              scanStatus={keyScanStatus}
+              scanMessage={keyScanMessage}
               accept=".json,.csv,.txt,.dat,image/*"
             />
           </div>
@@ -376,10 +467,31 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onEvaluationComple
               type="submit"
               disabled={isSubmitting || !sheetFile || !answerKeyFile}
               className="btn btn-primary"
-              style={{ width: "100%", padding: "0.85rem", fontSize: "1rem" }}
+              style={{
+                width: "100%",
+                padding: "0.85rem",
+                fontSize: "1rem",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "0.5rem"
+              }}
             >
-              {isSubmitting ? "Evaluating Against Uploaded Answer Key..." : "Evaluate Sheet & View Final Result"}
-              {!isSubmitting && <ArrowRight size={18} />}
+              {isSubmitting ? (
+                "Evaluating Against Uploaded Answer Key..."
+              ) : (
+                <>
+                  {sheetScanStatus === "ready" && keyScanStatus === "ready" ? (
+                    <>
+                      <Zap size={18} fill="#ffffff" />
+                      <span>Instant Evaluate & View Result (Pre-Scanned)</span>
+                    </>
+                  ) : (
+                    <span>Evaluate Sheet & View Final Result</span>
+                  )}
+                  <ArrowRight size={18} />
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -391,6 +503,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onEvaluationComple
           documentLabel={cameraActiveFor === "sheet" ? "Student Sheet" : "Answer Key"}
           onCapture={handleCameraCapture}
           onClose={() => setCameraActiveFor(null)}
+        />
+      )}
+
+      {/* Document In-App Viewer Modal */}
+      {viewerFile && (
+        <DocumentViewerModal
+          file={viewerFile}
+          title={viewerTitle}
+          onClose={() => setViewerFile(null)}
         />
       )}
     </div>

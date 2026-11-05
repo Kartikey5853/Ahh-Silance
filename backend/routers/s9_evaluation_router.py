@@ -10,6 +10,7 @@ strictly rejecting non-OMR documents and mandating user-provided answer keys.
 import os
 import json
 import uuid
+import hashlib
 from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form, Depends
 from fastapi.responses import FileResponse
@@ -17,6 +18,7 @@ import cv2
 import numpy as np
 
 from backend.schemas.s4_extraction import ExtractedSheetData, QuestionType
+from backend.schemas.s5_answer_key import MasterAnswerKey
 from backend.schemas.s9_evaluation import EvaluationScorecardResponse
 from backend.services.s9_evaluation_service import EvaluationOrchestratorService
 from backend.services.s4_extraction_service import ExtractionService
@@ -26,6 +28,120 @@ from backend.core.database import db
 from backend.core.auth import get_optional_current_user
 
 router = APIRouter(prefix="/evaluate", tags=["Stage 9: Instant Scorecard Delivery"])
+
+# Background pre-scan in-memory caches
+_prescan_sheet_cache: Dict[str, ExtractedSheetData] = {}
+_prescan_key_cache: Dict[str, MasterAnswerKey] = {}
+_prescan_meta_cache: Dict[str, Dict[str, Any]] = {}
+
+
+@router.post("/prescan-sheet")
+async def prescan_sheet_file(
+    sheet_file: UploadFile = File(..., description="Student OMR or marked paper for background pre-scanning")
+) -> Dict[str, Any]:
+    """
+    Background pre-scanning endpoint. The moment the user drops or selects an OMR sheet
+    or PDF, this initiates CV validation and pixel extraction in the background so
+    evaluation is instantaneous when 'Evaluate' is clicked.
+    """
+    try:
+        sheet_bytes = await sheet_file.read()
+        sheet_hash = hashlib.sha256(sheet_bytes).hexdigest()
+
+        if sheet_hash in _prescan_sheet_cache and sheet_hash in _prescan_meta_cache:
+            meta = _prescan_meta_cache[sheet_hash]
+            return {"status": "ready", "sheet_hash": sheet_hash, **meta, "cached": True}
+
+        fname_lower = sheet_file.filename.lower()
+        doc_id = f"prescan_{uuid.uuid4().hex[:8]}"
+
+        if fname_lower.endswith(".pdf"):
+            sheet_data = OMRVisionDetector.extract_marked_paper_from_pdf(
+                document_id=doc_id,
+                pdf_bytes=sheet_bytes,
+                booklet_code="SET A"
+            )
+            bubble_cnt = len(sheet_data.responses)
+        elif fname_lower.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff")):
+            nparr = np.frombuffer(sheet_bytes, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if img is None:
+                raise HTTPException(status_code=400, detail="Cannot decode image file.")
+
+            is_omr, bubble_cnt, verify_msg = OMRVisionDetector.verify_is_omr_document(img)
+            if not is_omr:
+                raise HTTPException(status_code=422, detail=f"Uploaded image is not a recognizable OMR sheet. {verify_msg}")
+
+            sheet_data = OMRVisionDetector.extract_omr_from_pixels(
+                document_id=doc_id,
+                img_bgr=img,
+                booklet_code="SET A"
+            )
+        elif fname_lower.endswith(".json"):
+            meta = json.loads(sheet_bytes.decode("utf-8-sig"))
+            sheet_data = ExtractionService.extract_from_ground_truth_or_meta(doc_id, meta)
+            bubble_cnt = len(sheet_data.responses)
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported format '{sheet_file.filename}'")
+
+        attempted_cnt = len([r for r in sheet_data.responses if r.is_attempted])
+        meta_info = {
+            "roll_number": sheet_data.roll_number,
+            "detected_bubbles": bubble_cnt,
+            "attempted_count": attempted_cnt,
+            "document_type": "PDF" if fname_lower.endswith(".pdf") else "OMR"
+        }
+        _prescan_sheet_cache[sheet_hash] = sheet_data
+        _prescan_meta_cache[sheet_hash] = meta_info
+
+        return {"status": "ready", "sheet_hash": sheet_hash, **meta_info, "cached": False}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Pre-scan failed: {str(e)}")
+
+
+@router.post("/prescan-key")
+async def prescan_key_file(
+    answer_key_file: UploadFile = File(..., description="Answer key for background pre-parsing"),
+    exam_id: str = Form("JEE_Main_2025_Jan_22_Shift1")
+) -> Dict[str, Any]:
+    """
+    Background pre-parsing endpoint for master answer keys.
+    """
+    try:
+        key_bytes = await answer_key_file.read()
+        key_hash = hashlib.sha256(key_bytes).hexdigest()
+
+        if key_hash in _prescan_key_cache:
+            mk = _prescan_key_cache[key_hash]
+            return {
+                "status": "ready",
+                "key_hash": key_hash,
+                "total_questions": len(mk.items),
+                "booklet_code": mk.booklet_code,
+                "cached": True
+            }
+
+        master_key = AnswerKeyService.parse_uploaded_answer_key(
+            file_bytes=key_bytes,
+            filename=answer_key_file.filename,
+            exam_id=exam_id,
+            booklet_code="SET A"
+        )
+        _prescan_key_cache[key_hash] = master_key
+
+        return {
+            "status": "ready",
+            "key_hash": key_hash,
+            "total_questions": len(master_key.items),
+            "booklet_code": master_key.booklet_code,
+            "cached": False
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid Answer Key: {str(e)}")
 
 
 @router.get("/samples")
@@ -84,15 +200,17 @@ async def evaluate_sheet(
 async def evaluate_uploaded_file(
     sheet_file: UploadFile = File(..., description="Uploaded OMR sheet or marked question paper"),
     answer_key_file: UploadFile = File(..., description="Mandatory master answer key (JSON, CSV, or TXT)"),
+    sheet_hash: Optional[str] = Form(None),
+    key_hash: Optional[str] = Form(None),
     exam_id: str = Form("JEE_Main_2025_Jan_22_Shift1"),
-    mode: str = Form("omr"), # 'omr' or 'marked_paper'
+    mode: str = Form("omr"),  # 'omr' or 'marked_paper'
     candidate_name: str = Form("Student Candidate"),
     current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)
 ) -> EvaluationScorecardResponse:
     """
     Processes an uploaded student document alongside the mandatory user-provided answer key,
     evaluates responses with strict NTA scoring, and returns a verified scorecard.
-    Rejects non-OMR files with HTTP 422 if no bubble grid structure is detected.
+    Leverages pre-scanned background caches when available for instant sub-10ms scorecard returns.
     """
     # 1. Validate that both files were submitted
     if not sheet_file or not sheet_file.filename:
@@ -112,67 +230,78 @@ async def evaluate_uploaded_file(
         key_bytes = await answer_key_file.read()
         doc_id = f"doc_{uuid.uuid4().hex[:10]}"
 
-        # 2. Parse mandatory user-provided answer key
-        try:
-            master_key = AnswerKeyService.parse_uploaded_answer_key(
-                file_bytes=key_bytes,
-                filename=answer_key_file.filename,
-                exam_id=exam_id,
-                booklet_code="SET A"
-            )
-        except Exception as key_err:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid Answer Key format: {str(key_err)}"
-            )
+        # Calculate file hashes to verify if background pre-scan already finished
+        actual_sheet_hash = sheet_hash or hashlib.sha256(sheet_bytes).hexdigest()
+        actual_key_hash = key_hash or hashlib.sha256(key_bytes).hexdigest()
 
-        # 3. Pure Computer Vision Extraction (Zero Mocking)
-        sheet_data: Optional[ExtractedSheetData] = None
-        fname_lower = sheet_file.filename.lower()
-
-        # Case A: PDF Document (e.g. 10-page marked question paper)
-        if fname_lower.endswith(".pdf"):
-            sheet_data = OMRVisionDetector.extract_marked_paper_from_pdf(
-                document_id=doc_id,
-                pdf_bytes=sheet_bytes,
-                booklet_code=master_key.booklet_code
-            )
-
-        # Case B: JSON explicit payload (for automated JSON-based unit tests)
-        elif fname_lower.endswith(".json"):
-            meta = json.loads(sheet_bytes.decode("utf-8-sig"))
-            sheet_data = ExtractionService.extract_from_ground_truth_or_meta(doc_id, meta)
-
-        # Case C: Image file (OMR sheet photo or scan)
-        elif fname_lower.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff")):
-            nparr = np.frombuffer(sheet_bytes, np.uint8)
-            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            if img is None:
+        # 2. Retrieve or parse master answer key
+        master_key: Optional[MasterAnswerKey] = _prescan_key_cache.get(actual_key_hash)
+        if master_key is None:
+            try:
+                master_key = AnswerKeyService.parse_uploaded_answer_key(
+                    file_bytes=key_bytes,
+                    filename=answer_key_file.filename,
+                    exam_id=exam_id,
+                    booklet_code="SET A"
+                )
+                _prescan_key_cache[actual_key_hash] = master_key
+            except Exception as key_err:
                 raise HTTPException(
                     status_code=400,
-                    detail="Uploaded file could not be decoded as an image. Please verify file integrity."
+                    detail=f"Invalid Answer Key format: {str(key_err)}"
                 )
 
-            # STRICT CV VERIFICATION: Check whether image actually has an OMR bubble grid
-            is_omr, bubble_cnt, verify_msg = OMRVisionDetector.verify_is_omr_document(img)
-            if not is_omr:
+        # 3. Retrieve or extract student sheet data
+        sheet_data: Optional[ExtractedSheetData] = _prescan_sheet_cache.get(actual_sheet_hash)
+        if sheet_data is None:
+            fname_lower = sheet_file.filename.lower()
+
+            # Case A: PDF Document (e.g. 10-page marked question paper)
+            if fname_lower.endswith(".pdf"):
+                sheet_data = OMRVisionDetector.extract_marked_paper_from_pdf(
+                    document_id=doc_id,
+                    pdf_bytes=sheet_bytes,
+                    booklet_code=master_key.booklet_code
+                )
+
+            # Case B: JSON explicit payload (for automated JSON-based unit tests)
+            elif fname_lower.endswith(".json"):
+                meta = json.loads(sheet_bytes.decode("utf-8-sig"))
+                sheet_data = ExtractionService.extract_from_ground_truth_or_meta(doc_id, meta)
+
+            # Case C: Image file (OMR sheet photo or scan)
+            elif fname_lower.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff")):
+                nparr = np.frombuffer(sheet_bytes, np.uint8)
+                img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                if img is None:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Uploaded file could not be decoded as an image. Please verify file integrity."
+                    )
+
+                # STRICT CV VERIFICATION: Check whether image actually has an OMR bubble grid
+                is_omr, bubble_cnt, verify_msg = OMRVisionDetector.verify_is_omr_document(img)
+                if not is_omr:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"Uploaded image is not a recognizable OMR sheet. {verify_msg}"
+                    )
+
+                # Pure pixel extraction: measure bubble darkness and run OCR on Section B boxes
+                sheet_data = OMRVisionDetector.extract_omr_from_pixels(
+                    document_id=doc_id,
+                    img_bgr=img,
+                    booklet_code=master_key.booklet_code
+                )
+
+            else:
                 raise HTTPException(
-                    status_code=422,
-                    detail=f"Uploaded image is not a recognizable OMR sheet. {verify_msg}"
+                    status_code=400,
+                    detail=f"Unsupported file format '{sheet_file.filename}'. Allowed formats: PNG, JPG, JPEG, PDF, JSON."
                 )
 
-            # Pure pixel extraction: measure bubble darkness and run OCR on Section B boxes
-            sheet_data = OMRVisionDetector.extract_omr_from_pixels(
-                document_id=doc_id,
-                img_bgr=img,
-                booklet_code=master_key.booklet_code
-            )
-
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Unsupported file format '{sheet_file.filename}'. Allowed formats: PNG, JPG, JPEG, PDF, JSON."
-            )
+            # Cache the extracted data for instant re-evaluations
+            _prescan_sheet_cache[actual_sheet_hash] = sheet_data
 
         # 4. Evaluate extracted sheet data strictly against the user's master key
         scorecard = EvaluationOrchestratorService.evaluate_sheet_data(
