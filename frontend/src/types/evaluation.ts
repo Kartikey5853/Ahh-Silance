@@ -24,8 +24,10 @@ export interface QuestionScoreItem {
   /** Subject title */
   subject: string;
   /** MCQ or NUMERICAL */
-  question_type: string;
-  /** Candidate bubble or written value */
+  question_type?: string;
+  /** Extracted student answer */
+  student_answer?: string | null;
+  /** Candidate bubble or written value (alias for student_answer) */
   candidate_response?: string | null;
   /** Master answer key correct answer */
   correct_answer?: string | null;

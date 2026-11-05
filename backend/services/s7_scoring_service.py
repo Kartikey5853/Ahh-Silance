@@ -85,12 +85,16 @@ class JEEScoringEngine:
 
             # Handle Dropped Questions (Bonus to all students)
             if key_item.is_dropped:
+                ans_val = resp.selected_option if (resp and resp.selected_option) else (resp.numerical_value if resp else None)
+                q_type_str = "NUMERICAL" if key_item.question_type == QuestionType.NUMERICAL else "MCQ"
                 question_scores.append(QuestionScoreResult(
                     question_no=q_no,
                     subject=subj,
+                    question_type=q_type_str,
                     verdict=ScoringVerdict.DROPPED_BONUS,
                     marks_awarded=settings.jee_marks_correct,
-                    student_answer=resp.selected_option if resp else None,
+                    student_answer=ans_val,
+                    candidate_response=ans_val,
                     correct_answer="DROPPED (Bonus +4)",
                     is_ignored_by_first_5_rule=False,
                     audit_note="Question dropped by NTA; full bonus awarded to all candidates."
@@ -101,13 +105,16 @@ class JEEScoringEngine:
 
             # Handle Unattempted Questions
             if not is_attempted:
+                q_type_str = "NUMERICAL" if key_item.question_type == QuestionType.NUMERICAL else "MCQ"
                 correct_desc = ", ".join(key_item.correct_options) if key_item.question_type == QuestionType.MCQ else str(key_item.numerical_exact)
                 question_scores.append(QuestionScoreResult(
                     question_no=q_no,
                     subject=subj,
+                    question_type=q_type_str,
                     verdict=ScoringVerdict.UNATTEMPTED,
                     marks_awarded=settings.jee_marks_unattempted,
                     student_answer=None,
+                    candidate_response=None,
                     correct_answer=correct_desc,
                     is_ignored_by_first_5_rule=False,
                     audit_note="Question left unattempted."
@@ -129,9 +136,11 @@ class JEEScoringEngine:
                     question_scores.append(QuestionScoreResult(
                         question_no=q_no,
                         subject=subj,
+                        question_type="NUMERICAL",
                         verdict=ScoringVerdict.IGNORED_BY_FIRST_5_RULE,
                         marks_awarded=0.0,
                         student_answer=resp.numerical_value,
+                        candidate_response=resp.numerical_value,
                         correct_answer=f"[{key_item.numerical_min}, {key_item.numerical_max}]" if key_item.numerical_min else str(key_item.numerical_exact),
                         is_ignored_by_first_5_rule=True,
                         audit_note=f"Attempt #{current_attempt_idx} in {subj} Section B exceeds limit of 5. Discarded per NTA rules."
@@ -163,12 +172,14 @@ class JEEScoringEngine:
                 question_scores.append(QuestionScoreResult(
                     question_no=q_no,
                     subject=subj,
+                    question_type="NUMERICAL",
                     verdict=verdict,
                     marks_awarded=marks,
                     student_answer=resp.numerical_value,
+                    candidate_response=resp.numerical_value,
                     correct_answer=correct_str,
                     is_ignored_by_first_5_rule=False,
-                    audit_note="Section B evaluated attempt."
+                    audit_note=audit_note
                 ))
                 continue
 
@@ -180,9 +191,11 @@ class JEEScoringEngine:
                 question_scores.append(QuestionScoreResult(
                     question_no=q_no,
                     subject=subj,
+                    question_type="MCQ",
                     verdict=ScoringVerdict.INCORRECT,
                     marks_awarded=settings.jee_marks_incorrect,
                     student_answer="MULTIPLE_BUBBLES",
+                    candidate_response="MULTIPLE_BUBBLES",
                     correct_answer=", ".join(key_item.correct_options),
                     is_ignored_by_first_5_rule=False,
                     audit_note="Candidate shaded multiple bubbles in Section A MCQ."
@@ -193,9 +206,11 @@ class JEEScoringEngine:
                 question_scores.append(QuestionScoreResult(
                     question_no=q_no,
                     subject=subj,
+                    question_type="MCQ",
                     verdict=ScoringVerdict.CORRECT,
                     marks_awarded=settings.jee_marks_correct,
                     student_answer=resp.selected_option,
+                    candidate_response=resp.selected_option,
                     correct_answer=", ".join(key_item.correct_options),
                     is_ignored_by_first_5_rule=False,
                     audit_note="Correct option marked."
@@ -206,9 +221,11 @@ class JEEScoringEngine:
                 question_scores.append(QuestionScoreResult(
                     question_no=q_no,
                     subject=subj,
+                    question_type="MCQ",
                     verdict=ScoringVerdict.INCORRECT,
                     marks_awarded=settings.jee_marks_incorrect,
                     student_answer=resp.selected_option,
+                    candidate_response=resp.selected_option,
                     correct_answer=", ".join(key_item.correct_options),
                     is_ignored_by_first_5_rule=False,
                     audit_note="Incorrect option marked."

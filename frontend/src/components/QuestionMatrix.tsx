@@ -46,6 +46,57 @@ export const QuestionMatrix: React.FC<QuestionMatrixProps> = ({ questions }) => 
     return "Section B (Numerical)";
   };
 
+  /**
+   * Renders the 4 standard OMR bubble circles (A, B, C, D)
+   * highlighting the candidate's marked bubble.
+   */
+  const renderBubbles = (markedOpt: string | null, isCorrect: boolean, isIncorrect: boolean) => {
+    const options = ["A", "B", "C", "D"];
+    return (
+      <div style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+        {options.map((opt) => {
+          const isChosen = markedOpt === opt;
+          let bg = "transparent";
+          let color = "var(--text-muted)";
+          let border = "1px solid var(--border-color)";
+
+          if (isChosen) {
+            bg = isCorrect ? "var(--green)" : isIncorrect ? "var(--red)" : "var(--primary)";
+            color = "#ffffff";
+            border = isCorrect ? "1px solid var(--green)" : isIncorrect ? "1px solid var(--red)" : "1px solid var(--primary)";
+          }
+
+          return (
+            <span
+              key={opt}
+              style={{
+                width: "22px",
+                height: "22px",
+                borderRadius: "50%",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "0.74rem",
+                fontWeight: isChosen ? 700 : 500,
+                backgroundColor: bg,
+                color: color,
+                border: border,
+                boxShadow: isChosen ? "0 1px 3px rgba(0,0,0,0.18)" : "none"
+              }}
+            >
+              {opt}
+            </span>
+          );
+        })}
+        {markedOpt && (
+          <span style={{ marginLeft: "6px", fontWeight: 700, fontSize: "0.85rem", color: isCorrect ? "var(--green)" : isIncorrect ? "var(--red)" : "var(--text-primary)" }}>
+            Option {markedOpt}
+          </span>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="card" style={{ marginTop: "1.5rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem", marginBottom: "1rem" }}>
@@ -140,8 +191,9 @@ export const QuestionMatrix: React.FC<QuestionMatrixProps> = ({ questions }) => 
                 Icon = AlertTriangle;
               }
 
-              const candResp = q.candidate_response ?? (q as any).student_marked ?? (q as any).written_value ?? "—";
+              const candResp = q.student_answer ?? q.candidate_response ?? (q as any).student_marked ?? (q as any).written_value ?? null;
               const correctKey = q.correct_answer ?? (q as any).correct_options?.join(", ") ?? (q as any).numerical_exact ?? "—";
+              const qType = q.question_type || ((q.question_no % 30 >= 1 && q.question_no % 30 <= 20) ? "MCQ" : "NUMERICAL");
 
               return (
                 <tr
@@ -159,14 +211,53 @@ export const QuestionMatrix: React.FC<QuestionMatrixProps> = ({ questions }) => 
                   </td>
                   <td style={{ padding: "0.6rem 0.75rem" }}>
                     <span style={{ fontSize: "0.75rem", padding: "0.15rem 0.4rem", background: "var(--bg-tertiary)", borderRadius: "4px" }}>
-                      {q.question_type}
+                      {qType}
                     </span>
                   </td>
-                  <td style={{ padding: "0.6rem 0.75rem", fontFamily: "var(--font-mono)", fontWeight: 600 }}>
-                    {candResp}
+                  <td style={{ padding: "0.6rem 0.75rem" }}>
+                    {qType === "MCQ" ? (
+                      candResp === "MULTIPLE_BUBBLES" ? (
+                        <span className="badge badge-incorrect" style={{ fontSize: "0.75rem" }}>
+                          Multiple Bubbles Marked
+                        </span>
+                      ) : candResp ? (
+                        renderBubbles(candResp, isCorrect, isIncorrect)
+                      ) : (
+                        <span style={{ color: "var(--text-muted)", fontStyle: "italic", fontSize: "0.82rem" }}>
+                          Unattempted
+                        </span>
+                      )
+                    ) : (
+                      candResp ? (
+                        <span style={{
+                          padding: "0.2rem 0.55rem",
+                          background: isCorrect ? "rgba(16, 185, 129, 0.1)" : isIncorrect ? "rgba(239, 68, 68, 0.1)" : "var(--bg-tertiary)",
+                          border: `1px solid ${isCorrect ? "var(--green)" : isIncorrect ? "var(--red)" : "var(--border-color)"}`,
+                          borderRadius: "4px",
+                          fontWeight: 700,
+                          fontFamily: "var(--font-mono)",
+                          fontSize: "0.85rem",
+                          color: isCorrect ? "var(--green)" : isIncorrect ? "var(--red)" : "var(--text-primary)"
+                        }}>
+                          Written: {candResp}
+                        </span>
+                      ) : (
+                        <span style={{ color: "var(--text-muted)", fontStyle: "italic", fontSize: "0.82rem" }}>
+                          Unattempted
+                        </span>
+                      )
+                    )}
                   </td>
-                  <td style={{ padding: "0.6rem 0.75rem", fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>
-                    {correctKey}
+                  <td style={{ padding: "0.6rem 0.75rem", fontFamily: "var(--font-mono)", color: "var(--text-primary)" }}>
+                    <span style={{
+                      fontWeight: 600,
+                      padding: "0.15rem 0.5rem",
+                      borderRadius: "4px",
+                      backgroundColor: "var(--bg-secondary)",
+                      border: "1px solid var(--border-color)"
+                    }}>
+                      {correctKey}
+                    </span>
                   </td>
                   <td style={{ padding: "0.6rem 0.75rem", fontWeight: 700, color: isCorrect ? "var(--green)" : isIncorrect ? "var(--red)" : "var(--text-muted)" }}>
                     {q.marks_awarded > 0 ? `+${q.marks_awarded}` : q.marks_awarded}
