@@ -19,6 +19,7 @@ from backend.routers.s6_alignment_router import router as s6_router
 from backend.routers.s7_scoring_router import router as s7_router
 from backend.routers.s8_analytics_router import router as s8_router
 from backend.routers.s9_evaluation_router import router as s9_router
+from backend.routers.auth_router import router as auth_router
 
 
 def create_app() -> FastAPI:
@@ -51,6 +52,7 @@ def create_app() -> FastAPI:
     app.include_router(s7_router, prefix=prefix)
     app.include_router(s8_router, prefix=prefix)
     app.include_router(s9_router, prefix=prefix)
+    app.include_router(auth_router, prefix=prefix)
 
     @app.get("/health", tags=["System"])
     async def health_check() -> dict:

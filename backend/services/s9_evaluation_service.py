@@ -94,8 +94,8 @@ class EvaluationOrchestratorService:
             roll_number=sheet_data.roll_number,
             exam_id=exam_id,
             total_score=scoring.total_score,
-            payload=scorecard.model_dump()
+            payload=scorecard.model_dump(mode="json")
         )
-        db.save_scorecard(eval_id, scorecard_model.model_dump())
+        db.save_scorecard(eval_id, scorecard_model.model_dump(mode="json"))
 
         return scorecard

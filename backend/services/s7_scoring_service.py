@@ -117,7 +117,7 @@ class JEEScoringEngine:
 
             # Process Section B (Numerical) Questions
             b_range = subject_section_b_ranges.get(subj, (0, 0))
-            is_section_b = b_range[0] <= q_no <= b_range[1]
+            is_section_b = (b_range[0] <= q_no <= b_range[1]) or (key_item.question_type == QuestionType.NUMERICAL)
 
             if is_section_b:
                 section_b_attempt_counters[subj] += 1
@@ -139,17 +139,25 @@ class JEEScoringEngine:
                     continue
 
                 # Evaluate within the allowed first 5 attempts
-                is_correct = cls.evaluate_numerical_match(resp.numerical_value or "", key_item)
-                if is_correct:
-                    total_score += settings.jee_marks_correct
-                    correct_count += 1
-                    verdict = ScoringVerdict.CORRECT
-                    marks = settings.jee_marks_correct
-                else:
+                audit_note = "Section B evaluated attempt."
+                if resp.digit_bubble_mismatch or resp.has_multiple_marks:
                     total_score += settings.jee_marks_incorrect
                     incorrect_count += 1
                     verdict = ScoringVerdict.INCORRECT
                     marks = settings.jee_marks_incorrect
+                    audit_note = "Section B digit-bubble discrepancy or double-bubbling penalized as incorrect."
+                else:
+                    is_correct = cls.evaluate_numerical_match(resp.numerical_value or "", key_item)
+                    if is_correct:
+                        total_score += settings.jee_marks_correct
+                        correct_count += 1
+                        verdict = ScoringVerdict.CORRECT
+                        marks = settings.jee_marks_correct
+                    else:
+                        total_score += settings.jee_marks_incorrect
+                        incorrect_count += 1
+                        verdict = ScoringVerdict.INCORRECT
+                        marks = settings.jee_marks_incorrect
 
                 correct_str = f"[{key_item.numerical_min}, {key_item.numerical_max}]" if key_item.numerical_min else str(key_item.numerical_exact)
                 question_scores.append(QuestionScoreResult(

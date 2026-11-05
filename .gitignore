@@ -27,7 +27,15 @@ ENV/
 *.swo
 *~
 
-# Operating System files
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Node & Frontend
+node_modules/
+dist/
+.vite/
 Thumbs.db
 ehthumbs.db
 Desktop.ini
