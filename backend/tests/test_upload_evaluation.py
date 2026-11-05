@@ -1,14 +1,19 @@
 """
-Integration tests for document upload and mandatory answer key evaluation.
+Integration tests for document upload, mandatory answer key evaluation,
+and pure computer vision OMR verification.
 
 Validates:
-1. Rejection of uploads missing an answer key file (HTTP 400/422).
-2. End-to-end evaluation of external_test OMR sheets with JSON and CSV answer keys.
-3. End-to-end evaluation of 10-page marked question paper PDF.
-4. Enforcement of the NTA Section B First-5 attempt rule.
+1. Rejection of uploads missing an answer key file (HTTP 400).
+2. Rejection of random/blank non-OMR images (HTTP 422 Unprocessable Entity).
+3. Pure pixel-level extraction of external_test OMR sheets with JSON and CSV answer keys.
+4. End-to-end evaluation of 10-page marked question paper PDF.
+5. Enforcement of the NTA Section B First-5 attempt rule.
 """
 
 import os
+import io
+import cv2
+import numpy as np
 import pytest
 from starlette.testclient import TestClient
 from backend.main import app
@@ -20,7 +25,7 @@ EXTERNAL_TEST_DIR = r"f:\neira\Dataset\external_test"
 
 def test_missing_answer_key_rejected():
     """
-    Validates that attempting evaluation without an answer key file is rejected.
+    Validates that attempting evaluation without an answer key file is rejected with HTTP 400.
     """
     sheet_path = os.path.join(EXTERNAL_TEST_DIR, "omr_sheet_01.png")
     if not os.path.exists(sheet_path):
@@ -35,9 +40,62 @@ def test_missing_answer_key_rejected():
     assert response.status_code in [400, 422]
 
 
+def test_random_image_rejected_with_422():
+    """
+    Validates that uploading a random non-OMR image (e.g. noise or photo) is rejected with 422.
+    """
+    # Create random noise image
+    rand_img = np.random.randint(50, 180, (600, 600, 3), dtype=np.uint8)
+    _, buf = cv2.imencode(".png", rand_img)
+    fake_bytes = io.BytesIO(buf.tobytes())
+
+    key_path = os.path.join(EXTERNAL_TEST_DIR, "answer_key_01.json")
+    if not os.path.exists(key_path):
+        pytest.skip("Answer key file not found")
+
+    with open(key_path, "rb") as f_key:
+        response = client.post(
+            "/api/v1/evaluate/upload",
+            files={
+                "sheet_file": ("random_photo.png", fake_bytes, "image/png"),
+                "answer_key_file": ("answer_key_01.json", f_key, "application/json")
+            },
+            data={"mode": "omr", "exam_id": "TEST_EXAM"}
+        )
+
+    assert response.status_code == 422
+    assert "not a recognizable OMR sheet" in response.json()["detail"]
+
+
+def test_blank_image_rejected_with_422():
+    """
+    Validates that uploading a completely blank image is rejected with 422.
+    """
+    blank_img = np.full((800, 600, 3), 255, dtype=np.uint8)
+    _, buf = cv2.imencode(".png", blank_img)
+    blank_bytes = io.BytesIO(buf.tobytes())
+
+    key_path = os.path.join(EXTERNAL_TEST_DIR, "answer_key_01.json")
+    if not os.path.exists(key_path):
+        pytest.skip("Answer key file not found")
+
+    with open(key_path, "rb") as f_key:
+        response = client.post(
+            "/api/v1/evaluate/upload",
+            files={
+                "sheet_file": ("blank_sheet.png", blank_bytes, "image/png"),
+                "answer_key_file": ("answer_key_01.json", f_key, "application/json")
+            },
+            data={"mode": "omr", "exam_id": "TEST_EXAM"}
+        )
+
+    assert response.status_code == 422
+    assert "not a recognizable OMR sheet" in response.json()["detail"]
+
+
 def test_omr_evaluation_with_json_key():
     """
-    Validates evaluation of omr_sheet_01.png against answer_key_01.json.
+    Validates evaluation of omr_sheet_01.png against answer_key_01.json using pure pixel vision.
     """
     sheet_path = os.path.join(EXTERNAL_TEST_DIR, "omr_sheet_01.png")
     key_path = os.path.join(EXTERNAL_TEST_DIR, "answer_key_01.json")
@@ -84,7 +142,7 @@ def test_omr_evaluation_with_csv_key_and_first5_rule():
 
     assert response.status_code == 200
     card = response.json()
-    # Verified Section B overflow discard
+    assert card["candidate"]["roll_number"] == "2403102288"
     assert card["scoring"]["overflow_ignored_count"] == 2
     assert card["audit_flags"]["has_section_b_overflow"] is True
 

@@ -3,24 +3,25 @@ Stage 9 Router: Unified Evaluation and Instant Scorecard Endpoints.
 
 Coordinates end-to-end evaluation orchestration and retrieves stored
 scorecards with quality control audit flags and SQLite persistence.
-Enforces mandatory user-submitted answer key matching with no default assumptions.
+Enforces pure computer vision extraction without synthetic fallbacks,
+strictly rejecting non-OMR documents and mandating user-provided answer keys.
 """
 
 import os
 import json
 import uuid
-import random
 from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form, Depends
 from fastapi.responses import FileResponse
 import cv2
 import numpy as np
 
-from backend.schemas.s4_extraction import ExtractedSheetData, ExtractedQuestionResponse, QuestionType
+from backend.schemas.s4_extraction import ExtractedSheetData, QuestionType
 from backend.schemas.s9_evaluation import EvaluationScorecardResponse
 from backend.services.s9_evaluation_service import EvaluationOrchestratorService
 from backend.services.s4_extraction_service import ExtractionService
 from backend.services.s5_answer_key_service import AnswerKeyService
+from backend.services.s2_omr_vision_detector import OMRVisionDetector
 from backend.core.database import db
 from backend.core.auth import get_optional_current_user
 
@@ -37,7 +38,9 @@ async def list_available_samples() -> List[Dict[str, str]]:
         return []
     items = []
     for f in os.listdir(sample_dir):
-        items.append({"name": f, "size": str(os.path.getsize(os.path.join(sample_dir, f)))})
+        fp = os.path.join(sample_dir, f)
+        if os.path.isfile(fp):
+            items.append({"name": f, "size": str(os.path.getsize(fp))})
     return items
 
 
@@ -89,12 +92,13 @@ async def evaluate_uploaded_file(
     """
     Processes an uploaded student document alongside the mandatory user-provided answer key,
     evaluates responses with strict NTA scoring, and returns a verified scorecard.
+    Rejects non-OMR files with HTTP 422 if no bubble grid structure is detected.
     """
-    # Validate that both files were submitted
+    # 1. Validate that both files were submitted
     if not sheet_file or not sheet_file.filename:
         raise HTTPException(
             status_code=400,
-            detail="Student document file is required (OMR sheet or marked question paper)."
+            detail="Student document file is missing. Please select an OMR sheet image or marked question paper PDF."
         )
 
     if not answer_key_file or not answer_key_file.filename:
@@ -108,7 +112,7 @@ async def evaluate_uploaded_file(
         key_bytes = await answer_key_file.read()
         doc_id = f"doc_{uuid.uuid4().hex[:10]}"
 
-        # 1. Parse mandatory user-provided answer key
+        # 2. Parse mandatory user-provided answer key
         try:
             master_key = AnswerKeyService.parse_uploaded_answer_key(
                 file_bytes=key_bytes,
@@ -122,96 +126,55 @@ async def evaluate_uploaded_file(
                 detail=f"Invalid Answer Key format: {str(key_err)}"
             )
 
-        # 2. Extract student sheet responses
+        # 3. Pure Computer Vision Extraction (Zero Mocking)
         sheet_data: Optional[ExtractedSheetData] = None
+        fname_lower = sheet_file.filename.lower()
 
-        # Check if the uploaded file is a JSON metadata file directly
-        if sheet_file.filename.lower().endswith(".json"):
+        # Case A: PDF Document (e.g. 10-page marked question paper)
+        if fname_lower.endswith(".pdf"):
+            sheet_data = OMRVisionDetector.extract_marked_paper_from_pdf(
+                document_id=doc_id,
+                pdf_bytes=sheet_bytes,
+                booklet_code=master_key.booklet_code
+            )
+
+        # Case B: JSON explicit payload (for automated JSON-based unit tests)
+        elif fname_lower.endswith(".json"):
             meta = json.loads(sheet_bytes.decode("utf-8-sig"))
             sheet_data = ExtractionService.extract_from_ground_truth_or_meta(doc_id, meta)
-        else:
-            # Search dataset directories for matching sidecar ground truth
-            base_name = os.path.splitext(sheet_file.filename)[0]
-            search_dirs = [
-                r"f:\neira\Dataset\external_test",
-                r"f:\neira\Dataset\synthetically_generated\jee_main_authentic_omrs",
-                r"f:\neira\Dataset\synthetic\omr",
-                r"f:\neira\Dataset\synthetic\marked_papers",
-                r"f:\neira\reports\internal_backend_test\assets"
-            ]
 
-            found_json = None
-            for sdir in search_dirs:
-                cand_path = os.path.join(sdir, f"{base_name}.json")
-                if os.path.exists(cand_path):
-                    try:
-                        with open(cand_path, "r", encoding="utf-8") as f:
-                            found_json = json.load(f)
-                        break
-                    except Exception:
-                        pass
-
-            if found_json:
-                sheet_data = ExtractionService.extract_from_ground_truth_or_meta(doc_id, found_json)
-            else:
-                # Dynamic fallback for arbitrary uploaded photos/scans without sidecar
-                nparr = np.frombuffer(sheet_bytes, np.uint8)
-                img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
-                # Generate high-accuracy responses matching the uploaded master key
-                responses = []
-                seed_val = abs(hash(sheet_file.filename)) % 1000000
-                rng = random.Random(seed_val)
-
-                for item in master_key.items:
-                    q = item.question_no
-                    q_type = item.question_type
-                    is_sec_b = q_type == QuestionType.NUMERICAL
-
-                    if is_sec_b:
-                        # Attempt ~5 numericals per section
-                        attempt = (q % 10) <= 5
-                        if attempt:
-                            cand_val = str(item.numerical_exact) if rng.random() < 0.85 else str(round((item.numerical_exact or 10.0) + 2.0, 1))
-                        else:
-                            cand_val = None
-
-                        responses.append(ExtractedQuestionResponse(
-                            question_no=q,
-                            question_type=q_type,
-                            selected_option=None,
-                            numerical_value=cand_val,
-                            has_multiple_marks=False,
-                            digit_bubble_mismatch=False,
-                            is_attempted=attempt
-                        ))
-                    else:
-                        # MCQ attempt ~85%
-                        attempt = rng.random() > 0.15
-                        if attempt:
-                            correct_opt = item.correct_options[0] if item.correct_options else "A"
-                            cand_opt = correct_opt if rng.random() < 0.78 else rng.choice([o for o in ["A", "B", "C", "D"] if o != correct_opt])
-                        else:
-                            cand_opt = None
-
-                        responses.append(ExtractedQuestionResponse(
-                            question_no=q,
-                            question_type=q_type,
-                            selected_option=cand_opt,
-                            numerical_value=None,
-                            has_multiple_marks=False,
-                            digit_bubble_mismatch=False,
-                            is_attempted=attempt
-                        ))
-
-                sheet_data = ExtractedSheetData(
-                    document_id=doc_id,
-                    roll_number=str(random.randint(2403100000, 2403199999)),
-                    booklet_code=master_key.booklet_code,
-                    responses=responses
+        # Case C: Image file (OMR sheet photo or scan)
+        elif fname_lower.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff")):
+            nparr = np.frombuffer(sheet_bytes, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if img is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Uploaded file could not be decoded as an image. Please verify file integrity."
                 )
 
-        # 3. Evaluate sheet data against user's uploaded master key
+            # STRICT CV VERIFICATION: Check whether image actually has an OMR bubble grid
+            is_omr, bubble_cnt, verify_msg = OMRVisionDetector.verify_is_omr_document(img)
+            if not is_omr:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Uploaded image is not a recognizable OMR sheet. {verify_msg}"
+                )
+
+            # Pure pixel extraction: measure bubble darkness and run OCR on Section B boxes
+            sheet_data = OMRVisionDetector.extract_omr_from_pixels(
+                document_id=doc_id,
+                img_bgr=img,
+                booklet_code=master_key.booklet_code
+            )
+
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file format '{sheet_file.filename}'. Allowed formats: PNG, JPG, JPEG, PDF, JSON."
+            )
+
+        # 4. Evaluate extracted sheet data strictly against the user's master key
         scorecard = EvaluationOrchestratorService.evaluate_sheet_data(
             document_id=doc_id,
             sheet_data=sheet_data,
@@ -220,7 +183,7 @@ async def evaluate_uploaded_file(
             master_key=master_key
         )
 
-        # 4. Associate with user if logged in
+        # 5. Persist to SQLite database with user binding
         user_id = current_user["id"] if current_user else None
         db.save_scorecard(scorecard.evaluation_id, scorecard.model_dump(mode="json"), user_id=user_id)
 
