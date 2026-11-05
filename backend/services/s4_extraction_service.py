@@ -78,6 +78,7 @@ class ExtractionService:
         """
         responses = []
         raw_responses = raw_meta.get("student_responses", {})
+        cand_marks = raw_meta.get("candidate_marks", {})
         sec_a = raw_meta.get("section_a_mcq", {})
         sec_b = raw_meta.get("section_b_numerical", {})
         test_meta = raw_meta.get("test_metadata", {})
@@ -89,7 +90,7 @@ class ExtractionService:
             is_mcq = not ((21 <= q_idx <= 30) or (51 <= q_idx <= 60) or (81 <= q_idx <= 90))
             q_type = QuestionType.MCQ if is_mcq else QuestionType.NUMERICAL
 
-            resp_item = raw_responses.get(q_str) or sec_a.get(q_str) or sec_b.get(q_str)
+            resp_item = raw_responses.get(q_str) or cand_marks.get(q_str) or sec_a.get(q_str) or sec_b.get(q_str)
             if not resp_item:
                 responses.append(ExtractedQuestionResponse(
                     question_no=q_idx,
@@ -102,13 +103,32 @@ class ExtractionService:
                 ))
                 continue
 
-            marked_opt = resp_item.get("marked_option") or resp_item.get("student_marked")
-            num_val = resp_item.get("numerical_value") if resp_item.get("numerical_value") is not None else resp_item.get("written_value")
-            is_attempted = resp_item.get("is_attempted")
-            if is_attempted is None:
-                is_attempted = (marked_opt is not None) or (num_val is not None)
-            has_double = resp_item.get("is_double_bubble", False) or resp_item.get("is_double_marked", False)
-            mismatch = resp_item.get("digit_bubble_mismatch", False) or resp_item.get("has_discrepancy", False)
+            # If resp_item is directly a string (e.g. "A" or "45.0")
+            if isinstance(resp_item, str):
+                val_str = resp_item.strip()
+                if is_mcq:
+                    marked_opt = val_str
+                    num_val = None
+                else:
+                    marked_opt = None
+                    num_val = val_str
+                is_attempted = True
+                has_double = False
+                mismatch = False
+            elif isinstance(resp_item, dict):
+                marked_opt = resp_item.get("marked_option") or resp_item.get("student_marked")
+                num_val = resp_item.get("numerical_value") if resp_item.get("numerical_value") is not None else resp_item.get("written_value")
+                is_attempted = resp_item.get("is_attempted")
+                if is_attempted is None:
+                    is_attempted = (marked_opt is not None) or (num_val is not None)
+                has_double = resp_item.get("is_double_bubble", False) or resp_item.get("is_double_marked", False)
+                mismatch = resp_item.get("digit_bubble_mismatch", False) or resp_item.get("has_discrepancy", False)
+            else:
+                marked_opt = None
+                num_val = None
+                is_attempted = False
+                has_double = False
+                mismatch = False
 
             responses.append(ExtractedQuestionResponse(
                 question_no=q_idx,

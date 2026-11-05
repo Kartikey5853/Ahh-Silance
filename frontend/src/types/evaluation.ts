@@ -7,11 +7,11 @@
 
 export interface CandidateInfo {
   /** Full candidate display name */
-  candidate_name: string;
+  candidate_name?: string | null;
   /** 10-digit detected or transcribed roll number */
-  roll_number: string;
+  roll_number?: string | null;
   /** Booklet test version (e.g. SET A) */
-  booklet_code: string;
+  booklet_code?: string | null;
   /** Official exam title string */
   exam_title: string;
 }
@@ -21,35 +21,42 @@ export type QuestionStatus = "CORRECT" | "INCORRECT" | "UNATTEMPTED" | "OVERFLOW
 export interface QuestionScoreItem {
   /** Question sequence number (1 to 90) */
   question_no: number;
+  /** Subject title */
+  subject: string;
   /** MCQ or NUMERICAL */
   question_type: string;
   /** Candidate bubble or written value */
-  candidate_response: string | null;
+  candidate_response?: string | null;
   /** Master answer key correct answer */
-  correct_answer: string;
+  correct_answer?: string | null;
   /** Marks awarded (+4, -1, 0) */
   marks_awarded: number;
   /** Evaluation status tag */
-  status: QuestionStatus;
+  verdict?: string;
+  status?: QuestionStatus;
   /** Explanation if discarded by Section B First-5 rule */
   audit_note?: string | null;
 }
 
-export interface SubjectBreakdown {
-  /** Subject name (Physics, Chemistry, Mathematics) */
-  subject: string;
+export interface SubjectAnalytics {
+  /** Subject name (CHEMISTRY, PHYSICS, MATHEMATICS) */
+  subject_name: string;
   /** Net marks scored in this subject */
   score: number;
   /** Max marks per subject (100) */
-  max_marks: number;
+  total_marks: number;
+  /** Questions attempted in subject */
+  attempted: number;
   /** Count of correct questions */
   correct: number;
   /** Count of incorrect questions */
   incorrect: number;
-  /** Count of unattempted questions */
-  unattempted: number;
+  /** Accuracy percentage */
+  accuracy_percentage: number;
+  /** Section B total attempts */
+  section_b_attempts: number;
   /** Discarded Section B overflow attempts */
-  overflow_ignored: number;
+  section_b_ignored: number;
 }
 
 export interface ScoringSummary {
@@ -70,14 +77,14 @@ export interface ScoringSummary {
 }
 
 export interface ExamAnalytics {
-  /** Subject-level score distributions */
-  subject_breakdowns: Record<string, SubjectBreakdown>;
+  /** Target evaluation identifier */
+  evaluation_id: string;
   /** Overall attempt accuracy percentage */
-  accuracy_percentage: number;
-  /** Overall test question attempt rate */
-  attempt_rate_percentage: number;
-  /** Estimated percentile bucket */
-  estimated_percentile?: number;
+  overall_accuracy_percentage: number;
+  /** Total attempted questions */
+  total_attempted: number;
+  /** Subject-level score distributions */
+  subject_breakdown: SubjectAnalytics[];
 }
 
 export interface AuditVerificationFlags {

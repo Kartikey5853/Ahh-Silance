@@ -2,30 +2,33 @@
  * Examination Evaluation API Service.
  * 
  * Provides methods for dispatching uploaded OMR sheets or marked question papers
- * along with optional answer keys to the backend evaluation pipeline.
+ * along with the mandatory user-provided answer key to the backend evaluation pipeline.
  */
 
 import { apiClient } from "./client";
 import type { EvaluationScorecard } from "../types/evaluation";
 
 export interface EvaluationUploadParams {
+  /** The student document to grade (OMR or marked question paper) */
   sheetFile: File;
-  answerKeyFile?: File | null;
+  /** Mandatory master answer key file (JSON, CSV, or TXT) */
+  answerKeyFile: File;
+  /** Exam identifier */
   examId?: string;
+  /** Evaluation mode */
   mode?: "omr" | "marked_paper";
+  /** Candidate name */
   candidateName?: string;
 }
 
 export const evaluateApi = {
   /**
-   * Uploads student sheet and answer key files via multipart/form-data for automated evaluation.
+   * Uploads student sheet and master answer key files via multipart/form-data for automated evaluation.
    */
   async evaluateUpload(params: EvaluationUploadParams): Promise<EvaluationScorecard> {
     const formData = new FormData();
     formData.append("sheet_file", params.sheetFile);
-    if (params.answerKeyFile) {
-      formData.append("answer_key_file", params.answerKeyFile);
-    }
+    formData.append("answer_key_file", params.answerKeyFile);
     formData.append("exam_id", params.examId || "JEE_Main_2025_Jan_22_Shift1");
     formData.append("mode", params.mode || "omr");
     formData.append("candidate_name", params.candidateName || "Candidate");

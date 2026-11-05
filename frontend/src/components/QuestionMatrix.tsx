@@ -117,9 +117,10 @@ export const QuestionMatrix: React.FC<QuestionMatrixProps> = ({ questions }) => 
           </thead>
           <tbody>
             {filteredQuestions.map((q) => {
-              const isCorrect = q.status === "CORRECT";
-              const isIncorrect = q.status === "INCORRECT";
-              const isOverflow = q.status === "OVERFLOW_IGNORED";
+              const verdictStr = String(q.verdict || q.status || "");
+              const isCorrect = verdictStr === "CORRECT" || verdictStr === "DROPPED_BONUS";
+              const isIncorrect = verdictStr === "INCORRECT";
+              const isOverflow = verdictStr === "OVERFLOW_IGNORED" || verdictStr === "IGNORED_BY_FIRST_5_RULE";
 
               let badgeClass = "badge-unattempted";
               let statusText = "Skipped";
@@ -138,6 +139,9 @@ export const QuestionMatrix: React.FC<QuestionMatrixProps> = ({ questions }) => 
                 statusText = "Discarded (First 5 Rule)";
                 Icon = AlertTriangle;
               }
+
+              const candResp = q.candidate_response ?? (q as any).student_marked ?? (q as any).written_value ?? "—";
+              const correctKey = q.correct_answer ?? (q as any).correct_options?.join(", ") ?? (q as any).numerical_exact ?? "—";
 
               return (
                 <tr
@@ -159,10 +163,10 @@ export const QuestionMatrix: React.FC<QuestionMatrixProps> = ({ questions }) => 
                     </span>
                   </td>
                   <td style={{ padding: "0.6rem 0.75rem", fontFamily: "var(--font-mono)", fontWeight: 600 }}>
-                    {q.candidate_response ?? "—"}
+                    {candResp}
                   </td>
                   <td style={{ padding: "0.6rem 0.75rem", fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>
-                    {q.correct_answer}
+                    {correctKey}
                   </td>
                   <td style={{ padding: "0.6rem 0.75rem", fontWeight: 700, color: isCorrect ? "var(--green)" : isIncorrect ? "var(--red)" : "var(--text-muted)" }}>
                     {q.marks_awarded > 0 ? `+${q.marks_awarded}` : q.marks_awarded}

@@ -96,7 +96,9 @@ export const ResultPage: React.FC<ResultPageProps> = ({ scorecard, onBackToDashb
         >
           <div style={{ background: "var(--bg-secondary)", padding: "0.85rem", borderRadius: "6px", textAlign: "center" }}>
             <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "block" }}>Accuracy</span>
-            <strong style={{ fontSize: "1.25rem", color: "var(--blue)" }}>{analytics.accuracy_percentage}%</strong>
+            <strong style={{ fontSize: "1.25rem", color: "var(--blue)" }}>
+              {analytics.overall_accuracy_percentage ?? (analytics as any).accuracy_percentage ?? 0}%
+            </strong>
           </div>
 
           <div style={{ background: "var(--bg-secondary)", padding: "0.85rem", borderRadius: "6px", textAlign: "center" }}>
@@ -127,24 +129,24 @@ export const ResultPage: React.FC<ResultPageProps> = ({ scorecard, onBackToDashb
       </h2>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
-        {Object.entries(analytics.subject_breakdowns).map(([subjKey, data]) => (
-          <div key={subjKey} className="card">
+        {(analytics.subject_breakdown || []).map((data) => (
+          <div key={data.subject_name} className="card">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.75rem" }}>
-              <h3 style={{ fontSize: "1.1rem", fontWeight: 700 }}>{data.subject}</h3>
+              <h3 style={{ fontSize: "1.1rem", fontWeight: 700 }}>{data.subject_name}</h3>
               <div style={{ fontSize: "1.35rem", fontWeight: 800 }}>
-                {data.score} <span style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontWeight: 500 }}>/ {data.max_marks}</span>
+                {data.score} <span style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontWeight: 500 }}>/ {data.total_marks || 100}</span>
               </div>
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.82rem", color: "var(--text-secondary)", borderTop: "1px solid var(--border-color)", paddingTop: "0.75rem" }}>
               <span>Correct: <strong style={{ color: "var(--green)" }}>{data.correct}</strong></span>
               <span>Incorrect: <strong style={{ color: "var(--red)" }}>{data.incorrect}</strong></span>
-              <span>Skipped: <strong>{data.unattempted}</strong></span>
+              <span>Accuracy: <strong>{data.accuracy_percentage}%</strong></span>
             </div>
 
-            {data.overflow_ignored > 0 && (
+            {data.section_b_ignored > 0 && (
               <div style={{ marginTop: "0.6rem", padding: "0.35rem 0.5rem", background: "var(--amber-bg)", borderRadius: "4px", fontSize: "0.75rem", color: "var(--amber)" }}>
-                First-5 Rule: {data.overflow_ignored} excess numerical attempts discarded
+                First-5 Rule: {data.section_b_ignored} excess numerical attempts discarded
               </div>
             )}
           </div>

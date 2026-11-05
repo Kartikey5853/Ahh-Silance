@@ -35,7 +35,8 @@ class EvaluationOrchestratorService:
         document_id: str,
         sheet_data: ExtractedSheetData,
         exam_id: str = "JEE_Main_2025_Jan_22_Shift1",
-        candidate_name: Optional[str] = "Student Candidate"
+        candidate_name: Optional[str] = "Student Candidate",
+        master_key: Optional[MasterAnswerKey] = None
     ) -> EvaluationScorecardResponse:
         """
         Executes end-to-end evaluation pipeline and returns the final scorecard.
@@ -43,9 +44,10 @@ class EvaluationOrchestratorService:
         t0 = time.perf_counter()
         eval_id = f"eval_{uuid.uuid4().hex[:12]}"
 
-        # 1. Retrieve or generate the master key for booklet set
+        # 1. Retrieve or use provided master key
         booklet_code = sheet_data.booklet_code or "SET A"
-        master_key = AnswerKeyService.get_or_create_default_key(exam_id, booklet_code)
+        if master_key is None:
+            master_key = AnswerKeyService.get_or_create_default_key(exam_id, booklet_code)
 
         # 2. Align student responses to key
         alignment = AlignmentService.align_responses_with_key(document_id, sheet_data, master_key)
