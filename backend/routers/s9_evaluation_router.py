@@ -11,6 +11,7 @@ import os
 import json
 import uuid
 import hashlib
+import base64
 from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form, Depends
 from fastapi.responses import FileResponse, Response
@@ -112,6 +113,8 @@ async def prescan_sheet_file(
         if overlay_bytes:
             _prescan_overlay_cache[sheet_hash] = overlay_bytes
 
+        overlay_data_uri = f"data:image/jpeg;base64,{base64.b64encode(overlay_bytes).decode('ascii')}" if overlay_bytes else None
+
         attempted_cnt = len([r for r in sheet_data.responses if r.is_attempted])
         meta_info = {
             "roll_number": sheet_data.roll_number,
@@ -119,16 +122,13 @@ async def prescan_sheet_file(
             "attempted_count": attempted_cnt,
             "document_type": "PDF" if fname_lower.endswith(".pdf") else "OMR",
             "has_overlay": overlay_bytes is not None,
-            "overlay_url": f"/api/v1/evaluate/detection-overlay/{sheet_hash}" if overlay_bytes else None
+            "overlay_url": f"/api/v1/evaluate/detection-overlay/{sheet_hash}" if overlay_bytes else None,
+            "overlay_data": overlay_data_uri
         }
         _prescan_sheet_cache[sheet_hash] = sheet_data
         _prescan_meta_cache[sheet_hash] = meta_info
 
         return {"status": "ready", "sheet_hash": sheet_hash, **meta_info, "cached": False}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Pre-scan failed: {str(e)}")
     except HTTPException:
         raise
     except Exception as e:

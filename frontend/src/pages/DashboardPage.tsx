@@ -11,6 +11,7 @@ import { FileUploadDropzone } from "../components/FileUploadDropzone";
 import { CameraCapture } from "../components/CameraCapture";
 import { DocumentViewerModal } from "../components/DocumentViewerModal";
 import { evaluateApi } from "../api/evaluateApi";
+import { resolveApiUrl } from "../api/client";
 import type { EvaluationScorecard } from "../types/evaluation";
 import { AlertCircle, ArrowRight, Zap } from "lucide-react";
 
@@ -66,8 +67,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onEvaluationComple
     evaluateApi.prescanSheet(file)
       .then((res) => {
         setSheetHash(res.sheet_hash);
-        if (res.overlay_url) {
-          setSheetOverlayUrl(res.overlay_url);
+        const overlaySource = res.overlay_data || (res.overlay_url ? resolveApiUrl(res.overlay_url) : null);
+        if (overlaySource) {
+          setSheetOverlayUrl(overlaySource);
         }
         setSheetScanStatus("ready");
         const bubbles = res.detected_bubbles || 0;
@@ -201,11 +203,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onEvaluationComple
                 setViewerTitle("Student Response Document");
                 setViewerInitialMode("original");
               }}
-              onViewDetectionMap={sheetOverlayUrl ? () => {
+              onViewDetectionMap={() => {
                 setViewerFile(sheetFile);
                 setViewerTitle("Vision Detection Overlay Map");
                 setViewerInitialMode("overlay");
-              } : undefined}
+              }}
               scanStatus={sheetScanStatus}
               scanMessage={sheetScanMessage}
             />

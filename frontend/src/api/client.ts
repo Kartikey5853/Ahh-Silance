@@ -8,7 +8,19 @@
 
 import axios, { type InternalAxiosRequestConfig } from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
+
+/**
+ * Resolves a relative API path to a fully qualified backend URL or returns data URIs unchanged.
+ */
+export const resolveApiUrl = (path?: string | null): string => {
+  if (!path) return "";
+  if (path.startsWith("data:") || path.startsWith("http://") || path.startsWith("https://")) {
+    return path;
+  }
+  const base = API_BASE_URL.replace(/\/api\/v1\/?$/, "");
+  return `${base}${path.startsWith("/") ? "" : "/"}${path}`;
+};
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,

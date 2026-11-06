@@ -33,6 +33,7 @@ export interface PrescanSheetResult {
   document_type?: string;
   has_overlay?: boolean;
   overlay_url?: string | null;
+  overlay_data?: string | null;
   cached?: boolean;
 }
 

@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { X, ZoomIn, ZoomOut, RotateCcw, ExternalLink, FileText, Image as ImageIcon } from "lucide-react";
+import { X, ZoomIn, ZoomOut, RotateCcw, ExternalLink, FileText, Image as ImageIcon, Loader2 } from "lucide-react";
 
 interface DocumentViewerModalProps {
   /** The file to preview */
@@ -16,7 +16,7 @@ interface DocumentViewerModalProps {
   title: string;
   /** Close callback */
   onClose: () => void;
-  /** Optional URL of computer vision detection overlay */
+  /** Optional URL or Data URI of computer vision detection overlay */
   overlayUrl?: string | null;
   /** Initial view mode */
   initialMode?: "original" | "overlay";
@@ -32,15 +32,13 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
   const [objectUrl, setObjectUrl] = useState<string>("");
   const [textContent, setTextContent] = useState<string>("");
   const [zoomScale, setZoomScale] = useState<number>(1);
-  const [activeMode, setActiveMode] = useState<"original" | "overlay">(
-    initialMode === "overlay" && overlayUrl ? "overlay" : "original"
-  );
+  const [activeMode, setActiveMode] = useState<"original" | "overlay">(initialMode || "original");
 
   useEffect(() => {
-    if (initialMode === "overlay" && overlayUrl) {
-      setActiveMode("overlay");
+    if (initialMode) {
+      setActiveMode(initialMode);
     }
-  }, [initialMode, overlayUrl]);
+  }, [initialMode]);
 
   useEffect(() => {
     if (!file) {
@@ -135,7 +133,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            {overlayUrl && (
+            {(isImage || isPdf) && (
               <div style={{ display: "flex", background: "var(--bg-tertiary)", borderRadius: "6px", padding: "2px", border: "1px solid var(--border-color)", marginRight: "0.5rem" }}>
                 <button
                   type="button"
@@ -172,7 +170,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
               </div>
             )}
 
-            {(isImage || (activeMode === "overlay" && overlayUrl)) && (
+            {(isImage || activeMode === "overlay") && (
               <div style={{ display: "flex", alignItems: "center", gap: "0.25rem", marginRight: "1rem", background: "#ffffff", padding: "0.2rem 0.4rem", borderRadius: "6px", border: "1px solid var(--border-color)" }}>
                 <button type="button" className="btn btn-secondary" onClick={handleZoomOut} title="Zoom Out" style={{ padding: "0.3rem" }}>
                   <ZoomOut size={16} />
@@ -226,30 +224,40 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
           }}
         >
           {/* DETECTION OVERLAY VIEW */}
-          {activeMode === "overlay" && overlayUrl ? (
-            <div
-              style={{
-                transition: "transform 0.15s ease",
-                transform: `scale(${zoomScale})`,
-                transformOrigin: "center center",
-                display: "inline-block",
-                boxShadow: "0 10px 25px rgba(0,0,0,0.5)",
-                backgroundColor: "#000000",
-                borderRadius: "4px",
-                overflow: "hidden"
-              }}
-            >
-              <img
-                src={overlayUrl}
-                alt="Computer Vision Detection Overlay Map"
+          {activeMode === "overlay" ? (
+            overlayUrl ? (
+              <div
                 style={{
-                  maxWidth: "100%",
-                  maxHeight: "75vh",
-                  display: "block",
-                  objectFit: "contain"
+                  transition: "transform 0.15s ease",
+                  transform: `scale(${zoomScale})`,
+                  transformOrigin: "center center",
+                  display: "inline-block",
+                  boxShadow: "0 10px 25px rgba(0,0,0,0.5)",
+                  backgroundColor: "#000000",
+                  borderRadius: "4px",
+                  overflow: "hidden"
                 }}
-              />
-            </div>
+              >
+                <img
+                  src={overlayUrl}
+                  alt="Computer Vision Detection Overlay Map"
+                  style={{
+                    maxWidth: "100%",
+                    maxHeight: "75vh",
+                    display: "block",
+                    objectFit: "contain"
+                  }}
+                />
+              </div>
+            ) : (
+              <div style={{ textAlign: "center", color: "#ffffff", padding: "3rem" }}>
+                <Loader2 size={36} className="spin" style={{ margin: "0 auto 1.25rem auto", display: "block", color: "var(--blue)" }} />
+                <h4 style={{ fontSize: "1.15rem", fontWeight: 700, marginBottom: "0.5rem" }}>Generating Vision Detection Overlay...</h4>
+                <p style={{ fontSize: "0.85rem", color: "#94a3b8" }}>
+                  Analyzing bubble matrix contours, roll number encoding, and handwritten inputs.
+                </p>
+              </div>
+            )
           ) : (
             <>
               {/* IMAGE VIEWER */}
