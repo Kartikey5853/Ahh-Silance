@@ -5,7 +5,7 @@
 [![React TSX](https://img.shields.io/badge/frontend-React%20%2B%20TypeScript%20%2B%20Vite-61dafb.svg)](https://reactjs.org/)
 [![Computer Vision](https://img.shields.io/badge/engine-OpenCV%20%2B%20RapidOCR-orange.svg)](https://opencv.org/)
 [![Offline First](https://img.shields.io/badge/deployment-100%25%20Offline-success.svg)](#-how-to-use-offline)
-[![Tests Passing](https://img.shields.io/badge/tests-23%2F23%20passing-brightgreen.svg)](#-dataset-metrics--benchmarks)
+[![Tests Passing](https://img.shields.io/badge/tests-26%2F26%20passing-brightgreen.svg)](#-dataset-metrics--benchmarks)
 
 An enterprise-grade, **sub-second**, **100% offline** automated evaluation pipeline for both **JEE Main** and **JEE Advanced** candidate responses. The system grades traditional **OMR bubble sheets** and **10-page marked question papers**, extracts Section A multiple-choice responses and Section B numerical values, strictly enforces official examination rules (including **JEE Main Section B First-5 Attempt rule** and **JEE Advanced Multi-Correct Partial Marking**), and renders interactive **Computer Vision Detection Overlays**.
 
@@ -30,7 +30,9 @@ An enterprise-grade, **sub-second**, **100% offline** automated evaluation pipel
 * **Dual Evaluation Modalities**:
   * **OMR Answer Sheets**: Full 90-question bubble matrix + 10-column candidate Roll Number grid.
   * **10-Page Question Papers**: Multi-page PDF ingestion where answers are directly marked on the question paper.
-* **Universal Master Answer Key Ingestion**: Evaluates against `.json`, `.csv`, `.txt`, or scanned handwritten key images.
+* **Universal Master Answer Key Ingestion (Text & Scanned Images)**:
+  * Ingests structured formats: `.json`, `.csv`, `.txt`, `.dat`.
+  * **Scanned Image Answer Keys**: Supports both **printed official tabular keys** and **handwritten notebook sheets** written in ink/pen. Utilizes RapidOCR and spatial tabular row-pairing to extract and match question numbers with single-choice, multi-correct, and numerical ground-truth answers.
 * **Strict Official JEE Marking Scheme**:
   * **Section A (MCQ)**: $+4$ for correct, $-1$ for incorrect, $0$ for unattempted or multiple-bubbled.
   * **Section B (Numerical Value)**: $+4$ for correct, $0$ for incorrect/unattempted.
@@ -67,6 +69,12 @@ An enterprise-grade, **sub-second**, **100% offline** automated evaluation pipel
 ### 4. Interactive Detection Map Delivery
 * Generated in **~61 ms** using OpenCV drawing primitives.
 * Delivered directly in the pre-scan payload as an encoded **Base64 Data URI** (`data:image/jpeg;base64,...`). This guarantees instant, flicker-free rendering in the browser without secondary HTTP requests or dev-server proxy delays.
+
+### 5. Scanned Image Answer Key OCR & Spatial Alignment
+* **Multi-Format Ingestion**: Accepts `.png`, `.jpg`, `.jpeg`, `.webp`, `.bmp`, `.tiff` images of printed answer sheets or handwritten notebook pages.
+* **Inline & Tabular Extraction**: Resolves inline key notations (`Q01: B`, `1. C`, `Q13: 42.0`, `7: A, C`) across single lines or multi-column grids.
+* **Spatial Proximity Row Pairing**: When question numbers and answer values sit in separate columns of a printed table, pairs each question label with its horizontally adjacent answer block (`abs(ay - qy) < max(35, qh * 1.5)`).
+* **Automatic Exam Pattern Recognition**: Seamlessly extracts either 90 questions (JEE Main) or 51 questions (JEE Advanced) directly from the image.
 
 ---
 
@@ -188,10 +196,10 @@ The application will be live at:
 
 ---
 
-### 🔑 Test User Credentials
-The system includes a pre-seeded offline SQLite database with JWT authentication:
-* **Username**: `test`
-* **Password**: `test123`
+### 🔑 Frictionless Direct Access
+The application features direct, instant access with zero login barriers:
+* Access the dashboard directly at `http://localhost:5173`.
+* Optional legacy API JWT endpoints (`/api/v1/auth/login`) remain backward-compatible for programmatic automated pipelines.
 
 ---
 
@@ -200,7 +208,7 @@ The system includes a pre-seeded offline SQLite database with JWT authentication
 The repository includes ready-to-grade test datasets located in [`Dataset/external_test/`](Dataset/external_test/) and [`Dataset/synthetically_generated/`](Dataset/synthetically_generated/):
 
 #### Test Case 1: Standard JEE Main OMR (Sheet 1)
-1. Open `http://localhost:5173` and log in.
+1. Open `http://localhost:5173`.
 2. In the **Student Response Document** dropzone, select:
    `Dataset/external_test/omr_sheet_01.png`
    * *Notice the green confirmation indicator immediately verifies bubble matrix contours.*
@@ -230,6 +238,20 @@ The repository includes ready-to-grade test datasets located in [`Dataset/extern
 2. Upload `Dataset/jee_advanced/jee_advanced_omr_02.png` + `Dataset/jee_advanced/jee_advanced_answer_key_02.csv`
    * *Stress-tests partial marking and verifies Question 13 (written without bubbles) receives strictly **0 marks**.*
 
+#### Test Case 6: Scanned Image Answer Keys (Printed & Handwritten)
+1. **JEE Main with Printed Answer Key Image**:
+   * Student Sheet: `Dataset/external_test/omr_sheet_01.png`
+   * Master Key: `Dataset/external_test/answer_key_01_printed.png`
+   * *The system performs OCR and spatial row-alignment across all 90 questions.*
+2. **JEE Main with Handwritten Answer Key Image**:
+   * Student Sheet: `Dataset/external_test/omr_sheet_01.png`
+   * Master Key: `Dataset/external_test/answer_key_01_handwritten.png`
+   * *Processes natural blue pen handwriting on ruled notebook paper.*
+3. **JEE Advanced with Handwritten Answer Key Image**:
+   * Student Sheet: `Dataset/jee_advanced/jee_advanced_omr_01.png`
+   * Master Key: `Dataset/jee_advanced/jee_advanced_answer_key_01_handwritten.png`
+   * *Correctly detects and grades all 51 questions including multi-correct combinations (e.g. `A, C`).*
+
 ---
 
 ## 📊 Dataset Metrics & Benchmarks
@@ -237,8 +259,8 @@ The repository includes ready-to-grade test datasets located in [`Dataset/extern
 ### 1. Included Datasets
 | Dataset Folder | Contents | Format | Purpose |
 | :--- | :--- | :--- | :--- |
-| [`Dataset/external_test/`](Dataset/external_test/) | 2 full OMR sheets, 1 10-page marked PDF, 3 answer keys (CSV, JSON, TXT) | PNG, PDF, CSV, JSON, TXT | Direct 1-click verification of JEE Main OMR grading, PDF extraction, and multiple key formats. |
-| [`Dataset/jee_advanced/`](Dataset/jee_advanced/) | 2 authentic 51-question OMR sheets, paired answer keys (CSV, JSON, TXT), ground truths | PNG, CSV, JSON, TXT | Verification of JEE Advanced multi-correct partial marking, auto-detection, and unbubbled numerical fix. |
+| [`Dataset/external_test/`](Dataset/external_test/) | 2 full OMR sheets, 1 10-page marked PDF, 5 answer keys (CSV, JSON, TXT, Printed PNG, Handwritten PNG) | PNG, PDF, CSV, JSON, TXT | Direct 1-click verification of JEE Main OMR grading, PDF extraction, and text/image key formats. |
+| [`Dataset/jee_advanced/`](Dataset/jee_advanced/) | 2 authentic 51-question OMR sheets, 5 answer keys (CSV, JSON, TXT, Printed PNG, Handwritten PNG), ground truths | PNG, CSV, JSON, TXT | Verification of JEE Advanced multi-correct partial marking, auto-detection, unbubbled numerical fix, and image keys. |
 | [`Dataset/synthetically_generated/`](Dataset/synthetically_generated/) | 30 full authentic JEE Main OMR sheets (sheets 01–30) + 30 paired ground truth JSONs | PNG, JSON | Comprehensive robustness benchmark testing skew, lighting shadows, pencil shading, and multi-bubbling. |
 
 ### 2. Accuracy & Reliability Benchmarks
@@ -264,14 +286,14 @@ Run the comprehensive pytest suite offline:
 ```powershell
 .\backend\env\Scripts\pytest.exe backend/tests -v
 ```
-**Results: 23 passed in 25.56s (100% pass rate)**
-* `test_jee_advanced.py` (5 tests: auto-detection by key, by layout, multi-correct partial marking, end-to-end evaluation, unbubbled numerical bug verification)
+**Results: 26 passed in 44.93s (100% pass rate)**
+* `test_jee_advanced.py` (6 tests: auto-detection by key, by layout, multi-correct partial marking, end-to-end evaluation, unbubbled numerical bug verification, handwritten image answer key evaluation)
+* `test_upload_evaluation.py` (8 tests: blank image rejection, random image rejection, missing key rejection, JSON evaluation, CSV evaluation, 10-page PDF evaluation, printed image answer key evaluation, handwritten image answer key evaluation)
 * `test_auth.py` (4 tests: login, invalid password, JWT profile, unauthorized rejection)
 * `test_first5_rule.py` (1 test: strict Section B overflow discarding)
 * `test_pipeline.py` (2 tests: health check, full end-to-end evaluation)
 * `test_schemas.py` (2 tests: S1 through S7 Pydantic schemas)
 * `test_services.py` (3 tests: Sauvola thresholding, inner core sampling, layout partitions)
-* `test_upload_evaluation.py` (6 tests: blank image rejection, random image rejection, missing key rejection, JSON evaluation, CSV evaluation, 10-page PDF evaluation)
 
 ---
 
@@ -291,6 +313,8 @@ Run the comprehensive pytest suite offline:
 │   │   ├── answer_key_01.csv          # Master answer key (CSV)
 │   │   ├── answer_key_01.json         # Master answer key (JSON)
 │   │   ├── answer_key_01.txt          # Master answer key (TXT)
+│   │   ├── answer_key_01_printed.png  # Master answer key (Printed Table Image)
+│   │   ├── answer_key_01_handwritten.png # Master answer key (Handwritten Ruled Sheet)
 │   │   ├── omr_sheet_02.png           # Real test OMR sheet 2
 │   │   ├── answer_key_02.csv          # Master answer key 2
 │   │   ├── marked_question_paper_10pages.pdf # 10-page marked question paper
@@ -300,6 +324,8 @@ Run the comprehensive pytest suite offline:
 │   │   ├── jee_advanced_omr_01.png    # 51-question authentic OMR sheet 1
 │   │   ├── jee_advanced_omr_01.json   # Ground truth labels
 │   │   ├── jee_advanced_answer_key_01.csv # Master answer key (CSV)
+│   │   ├── jee_advanced_answer_key_01_printed.png # Master answer key (Printed Image)
+│   │   ├── jee_advanced_answer_key_01_handwritten.png # Master key (Handwritten Image)
 │   │   ├── jee_advanced_omr_02.png    # Stress test OMR (unbubbled bug test sheet)
 │   │   └── jee_advanced_answer_key_02.csv # Matching master key
 │   │
@@ -321,7 +347,7 @@ Run the comprehensive pytest suite offline:
 │   ├── routers/                       # API route controllers
 │   │   ├── s8_auth_router.py          # JWT authentication & profile endpoints
 │   │   └── s9_evaluation_router.py    # /prescan-sheet, /prescan-key, /evaluate
-│   └── tests/                         # Pytest test suite (23 verified tests)
+│   └── tests/                         # Pytest test suite (26 verified tests)
 │       └── test_jee_advanced.py       # JEE Advanced & unbubbled numerical tests
 │
 ├── frontend/                          # React TSX Web Application
@@ -346,7 +372,8 @@ Run the comprehensive pytest suite offline:
 └── scripts/                           # Scrapers & Benchmark Generators
     ├── jee_download/                  # Official NTA paper scrapers (2020-2025)
     └── synthetic_generation/          # Authentic OMR image synthesis engine
-        └── generate_jee_advanced_dataset.py # JEE Advanced OMR generator
+        ├── generate_jee_advanced_dataset.py # JEE Advanced OMR generator
+        └── generate_image_answer_keys.py    # Handwritten & printed answer key generator
 ```
 
 ---

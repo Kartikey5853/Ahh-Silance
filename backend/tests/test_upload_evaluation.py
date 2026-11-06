@@ -171,3 +171,55 @@ def test_marked_question_paper_10pages_pdf():
     assert card["candidate"]["roll_number"] == "2403109988"
     assert card["scoring"]["total_score"] > 0
     assert len(card["scoring"]["question_scores"]) == 90
+
+
+def test_omr_evaluation_with_printed_image_answer_key():
+    """
+    Validates end-to-end evaluation when the master answer key is uploaded as a computer-generated/printed image.
+    """
+    sheet_path = os.path.join(EXTERNAL_TEST_DIR, "omr_sheet_01.png")
+    key_img_path = os.path.join(EXTERNAL_TEST_DIR, "answer_key_01_printed.png")
+    if not os.path.exists(sheet_path) or not os.path.exists(key_img_path):
+        pytest.skip("External test files missing")
+
+    with open(sheet_path, "rb") as f_sheet, open(key_img_path, "rb") as f_key:
+        response = client.post(
+            "/api/v1/evaluate/upload",
+            files={
+                "sheet_file": ("omr_sheet_01.png", f_sheet, "image/png"),
+                "answer_key_file": ("answer_key_01_printed.png", f_key, "image/png")
+            },
+            data={"mode": "omr", "exam_id": "PRINTED_KEY_EXAM", "candidate_name": "Image Key Student"}
+        )
+
+    assert response.status_code == 200, f"Evaluation failed: {response.text}"
+    card = response.json()
+    assert card["candidate"]["exam_type"] == "JEE_MAIN"
+    assert len(card["scoring"]["question_scores"]) == 90
+    assert card["scoring"]["total_score"] > 50.0
+
+
+def test_omr_evaluation_with_handwritten_image_answer_key():
+    """
+    Validates end-to-end evaluation when the master answer key is uploaded as a handwritten image.
+    """
+    sheet_path = os.path.join(EXTERNAL_TEST_DIR, "omr_sheet_01.png")
+    key_img_path = os.path.join(EXTERNAL_TEST_DIR, "answer_key_01_handwritten.png")
+    if not os.path.exists(sheet_path) or not os.path.exists(key_img_path):
+        pytest.skip("External test files missing")
+
+    with open(sheet_path, "rb") as f_sheet, open(key_img_path, "rb") as f_key:
+        response = client.post(
+            "/api/v1/evaluate/upload",
+            files={
+                "sheet_file": ("omr_sheet_01.png", f_sheet, "image/png"),
+                "answer_key_file": ("answer_key_01_handwritten.png", f_key, "image/png")
+            },
+            data={"mode": "omr", "exam_id": "HANDWRITTEN_KEY_EXAM", "candidate_name": "Handwritten Student"}
+        )
+
+    assert response.status_code == 200, f"Evaluation failed: {response.text}"
+    card = response.json()
+    assert card["candidate"]["exam_type"] == "JEE_MAIN"
+    assert len(card["scoring"]["question_scores"]) == 90
+    assert card["scoring"]["total_score"] > 50.0

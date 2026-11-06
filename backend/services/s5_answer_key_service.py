@@ -81,30 +81,17 @@ class AnswerKeyService:
             except Exception as e:
                 raise ValueError(f"Failed to parse text answer key: {str(e)}")
 
-        # 4. Fallback for image answer keys using RapidOCR
-        elif fname_lower.endswith((".png", ".jpg", ".jpeg", ".webp")):
+        # 4. Parse Image answer keys (handwritten sheets, printed tables, photos)
+        elif fname_lower.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff")):
             try:
-                import cv2
-                import numpy as np
-                from rapidocr_onnxruntime import RapidOCR
-
-                nparr = np.frombuffer(file_bytes, np.uint8)
-                img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                engine = RapidOCR()
-                res, _ = engine(img)
-                if res:
-                    for item in res:
-                        txt = item[1].strip()
-                        m = re.match(r"(?:Q)?(\d+)[\s.:\-]+([A-Za-z0-9.,/\s\-]+)", txt)
-                        if m:
-                            raw_key_mapping[int(m.group(1))] = m.group(2).strip()
+                raw_key_mapping = cls._parse_image_answer_key(file_bytes, filename)
             except Exception as e:
                 raise ValueError(f"Failed to OCR image answer key: {str(e)}")
 
         if not raw_key_mapping:
             raise ValueError(
                 f"Could not extract question-answer pairs from '{filename}'. "
-                "Ensure file contains questions and answers (e.g. JSON {'1': 'A'}, CSV '1,A', or TXT 'Q1: A')."
+                "Ensure file contains questions and answers (e.g. JSON {'1': 'A'}, CSV '1,A', TXT 'Q1: A', or an image of the answer key)."
             )
 
         # Detect Exam Classification: JEE_ADVANCED vs JEE_MAIN
@@ -275,3 +262,79 @@ class AnswerKeyService:
         """
         key_id = f"{key_data.exam_id}_{key_data.booklet_code}"
         db.save_master_key(key_id, key_data.model_dump())
+
+    @classmethod
+    def _parse_image_answer_key(cls, file_bytes: bytes, filename: str) -> Dict[int, str]:
+        """
+        Parses question-answer mappings directly from images of answer keys:
+        - Hand-written answer sheets (notebook pages, pen markings, multi-column lists)
+        - Computer-generated / printed answer key tables (official NTA / IIT coaching tables)
+        Supports multi-column grids, standalone question/answer blocks, and multi-correct options.
+        """
+        import cv2
+        import numpy as np
+        from backend.services.s2_omr_vision_detector import ocr_engine
+
+        nparr = np.frombuffer(file_bytes, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if img is None:
+            raise ValueError(f"Could not decode image file '{filename}'.")
+
+        res, _ = ocr_engine(img)
+        if not res:
+            return {}
+
+        raw_key_mapping: Dict[int, str] = {}
+        q_blocks = []
+        ans_blocks = []
+
+        for item in res:
+            box = item[0]
+            txt = item[1].strip()
+            cy = (box[0][1] + box[2][1]) / 2.0
+            cx = (box[0][0] + box[2][0]) / 2.0
+            h_box = abs(box[2][1] - box[0][1])
+
+            # 1. Single pair in block (e.g. "Q1: A", "1. B", "Q13: 42.0", "7: A, C")
+            m = re.match(r"^(?:Q(?:uestion)?\s*[\#\.:\-]*)?(\d{1,2})[\s.:\-)\=>]+([A-Za-z0-9.,/\s\-]+)$", txt, re.IGNORECASE)
+            if m:
+                q_num = int(m.group(1))
+                ans_text = m.group(2).strip()
+                raw_key_mapping[q_num] = ans_text
+                continue
+
+            # 2. Multiple pairs in block (e.g. "Q1: A  Q2: B" or "1. A  2. B")
+            matches = re.findall(
+                r"(?:^|[\s,;|])(?:Q(?:uestion)?\s*[\#\.:\-]*)?(\d{1,2})[\s.:\-)\=>]+([A-D](?:\s*,\s*[A-D])*|\d+(?:\.\d+)?|[A-Za-z]+)",
+                txt,
+                re.IGNORECASE
+            )
+            if matches:
+                for q_str, ans_str in matches:
+                    raw_key_mapping[int(q_str)] = ans_str.strip()
+                continue
+
+            # 3. Standalone question number (e.g. "Q1", "1.", "Q01")
+            m_q = re.match(r"^(?:Q(?:uestion)?\s*[\#\.:\-]*)?(\d{1,2})[\.:\-]?$", txt, re.IGNORECASE)
+            if m_q:
+                q_blocks.append((int(m_q.group(1)), cx, cy, h_box))
+            else:
+                ans_blocks.append((txt, cx, cy, h_box))
+
+        # 4. Spatial pairing for separate question and answer blocks (e.g. table columns)
+        for q_num, qx, qy, qh in q_blocks:
+            if q_num in raw_key_mapping:
+                continue
+            candidates = [
+                (ans_txt, ax, ay) for ans_txt, ax, ay, ah in ans_blocks
+                if ax > qx and abs(ay - qy) < max(35, qh * 1.5)
+            ]
+            if candidates:
+                candidates.sort(key=lambda c: c[1] - qx)
+                clean_ans = candidates[0][0].strip()
+                clean_ans = re.sub(r"^(?:Ans(?:wer)?|Option)[\s.:\-]*", "", clean_ans, flags=re.IGNORECASE).strip()
+                clean_ans = clean_ans.strip("()[]{}")
+                if clean_ans:
+                    raw_key_mapping[q_num] = clean_ans
+
+        return raw_key_mapping

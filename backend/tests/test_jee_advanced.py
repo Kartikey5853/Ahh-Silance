@@ -161,3 +161,31 @@ def test_unbubbled_numerical_receives_zero_marks():
     # Confirms zero marks were awarded
     assert q13["marks_awarded"] == 0.0, f"Expected 0.0 marks for unbubbled numerical, got {q13['marks_awarded']}"
     assert q13["verdict"] == "UNATTEMPTED", f"Expected UNATTEMPTED, got {q13['verdict']}"
+
+
+def test_jee_advanced_evaluation_with_handwritten_image_key():
+    """
+    Validates JEE Advanced evaluation using a handwritten image of the master answer key.
+    """
+    sheet_path = os.path.join(JEE_ADV_DIR, "jee_advanced_omr_01.png")
+    key_img_path = os.path.join(JEE_ADV_DIR, "jee_advanced_answer_key_01_handwritten.png")
+
+    assert os.path.exists(sheet_path), "Missing JEE Advanced OMR 01"
+    assert os.path.exists(key_img_path), "Missing JEE Advanced handwritten key"
+
+    with open(sheet_path, "rb") as s_file, open(key_img_path, "rb") as k_file:
+        files = {
+            "sheet_file": ("jee_advanced_omr_01.png", s_file, "image/png"),
+            "answer_key_file": ("jee_advanced_answer_key_01_handwritten.png", k_file, "image/png")
+        }
+        data = {
+            "exam_id": "JEE_Advanced_2025_Paper1",
+            "candidate_name": "Image Key Aspirant"
+        }
+        res = client.post("/api/v1/evaluate/upload", files=files, data=data)
+
+    assert res.status_code == 200, f"Upload failed: {res.text}"
+    scorecard = res.json()
+    assert scorecard["candidate"]["exam_type"] == "JEE_ADVANCED"
+    assert len(scorecard["scoring"]["question_scores"]) == 51
+    assert scorecard["scoring"]["total_score"] > 50.0
