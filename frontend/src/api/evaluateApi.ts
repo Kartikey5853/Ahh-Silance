@@ -31,6 +31,8 @@ export interface PrescanSheetResult {
   detected_bubbles?: number;
   attempted_count?: number;
   document_type?: string;
+  has_overlay?: boolean;
+  overlay_url?: string | null;
   cached?: boolean;
 }
 

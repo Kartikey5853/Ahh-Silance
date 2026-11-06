@@ -16,12 +16,31 @@ interface DocumentViewerModalProps {
   title: string;
   /** Close callback */
   onClose: () => void;
+  /** Optional URL of computer vision detection overlay */
+  overlayUrl?: string | null;
+  /** Initial view mode */
+  initialMode?: "original" | "overlay";
 }
 
-export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({ file, title, onClose }) => {
+export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
+  file,
+  title,
+  onClose,
+  overlayUrl = null,
+  initialMode = "original"
+}) => {
   const [objectUrl, setObjectUrl] = useState<string>("");
   const [textContent, setTextContent] = useState<string>("");
   const [zoomScale, setZoomScale] = useState<number>(1);
+  const [activeMode, setActiveMode] = useState<"original" | "overlay">(
+    initialMode === "overlay" && overlayUrl ? "overlay" : "original"
+  );
+
+  useEffect(() => {
+    if (initialMode === "overlay" && overlayUrl) {
+      setActiveMode("overlay");
+    }
+  }, [initialMode, overlayUrl]);
 
   useEffect(() => {
     if (!file) {
@@ -116,7 +135,44 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({ file, 
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            {isImage && (
+            {overlayUrl && (
+              <div style={{ display: "flex", background: "var(--bg-tertiary)", borderRadius: "6px", padding: "2px", border: "1px solid var(--border-color)", marginRight: "0.5rem" }}>
+                <button
+                  type="button"
+                  onClick={() => setActiveMode("original")}
+                  style={{
+                    padding: "0.25rem 0.65rem",
+                    fontSize: "0.78rem",
+                    fontWeight: activeMode === "original" ? 700 : 500,
+                    background: activeMode === "original" ? "var(--primary)" : "transparent",
+                    color: activeMode === "original" ? "#ffffff" : "var(--text-primary)",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer"
+                  }}
+                >
+                  Original Scan
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveMode("overlay")}
+                  style={{
+                    padding: "0.25rem 0.65rem",
+                    fontSize: "0.78rem",
+                    fontWeight: activeMode === "overlay" ? 700 : 500,
+                    background: activeMode === "overlay" ? "var(--green)" : "transparent",
+                    color: activeMode === "overlay" ? "#ffffff" : "var(--text-primary)",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer"
+                  }}
+                >
+                  Vision Detection Map
+                </button>
+              </div>
+            )}
+
+            {(isImage || (activeMode === "overlay" && overlayUrl)) && (
               <div style={{ display: "flex", alignItems: "center", gap: "0.25rem", marginRight: "1rem", background: "#ffffff", padding: "0.2rem 0.4rem", borderRadius: "6px", border: "1px solid var(--border-color)" }}>
                 <button type="button" className="btn btn-secondary" onClick={handleZoomOut} title="Zoom Out" style={{ padding: "0.3rem" }}>
                   <ZoomOut size={16} />
@@ -134,7 +190,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({ file, 
             )}
 
             <a
-              href={objectUrl}
+              href={activeMode === "overlay" && overlayUrl ? overlayUrl : objectUrl}
               target="_blank"
               rel="noreferrer"
               className="btn btn-secondary"
@@ -163,14 +219,14 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({ file, 
             flex: 1,
             overflow: "auto",
             padding: "1rem",
-            backgroundColor: isImage ? "#1e293b" : "var(--bg-primary)",
+            backgroundColor: (isImage || activeMode === "overlay") ? "#1e293b" : "var(--bg-primary)",
             display: "flex",
-            alignItems: isImage ? "center" : "stretch",
-            justifyContent: isImage ? "center" : "stretch"
+            alignItems: (isImage || activeMode === "overlay") ? "center" : "stretch",
+            justifyContent: (isImage || activeMode === "overlay") ? "center" : "stretch"
           }}
         >
-          {/* IMAGE VIEWER */}
-          {isImage && objectUrl && (
+          {/* DETECTION OVERLAY VIEW */}
+          {activeMode === "overlay" && overlayUrl ? (
             <div
               style={{
                 transition: "transform 0.15s ease",
@@ -178,14 +234,14 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({ file, 
                 transformOrigin: "center center",
                 display: "inline-block",
                 boxShadow: "0 10px 25px rgba(0,0,0,0.5)",
-                backgroundColor: "#ffffff",
+                backgroundColor: "#000000",
                 borderRadius: "4px",
                 overflow: "hidden"
               }}
             >
               <img
-                src={objectUrl}
-                alt="Document Preview"
+                src={overlayUrl}
+                alt="Computer Vision Detection Overlay Map"
                 style={{
                   maxWidth: "100%",
                   maxHeight: "75vh",
@@ -194,55 +250,84 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({ file, 
                 }}
               />
             </div>
-          )}
+          ) : (
+            <>
+              {/* IMAGE VIEWER */}
+              {isImage && objectUrl && (
+                <div
+                  style={{
+                    transition: "transform 0.15s ease",
+                    transform: `scale(${zoomScale})`,
+                    transformOrigin: "center center",
+                    display: "inline-block",
+                    boxShadow: "0 10px 25px rgba(0,0,0,0.5)",
+                    backgroundColor: "#ffffff",
+                    borderRadius: "4px",
+                    overflow: "hidden"
+                  }}
+                >
+                  <img
+                    src={objectUrl}
+                    alt="Document Preview"
+                    style={{
+                      maxWidth: "100%",
+                      maxHeight: "75vh",
+                      display: "block",
+                      objectFit: "contain"
+                    }}
+                  />
+                </div>
+              )}
 
-          {/* PDF VIEWER */}
-          {isPdf && objectUrl && (
-            <iframe
-              src={objectUrl}
-              title={file.name}
-              style={{
-                width: "100%",
-                height: "100%",
-                border: "none",
-                borderRadius: "8px",
-                backgroundColor: "#ffffff"
-              }}
-            />
-          )}
+              {/* PDF VIEWER */}
+              {isPdf && objectUrl && (
+                <iframe
+                  src={objectUrl}
+                  title={file.name}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    border: "none",
+                    borderRadius: "8px",
+                    backgroundColor: "#ffffff"
+                  }}
+                />
+              )}
 
-          {/* TEXT / JSON / CSV VIEWER */}
-          {isText && (
-            <div style={{ width: "100%", display: "flex", flexDirection: "column", height: "100%" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-                <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--text-secondary)" }}>
-                  Parsed Answer Key Content Preview
-                </span>
-                {fname.endsWith(".json") && (
-                  <span className="badge badge-correct" style={{ fontSize: "0.75rem" }}>
-                    Valid JSON Key
-                  </span>
-                )}
-              </div>
+              {/* TEXT / JSON / CSV VIEWER */}
+              {isText && (
+                <div style={{ width: "100%", display: "flex", flexDirection: "column", height: "100%" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                    <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--text-secondary)" }}>
+                      Parsed Answer Key Content Preview
+                    </span>
+                    {fname.endsWith(".json") && (
+                      <span className="badge badge-correct" style={{ fontSize: "0.75rem" }}>
+                        Valid JSON Key
+                      </span>
+                    )}
+                  </div>
 
-              <pre
-                style={{
-                  flex: 1,
-                  margin: 0,
-                  padding: "1rem",
-                  backgroundColor: "#0f172a",
-                  color: "#38bdf8",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "0.85rem",
-                  lineHeight: "1.45",
-                  borderRadius: "8px",
-                  overflow: "auto",
-                  border: "1px solid #1e293b"
-                }}
-              >
-                {textContent || "Loading document contents..."}
-              </pre>
-            </div>
+                  <pre
+                    style={{
+                      flex: 1,
+                      margin: 0,
+                      padding: "1rem",
+                      backgroundColor: "#0f172a",
+                      color: "#38bdf8",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "0.85rem",
+                      lineHeight: "1.45",
+                      borderRadius: "8px",
+                      overflow: "auto",
+                      border: "1px solid #1e293b"
+                    }}
+                  >
+                    {textContent || "Loading document contents..."}
+                  </pre>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

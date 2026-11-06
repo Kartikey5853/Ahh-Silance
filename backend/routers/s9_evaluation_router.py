@@ -13,7 +13,7 @@ import uuid
 import hashlib
 from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form, Depends
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 import cv2
 import numpy as np
 
@@ -33,6 +33,19 @@ router = APIRouter(prefix="/evaluate", tags=["Stage 9: Instant Scorecard Deliver
 _prescan_sheet_cache: Dict[str, ExtractedSheetData] = {}
 _prescan_key_cache: Dict[str, MasterAnswerKey] = {}
 _prescan_meta_cache: Dict[str, Dict[str, Any]] = {}
+_prescan_overlay_cache: Dict[str, bytes] = {}
+
+
+@router.get("/detection-overlay/{sheet_hash}")
+async def get_detection_overlay(sheet_hash: str):
+    """
+    Delivers the high-resolution computer vision detection overlay map
+    showing recognized roll number bubbles, subject partitions, and marked options.
+    """
+    overlay_bytes = _prescan_overlay_cache.get(sheet_hash)
+    if not overlay_bytes:
+        raise HTTPException(status_code=404, detail="Detection overlay not found for this document.")
+    return Response(content=overlay_bytes, media_type="image/jpeg")
 
 
 @router.post("/prescan-sheet")
@@ -43,6 +56,7 @@ async def prescan_sheet_file(
     Background pre-scanning endpoint. The moment the user drops or selects an OMR sheet
     or PDF, this initiates CV validation and pixel extraction in the background so
     evaluation is instantaneous when 'Evaluate' is clicked.
+    Generates visual computer vision detection overlay with highlighted bubbles.
     """
     try:
         sheet_bytes = await sheet_file.read()
@@ -54,6 +68,7 @@ async def prescan_sheet_file(
 
         fname_lower = sheet_file.filename.lower()
         doc_id = f"prescan_{uuid.uuid4().hex[:8]}"
+        overlay_bytes: Optional[bytes] = None
 
         if fname_lower.endswith(".pdf"):
             sheet_data = OMRVisionDetector.extract_marked_paper_from_pdf(
@@ -62,6 +77,11 @@ async def prescan_sheet_file(
                 booklet_code="SET A"
             )
             bubble_cnt = len(sheet_data.responses)
+            try:
+                overlay_bytes = OMRVisionDetector.generate_pdf_detection_overlay(sheet_bytes, sheet_data)
+            except Exception as e:
+                print("PDF overlay generation warning:", e)
+
         elif fname_lower.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff")):
             nparr = np.frombuffer(sheet_bytes, np.uint8)
             img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -77,6 +97,11 @@ async def prescan_sheet_file(
                 img_bgr=img,
                 booklet_code="SET A"
             )
+            try:
+                overlay_bytes = OMRVisionDetector.generate_omr_detection_overlay(img, sheet_data)
+            except Exception as e:
+                print("OMR overlay generation warning:", e)
+
         elif fname_lower.endswith(".json"):
             meta = json.loads(sheet_bytes.decode("utf-8-sig"))
             sheet_data = ExtractionService.extract_from_ground_truth_or_meta(doc_id, meta)
@@ -84,17 +109,26 @@ async def prescan_sheet_file(
         else:
             raise HTTPException(status_code=400, detail=f"Unsupported format '{sheet_file.filename}'")
 
+        if overlay_bytes:
+            _prescan_overlay_cache[sheet_hash] = overlay_bytes
+
         attempted_cnt = len([r for r in sheet_data.responses if r.is_attempted])
         meta_info = {
             "roll_number": sheet_data.roll_number,
             "detected_bubbles": bubble_cnt,
             "attempted_count": attempted_cnt,
-            "document_type": "PDF" if fname_lower.endswith(".pdf") else "OMR"
+            "document_type": "PDF" if fname_lower.endswith(".pdf") else "OMR",
+            "has_overlay": overlay_bytes is not None,
+            "overlay_url": f"/api/v1/evaluate/detection-overlay/{sheet_hash}" if overlay_bytes else None
         }
         _prescan_sheet_cache[sheet_hash] = sheet_data
         _prescan_meta_cache[sheet_hash] = meta_info
 
         return {"status": "ready", "sheet_hash": sheet_hash, **meta_info, "cached": False}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Pre-scan failed: {str(e)}")
     except HTTPException:
         raise
     except Exception as e:

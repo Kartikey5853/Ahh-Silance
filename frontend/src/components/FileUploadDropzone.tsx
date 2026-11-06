@@ -21,6 +21,8 @@ interface FileUploadDropzoneProps {
   onTriggerCamera: () => void;
   /** Optional callback to open document viewer modal */
   onViewFile?: () => void;
+  /** Optional callback to view computer vision detection overlay */
+  onViewDetectionMap?: () => void;
   /** Background pre-scanning state */
   scanStatus?: "idle" | "scanning" | "ready" | "error";
   /** Background pre-scanning informative message */
@@ -36,6 +38,7 @@ export const FileUploadDropzone: React.FC<FileUploadDropzoneProps> = ({
   onFileSelect,
   onTriggerCamera,
   onViewFile,
+  onViewDetectionMap,
   scanStatus = "idle",
   scanMessage = null,
   accept = "image/*,.pdf,.json"
@@ -239,8 +242,36 @@ export const FileUploadDropzone: React.FC<FileUploadDropzoneProps> = ({
               )}
               {scanStatus === "ready" && (
                 <>
-                  <CheckCircle2 size={13} />
+                  <CheckCircle2 size={13} style={{ flexShrink: 0 }} />
                   <span>{scanMessage || "✓ Pre-scan complete. Ready for instant evaluation."}</span>
+                  {onViewDetectionMap && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onViewDetectionMap();
+                      }}
+                      style={{
+                        marginLeft: "auto",
+                        padding: "0.2rem 0.55rem",
+                        fontSize: "0.74rem",
+                        fontWeight: 700,
+                        backgroundColor: "var(--green)",
+                        color: "#ffffff",
+                        border: "none",
+                        borderRadius: "4px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.3rem",
+                        cursor: "pointer",
+                        flexShrink: 0
+                      }}
+                      title="Inspect computer vision detections on document"
+                    >
+                      <Eye size={12} />
+                      <span>View Detections</span>
+                    </button>
+                  )}
                 </>
               )}
               {scanStatus === "error" && (

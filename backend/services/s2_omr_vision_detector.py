@@ -361,3 +361,118 @@ class OMRVisionDetector:
             booklet_code=booklet_code,
             responses=responses
         )
+
+    @classmethod
+    def generate_omr_detection_overlay(
+        cls,
+        img_bgr: np.ndarray,
+        sheet_data: ExtractedSheetData
+    ) -> bytes:
+        """
+        Renders an annotated computer vision detection overlay on the uploaded OMR sheet.
+        Highlights:
+        - Decoded roll number bounding box and highlighted digit bubbles
+        - Subject layout boundaries (Chemistry, Physics, Mathematics)
+        - Section A detected marked bubble circles and recognized option letters
+        - Section B handwritten numerical boxes with neural OCR transcription tags
+        """
+        annotated = img_bgr.copy()
+        h, w = img_bgr.shape[:2]
+        sx = w / 2480.0
+        sy = h / 3508.0
+
+        # 1. Top HUD Banner
+        attempted_cnt = len([r for r in sheet_data.responses if r.is_attempted])
+        cv2.rectangle(annotated, (0, 0), (w, int(70 * sy)), (20, 20, 25), -1)
+        banner_text = f"COMPUTER VISION DETECTION OVERLAY  |  ROLL: {sheet_data.roll_number}  |  ATTEMPTED: {attempted_cnt}/90"
+        cv2.putText(annotated, banner_text, (int(30 * sx), int(45 * sy)), cv2.FONT_HERSHEY_SIMPLEX, 0.9 * sx, (0, 240, 255), max(2, int(2.5 * sx)))
+
+        # 2. Roll Number Matrix Overlay
+        rx1, rx2 = int(200 * sx), int(1120 * sx)
+        ry1, ry2 = int(340 * sy), int(500 * sy)
+        cv2.rectangle(annotated, (rx1, ry1), (rx2, ry2), (255, 200, 0), max(2, int(3 * sx)))
+        cv2.putText(annotated, f"DETECTED ROLL NO: {sheet_data.roll_number}", (rx1, ry1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8 * sx, (255, 200, 0), max(2, int(2 * sx)))
+
+        for d_i, char in enumerate(sheet_data.roll_number):
+            if char.isdigit():
+                digit_val = int(char)
+                bx = int((220 + d_i * 90) * sx)
+                by = int((385 + digit_val * 8) * sy)
+                cv2.circle(annotated, (bx, by), max(3, int(8 * sx)), (255, 200, 0), max(1, int(2 * sx)))
+
+        # 3. Section A (MCQs)
+        sec_a_specs = [
+            (1, 20, 210, "CHEMISTRY"),
+            (31, 50, 910, "PHYSICS"),
+            (61, 80, 1610, "MATHEMATICS")
+        ]
+        mcq_opts = ["A", "B", "C", "D"]
+        resp_dict = {r.question_no: r for r in sheet_data.responses}
+
+        for start, end, x_base, subj in sec_a_specs:
+            cv2.putText(annotated, f"SECTION A: {subj} (Q{start}-Q{end})", (int(x_base * sx), int(640 * sy)), cv2.FONT_HERSHEY_SIMPLEX, 0.75 * sx, (0, 140, 255), max(2, int(2 * sx)))
+            for q_num in range(start, end + 1):
+                y_pos = int((675 + (q_num - start) * 48) * sy)
+                resp = resp_dict.get(q_num)
+                if resp and resp.selected_option in mcq_opts:
+                    o_idx = mcq_opts.index(resp.selected_option)
+                    bx = int((x_base + 188 + o_idx * 75) * sx)
+                    rad = max(4, int(15 * sx))
+                    # Draw glowing green circle around detected marked bubble
+                    cv2.circle(annotated, (bx, y_pos), rad + 4, (0, 220, 50), max(2, int(3 * sx)))
+                    cv2.circle(annotated, (bx, y_pos), max(2, int(4 * sx)), (0, 220, 50), -1)
+                    cv2.putText(annotated, f"[{resp.selected_option}]", (int((x_base + 490) * sx), y_pos + int(6 * sy)), cv2.FONT_HERSHEY_SIMPLEX, 0.6 * sx, (0, 200, 40), max(1, int(2 * sx)))
+                elif resp and resp.has_multiple_marks:
+                    cv2.putText(annotated, "[MULTIPLE]", (int((x_base + 490) * sx), y_pos + int(6 * sy)), cv2.FONT_HERSHEY_SIMPLEX, 0.55 * sx, (0, 100, 255), max(1, int(2 * sx)))
+
+        # 4. Section B (Numerical)
+        sec_b_specs = [
+            (21, 30, 180, "CHEMISTRY"),
+            (51, 60, 880, "PHYSICS"),
+            (81, 90, 1580, "MATHEMATICS")
+        ]
+        for start, end, x_base, subj in sec_b_specs:
+            cv2.putText(annotated, f"SECTION B: {subj} (NUMERICAL)", (int(x_base * sx), int(1800 * sy)), cv2.FONT_HERSHEY_SIMPLEX, 0.75 * sx, (220, 0, 180), max(2, int(2 * sx)))
+            for q_num in range(start, end + 1):
+                y_center = int((1845 + (q_num - start) * 145) * sy)
+                resp = resp_dict.get(q_num)
+                if resp and resp.numerical_value:
+                    bx1 = int((x_base + 110) * sx)
+                    bx2 = int((x_base + 230) * sx)
+                    by1 = int((y_center - 10) * sy)
+                    by2 = int((y_center + 40) * sy)
+                    cv2.rectangle(annotated, (bx1, by1), (bx2, by2), (220, 0, 180), max(2, int(3 * sx)))
+                    cv2.putText(annotated, f"Q{q_num}: {resp.numerical_value}", (bx1, by1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.7 * sx, (220, 0, 180), max(2, int(2 * sx)))
+
+        _, enc = cv2.imencode(".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+        return enc.tobytes()
+
+    @classmethod
+    def generate_pdf_detection_overlay(
+        cls,
+        pdf_bytes: bytes,
+        sheet_data: ExtractedSheetData
+    ) -> bytes:
+        """
+        Renders page 1 of the marked question paper with detection overlays.
+        """
+        import fitz
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        if len(doc) == 0:
+            return b""
+        page = doc[0]
+        pix = page.get_pixmap(dpi=150)
+        img = np.frombuffer(pix.samples, dtype=np.uint8).reshape((pix.height, pix.width, pix.n))
+        if pix.n == 4:
+            img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGR)
+        else:
+            img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+
+        h, w = img.shape[:2]
+        attempted_cnt = len([r for r in sheet_data.responses if r.is_attempted])
+        cv2.rectangle(img, (0, 0), (w, 50), (20, 20, 25), -1)
+        banner_text = f"MARKED QUESTION PAPER DETECTION MAP  |  PAGES: {len(doc)}  |  DETECTED: {attempted_cnt}/90"
+        cv2.putText(img, banner_text, (20, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 240, 255), 2)
+
+        _, enc = cv2.imencode(".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+        return enc.tobytes()

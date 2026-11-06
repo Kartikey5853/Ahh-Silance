@@ -28,6 +28,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onEvaluationComple
   const [sheetScanStatus, setSheetScanStatus] = useState<"idle" | "scanning" | "ready" | "error">("idle");
   const [sheetScanMessage, setSheetScanMessage] = useState<string | null>(null);
   const [sheetHash, setSheetHash] = useState<string | null>(null);
+  const [sheetOverlayUrl, setSheetOverlayUrl] = useState<string | null>(null);
 
   const [keyScanStatus, setKeyScanStatus] = useState<"idle" | "scanning" | "ready" | "error">("idle");
   const [keyScanMessage, setKeyScanMessage] = useState<string | null>(null);
@@ -36,6 +37,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onEvaluationComple
   // In-App Document Viewer State
   const [viewerFile, setViewerFile] = useState<File | null>(null);
   const [viewerTitle, setViewerTitle] = useState<string>("Document Viewer");
+  const [viewerInitialMode, setViewerInitialMode] = useState<"original" | "overlay">("original");
 
   // Camera Modal State
   const [cameraActiveFor, setCameraActiveFor] = useState<"sheet" | "answerKey" | null>(null);
@@ -50,6 +52,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onEvaluationComple
   const handleSheetSelect = (file: File | null) => {
     setSheetFile(file);
     setSheetHash(null);
+    setSheetOverlayUrl(null);
 
     if (!file) {
       setSheetScanStatus("idle");
@@ -63,6 +66,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onEvaluationComple
     evaluateApi.prescanSheet(file)
       .then((res) => {
         setSheetHash(res.sheet_hash);
+        if (res.overlay_url) {
+          setSheetOverlayUrl(res.overlay_url);
+        }
         setSheetScanStatus("ready");
         const bubbles = res.detected_bubbles || 0;
         const attempts = res.attempted_count || 0;
@@ -193,7 +199,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onEvaluationComple
               onViewFile={() => {
                 setViewerFile(sheetFile);
                 setViewerTitle("Student Response Document");
+                setViewerInitialMode("original");
               }}
+              onViewDetectionMap={sheetOverlayUrl ? () => {
+                setViewerFile(sheetFile);
+                setViewerTitle("Vision Detection Overlay Map");
+                setViewerInitialMode("overlay");
+              } : undefined}
               scanStatus={sheetScanStatus}
               scanMessage={sheetScanMessage}
             />
@@ -296,6 +308,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onEvaluationComple
         <DocumentViewerModal
           file={viewerFile}
           title={viewerTitle}
+          overlayUrl={viewerFile === sheetFile ? sheetOverlayUrl : null}
+          initialMode={viewerInitialMode}
           onClose={() => setViewerFile(null)}
         />
       )}
