@@ -1,0 +1,548 @@
+{
+  "sheet_id": "external_omr_02",
+  "roll_no": "2403102288",
+  "booklet_code": "SET B",
+  "exam_title": "JEE Main 2025 Jan Session",
+  "student_responses": {
+    "1": {
+      "question_no": 1,
+      "subject": "CHEMISTRY",
+      "marked_option": "C",
+      "is_attempted": true
+    },
+    "2": {
+      "question_no": 2,
+      "subject": "CHEMISTRY",
+      "marked_option": "B",
+      "is_attempted": true
+    },
+    "3": {
+      "question_no": 3,
+      "subject": "CHEMISTRY",
+      "marked_option": "C",
+      "is_attempted": true
+    },
+    "4": {
+      "question_no": 4,
+      "subject": "CHEMISTRY",
+      "marked_option": "A",
+      "is_attempted": true
+    },
+    "5": {
+      "question_no": 5,
+      "subject": "CHEMISTRY",
+      "marked_option": "C",
+      "is_attempted": true
+    },
+    "6": {
+      "question_no": 6,
+      "subject": "CHEMISTRY",
+      "marked_option": "D",
+      "is_attempted": true
+    },
+    "7": {
+      "question_no": 7,
+      "subject": "CHEMISTRY",
+      "marked_option": "D",
+      "is_attempted": true
+    },
+    "8": {
+      "question_no": 8,
+      "subject": "CHEMISTRY",
+      "marked_option": "B",
+      "is_attempted": true
+    },
+    "9": {
+      "question_no": 9,
+      "subject": "CHEMISTRY",
+      "marked_option": "B",
+      "is_attempted": true
+    },
+    "10": {
+      "question_no": 10,
+      "subject": "CHEMISTRY",
+      "marked_option": "A",
+      "is_attempted": true
+    },
+    "11": {
+      "question_no": 11,
+      "subject": "CHEMISTRY",
+      "marked_option": null,
+      "is_attempted": false
+    },
+    "12": {
+      "question_no": 12,
+      "subject": "CHEMISTRY",
+      "marked_option": "A",
+      "is_attempted": true
+    },
+    "13": {
+      "question_no": 13,
+      "subject": "CHEMISTRY",
+      "marked_option": "C",
+      "is_attempted": true
+    },
+    "14": {
+      "question_no": 14,
+      "subject": "CHEMISTRY",
+      "marked_option": "D",
+      "is_attempted": true
+    },
+    "15": {
+      "question_no": 15,
+      "subject": "CHEMISTRY",
+      "marked_option": "A",
+      "is_attempted": true
+    },
+    "16": {
+      "question_no": 16,
+      "subject": "CHEMISTRY",
+      "marked_option": "C",
+      "is_attempted": true
+    },
+    "17": {
+      "question_no": 17,
+      "subject": "CHEMISTRY",
+      "marked_option": null,
+      "is_attempted": false
+    },
+    "18": {
+      "question_no": 18,
+      "subject": "CHEMISTRY",
+      "marked_option": "A",
+      "is_attempted": true
+    },
+    "19": {
+      "question_no": 19,
+      "subject": "CHEMISTRY",
+      "marked_option": "B",
+      "is_attempted": true
+    },
+    "20": {
+      "question_no": 20,
+      "subject": "CHEMISTRY",
+      "marked_option": "A",
+      "is_attempted": true
+    },
+    "31": {
+      "question_no": 31,
+      "subject": "PHYSICS",
+      "marked_option": "C",
+      "is_attempted": true
+    },
+    "32": {
+      "question_no": 32,
+      "subject": "PHYSICS",
+      "marked_option": "B",
+      "is_attempted": true
+    },
+    "33": {
+      "question_no": 33,
+      "subject": "PHYSICS",
+      "marked_option": "B",
+      "is_attempted": true
+    },
+    "34": {
+      "question_no": 34,
+      "subject": "PHYSICS",
+      "marked_option": "C",
+      "is_attempted": true
+    },
+    "35": {
+      "question_no": 35,
+      "subject": "PHYSICS",
+      "marked_option": "A",
+      "is_attempted": true
+    },
+    "36": {
+      "question_no": 36,
+      "subject": "PHYSICS",
+      "marked_option": "D",
+      "is_attempted": true
+    },
+    "37": {
+      "question_no": 37,
+      "subject": "PHYSICS",
+      "marked_option": "A",
+      "is_attempted": true
+    },
+    "38": {
+      "question_no": 38,
+      "subject": "PHYSICS",
+      "marked_option": "D",
+      "is_attempted": true
+    },
+    "39": {
+      "question_no": 39,
+      "subject": "PHYSICS",
+      "marked_option": null,
+      "is_attempted": false
+    },
+    "40": {
+      "question_no": 40,
+      "subject": "PHYSICS",
+      "marked_option": "A",
+      "is_attempted": true
+    },
+    "41": {
+      "question_no": 41,
+      "subject": "PHYSICS",
+      "marked_option": "A",
+      "is_attempted": true
+    },
+    "42": {
+      "question_no": 42,
+      "subject": "PHYSICS",
+      "marked_option": "B",
+      "is_attempted": true
+    },
+    "43": {
+      "question_no": 43,
+      "subject": "PHYSICS",
+      "marked_option": "C",
+      "is_attempted": true
+    },
+    "44": {
+      "question_no": 44,
+      "subject": "PHYSICS",
+      "marked_option": "D",
+      "is_attempted": true
+    },
+    "45": {
+      "question_no": 45,
+      "subject": "PHYSICS",
+      "marked_option": "D",
+      "is_attempted": true
+    },
+    "46": {
+      "question_no": 46,
+      "subject": "PHYSICS",
+      "marked_option": "B",
+      "is_attempted": true
+    },
+    "47": {
+      "question_no": 47,
+      "subject": "PHYSICS",
+      "marked_option": "D",
+      "is_attempted": true
+    },
+    "48": {
+      "question_no": 48,
+      "subject": "PHYSICS",
+      "marked_option": null,
+      "is_attempted": false
+    },
+    "49": {
+      "question_no": 49,
+      "subject": "PHYSICS",
+      "marked_option": "D",
+      "is_attempted": true
+    },
+    "50": {
+      "question_no": 50,
+      "subject": "PHYSICS",
+      "marked_option": "B",
+      "is_attempted": true
+    },
+    "61": {
+      "question_no": 61,
+      "subject": "MATHEMATICS",
+      "marked_option": null,
+      "is_attempted": false
+    },
+    "62": {
+      "question_no": 62,
+      "subject": "MATHEMATICS",
+      "marked_option": "D",
+      "is_attempted": true
+    },
+    "63": {
+      "question_no": 63,
+      "subject": "MATHEMATICS",
+      "marked_option": "C",
+      "is_attempted": true
+    },
+    "64": {
+      "question_no": 64,
+      "subject": "MATHEMATICS",
+      "marked_option": "A",
+      "is_attempted": true
+    },
+    "65": {
+      "question_no": 65,
+      "subject": "MATHEMATICS",
+      "marked_option": "D",
+      "is_attempted": true
+    },
+    "66": {
+      "question_no": 66,
+      "subject": "MATHEMATICS",
+      "marked_option": "C",
+      "is_attempted": true
+    },
+    "67": {
+      "question_no": 67,
+      "subject": "MATHEMATICS",
+      "marked_option": "C",
+      "is_attempted": true
+    },
+    "68": {
+      "question_no": 68,
+      "subject": "MATHEMATICS",
+      "marked_option": "A",
+      "is_attempted": true
+    },
+    "69": {
+      "question_no": 69,
+      "subject": "MATHEMATICS",
+      "marked_option": null,
+      "is_attempted": false
+    },
+    "70": {
+      "question_no": 70,
+      "subject": "MATHEMATICS",
+      "marked_option": "C",
+      "is_attempted": true
+    },
+    "71": {
+      "question_no": 71,
+      "subject": "MATHEMATICS",
+      "marked_option": "C",
+      "is_attempted": true
+    },
+    "72": {
+      "question_no": 72,
+      "subject": "MATHEMATICS",
+      "marked_option": "C",
+      "is_attempted": true
+    },
+    "73": {
+      "question_no": 73,
+      "subject": "MATHEMATICS",
+      "marked_option": "B",
+      "is_attempted": true
+    },
+    "74": {
+      "question_no": 74,
+      "subject": "MATHEMATICS",
+      "marked_option": "C",
+      "is_attempted": true
+    },
+    "75": {
+      "question_no": 75,
+      "subject": "MATHEMATICS",
+      "marked_option": "B",
+      "is_attempted": true
+    },
+    "76": {
+      "question_no": 76,
+      "subject": "MATHEMATICS",
+      "marked_option": null,
+      "is_attempted": false
+    },
+    "77": {
+      "question_no": 77,
+      "subject": "MATHEMATICS",
+      "marked_option": null,
+      "is_attempted": false
+    },
+    "78": {
+      "question_no": 78,
+      "subject": "MATHEMATICS",
+      "marked_option": "A",
+      "is_attempted": true
+    },
+    "79": {
+      "question_no": 79,
+      "subject": "MATHEMATICS",
+      "marked_option": "B",
+      "is_attempted": true
+    },
+    "80": {
+      "question_no": 80,
+      "subject": "MATHEMATICS",
+      "marked_option": "D",
+      "is_attempted": true
+    },
+    "21": {
+      "question_no": 21,
+      "subject": "CHEMISTRY",
+      "numerical_value": "82.0",
+      "is_attempted": true
+    },
+    "22": {
+      "question_no": 22,
+      "subject": "CHEMISTRY",
+      "numerical_value": "17.0",
+      "is_attempted": true
+    },
+    "23": {
+      "question_no": 23,
+      "subject": "CHEMISTRY",
+      "numerical_value": "21.0",
+      "is_attempted": true
+    },
+    "24": {
+      "question_no": 24,
+      "subject": "CHEMISTRY",
+      "numerical_value": "28.0",
+      "is_attempted": true
+    },
+    "25": {
+      "question_no": 25,
+      "subject": "CHEMISTRY",
+      "numerical_value": "38.0",
+      "is_attempted": true
+    },
+    "26": {
+      "question_no": 26,
+      "subject": "CHEMISTRY",
+      "numerical_value": "45.0",
+      "is_attempted": true
+    },
+    "27": {
+      "question_no": 27,
+      "subject": "CHEMISTRY",
+      "numerical_value": "49.0",
+      "is_attempted": true
+    },
+    "28": {
+      "question_no": 28,
+      "subject": "CHEMISTRY",
+      "numerical_value": null,
+      "is_attempted": false
+    },
+    "29": {
+      "question_no": 29,
+      "subject": "CHEMISTRY",
+      "numerical_value": null,
+      "is_attempted": false
+    },
+    "30": {
+      "question_no": 30,
+      "subject": "CHEMISTRY",
+      "numerical_value": null,
+      "is_attempted": false
+    },
+    "51": {
+      "question_no": 51,
+      "subject": "PHYSICS",
+      "numerical_value": "67.0",
+      "is_attempted": true
+    },
+    "52": {
+      "question_no": 52,
+      "subject": "PHYSICS",
+      "numerical_value": "74.0",
+      "is_attempted": true
+    },
+    "53": {
+      "question_no": 53,
+      "subject": "PHYSICS",
+      "numerical_value": "81.0",
+      "is_attempted": true
+    },
+    "54": {
+      "question_no": 54,
+      "subject": "PHYSICS",
+      "numerical_value": "13.0",
+      "is_attempted": true
+    },
+    "55": {
+      "question_no": 55,
+      "subject": "PHYSICS",
+      "numerical_value": "20.0",
+      "is_attempted": true
+    },
+    "56": {
+      "question_no": 56,
+      "subject": "PHYSICS",
+      "numerical_value": null,
+      "is_attempted": false
+    },
+    "57": {
+      "question_no": 57,
+      "subject": "PHYSICS",
+      "numerical_value": null,
+      "is_attempted": false
+    },
+    "58": {
+      "question_no": 58,
+      "subject": "PHYSICS",
+      "numerical_value": null,
+      "is_attempted": false
+    },
+    "59": {
+      "question_no": 59,
+      "subject": "PHYSICS",
+      "numerical_value": null,
+      "is_attempted": false
+    },
+    "60": {
+      "question_no": 60,
+      "subject": "PHYSICS",
+      "numerical_value": null,
+      "is_attempted": false
+    },
+    "81": {
+      "question_no": 81,
+      "subject": "MATHEMATICS",
+      "numerical_value": "52.0",
+      "is_attempted": true
+    },
+    "82": {
+      "question_no": 82,
+      "subject": "MATHEMATICS",
+      "numerical_value": "59.0",
+      "is_attempted": true
+    },
+    "83": {
+      "question_no": 83,
+      "subject": "MATHEMATICS",
+      "numerical_value": "69.0",
+      "is_attempted": true
+    },
+    "84": {
+      "question_no": 84,
+      "subject": "MATHEMATICS",
+      "numerical_value": "73.0",
+      "is_attempted": true
+    },
+    "85": {
+      "question_no": 85,
+      "subject": "MATHEMATICS",
+      "numerical_value": "83.0",
+      "is_attempted": true
+    },
+    "86": {
+      "question_no": 86,
+      "subject": "MATHEMATICS",
+      "numerical_value": null,
+      "is_attempted": false
+    },
+    "87": {
+      "question_no": 87,
+      "subject": "MATHEMATICS",
+      "numerical_value": null,
+      "is_attempted": false
+    },
+    "88": {
+      "question_no": 88,
+      "subject": "MATHEMATICS",
+      "numerical_value": null,
+      "is_attempted": false
+    },
+    "89": {
+      "question_no": 89,
+      "subject": "MATHEMATICS",
+      "numerical_value": null,
+      "is_attempted": false
+    },
+    "90": {
+      "question_no": 90,
+      "subject": "MATHEMATICS",
+      "numerical_value": null,
+      "is_attempted": false
+    }
+  }
+}
