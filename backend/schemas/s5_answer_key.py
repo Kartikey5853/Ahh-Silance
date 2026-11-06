@@ -29,8 +29,9 @@ class MasterAnswerKey(BaseModel):
     """
     Complete master answer key for a specific exam shift and booklet code.
     """
-    exam_id: str = Field(..., description="Unique exam identifier e.g. JEE_Main_2025_Jan_22_Shift1")
+    exam_id: str = Field(..., description="Unique exam identifier e.g. JEE_Main_2025_Jan_22_Shift1 or JEE_Advanced_2025_Paper1")
     exam_title: str = Field(..., description="Human-readable exam name")
+    exam_type: str = Field(default="JEE_MAIN", description="Detected exam classification: JEE_MAIN or JEE_ADVANCED")
     booklet_code: str = Field(default="SET A", description="Booklet set code")
     total_questions: int = Field(default=90, description="Number of questions in paper")
-    items: List[MasterKeyItem] = Field(..., description="List of 90 answer key items")
+    items: List[MasterKeyItem] = Field(..., description="List of answer key items")

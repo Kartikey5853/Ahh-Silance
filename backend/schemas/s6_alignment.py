@@ -27,6 +27,7 @@ class AlignmentResult(BaseModel):
     """
     document_id: str = Field(..., description="Target document identifier")
     exam_id: str = Field(..., description="Matched master key exam identifier")
+    exam_type: str = Field(default="JEE_MAIN", description="Detected exam classification: JEE_MAIN or JEE_ADVANCED")
     matched_booklet_code: str = Field(..., description="Booklet code used for alignment")
     total_aligned_questions: int = Field(default=90, description="Number of aligned questions")
     aligned_pairs: List[AlignedQuestionPair] = Field(..., description="Sparse hash-map aligned pairs")

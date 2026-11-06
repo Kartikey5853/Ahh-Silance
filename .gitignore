@@ -3,6 +3,8 @@ Dataset/*
 !Dataset/external_test/
 !Dataset/synthetically_generated/
 !Dataset/synthetically_generated/**
+!Dataset/jee_advanced/
+!Dataset/jee_advanced/**
 *.pdf
 !Dataset/external_test/*.pdf
 

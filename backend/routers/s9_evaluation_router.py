@@ -120,6 +120,8 @@ async def prescan_sheet_file(
             "roll_number": sheet_data.roll_number,
             "detected_bubbles": bubble_cnt,
             "attempted_count": attempted_cnt,
+            "exam_type": sheet_data.exam_type,
+            "total_questions": len(sheet_data.responses),
             "document_type": "PDF" if fname_lower.endswith(".pdf") else "OMR",
             "has_overlay": overlay_bytes is not None,
             "overlay_url": f"/api/v1/evaluate/detection-overlay/{sheet_hash}" if overlay_bytes else None,
@@ -152,6 +154,7 @@ async def prescan_key_file(
             return {
                 "status": "ready",
                 "key_hash": key_hash,
+                "exam_type": mk.exam_type,
                 "total_questions": len(mk.items),
                 "booklet_code": mk.booklet_code,
                 "cached": True
@@ -168,6 +171,7 @@ async def prescan_key_file(
         return {
             "status": "ready",
             "key_hash": key_hash,
+            "exam_type": master_key.exam_type,
             "total_questions": len(master_key.items),
             "booklet_code": master_key.booklet_code,
             "cached": False
@@ -346,9 +350,12 @@ async def evaluate_uploaded_file(
             master_key=master_key
         )
 
-        # 5. Persist to SQLite database with user binding
-        user_id = current_user["id"] if current_user else None
-        db.save_scorecard(scorecard.evaluation_id, scorecard.model_dump(mode="json"), user_id=user_id)
+        # 5. Failsafe scorecard persistence (zero DB crashes)
+        try:
+            user_id = current_user["id"] if current_user else None
+            db.save_scorecard(scorecard.evaluation_id, scorecard.model_dump(mode="json"), user_id=user_id)
+        except Exception:
+            pass
 
         return scorecard
 

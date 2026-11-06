@@ -55,8 +55,16 @@ export const ResultPage: React.FC<ResultPageProps> = ({ scorecard, onBackToDashb
       <div className="card" style={{ padding: "2rem", marginBottom: "1.5rem" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
           <div>
-            <span className="brand-badge" style={{ marginBottom: "0.5rem", display: "inline-block" }}>
-              Official Evaluation Result
+            <span
+              className="brand-badge"
+              style={{
+                marginBottom: "0.5rem",
+                display: "inline-block",
+                backgroundColor: candidate.exam_type === "JEE_ADVANCED" ? "rgba(37, 99, 235, 0.1)" : "rgba(34, 197, 94, 0.1)",
+                color: candidate.exam_type === "JEE_ADVANCED" ? "var(--blue)" : "var(--green)"
+              }}
+            >
+              {candidate.exam_type === "JEE_ADVANCED" ? "JEE Advanced Official Scorecard" : "JEE Main Official Scorecard"}
             </span>
             <h1 style={{ fontSize: "1.75rem", fontWeight: 800, color: "var(--text-primary)" }}>
               {candidate.candidate_name}
@@ -102,12 +110,19 @@ export const ResultPage: React.FC<ResultPageProps> = ({ scorecard, onBackToDashb
           </div>
 
           <div style={{ background: "var(--bg-secondary)", padding: "0.85rem", borderRadius: "6px", textAlign: "center" }}>
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "block" }}>Correct (+4)</span>
+            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "block" }}>Full Correct</span>
             <strong style={{ fontSize: "1.25rem", color: "var(--green)" }}>{scoring.correct_count}</strong>
           </div>
 
+          {scoring.partially_correct_count && scoring.partially_correct_count > 0 ? (
+            <div style={{ background: "var(--bg-secondary)", padding: "0.85rem", borderRadius: "6px", textAlign: "center" }}>
+              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "block" }}>Partial Credit</span>
+              <strong style={{ fontSize: "1.25rem", color: "var(--blue)" }}>{scoring.partially_correct_count}</strong>
+            </div>
+          ) : null}
+
           <div style={{ background: "var(--bg-secondary)", padding: "0.85rem", borderRadius: "6px", textAlign: "center" }}>
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "block" }}>Incorrect (-1)</span>
+            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "block" }}>Incorrect</span>
             <strong style={{ fontSize: "1.25rem", color: "var(--red)" }}>{scoring.incorrect_count}</strong>
           </div>
 
@@ -116,10 +131,12 @@ export const ResultPage: React.FC<ResultPageProps> = ({ scorecard, onBackToDashb
             <strong style={{ fontSize: "1.25rem", color: "var(--text-muted)" }}>{scoring.unattempted_count}</strong>
           </div>
 
-          <div style={{ background: "var(--bg-secondary)", padding: "0.85rem", borderRadius: "6px", textAlign: "center" }}>
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "block" }}>Section B Discarded</span>
-            <strong style={{ fontSize: "1.25rem", color: "var(--amber)" }}>{scoring.overflow_ignored_count}</strong>
-          </div>
+          {candidate.exam_type !== "JEE_ADVANCED" && (
+            <div style={{ background: "var(--bg-secondary)", padding: "0.85rem", borderRadius: "6px", textAlign: "center" }}>
+              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "block" }}>Section B Discarded</span>
+              <strong style={{ fontSize: "1.25rem", color: "var(--amber)" }}>{scoring.overflow_ignored_count}</strong>
+            </div>
+          )}
         </div>
       </div>
 

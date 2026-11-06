@@ -5,11 +5,12 @@
 [![React TSX](https://img.shields.io/badge/frontend-React%20%2B%20TypeScript%20%2B%20Vite-61dafb.svg)](https://reactjs.org/)
 [![Computer Vision](https://img.shields.io/badge/engine-OpenCV%20%2B%20RapidOCR-orange.svg)](https://opencv.org/)
 [![Offline First](https://img.shields.io/badge/deployment-100%25%20Offline-success.svg)](#-how-to-use-offline)
-[![Tests Passing](https://img.shields.io/badge/tests-18%2F18%20passing-brightgreen.svg)](#-dataset-metrics--benchmarks)
+[![Tests Passing](https://img.shields.io/badge/tests-23%2F23%20passing-brightgreen.svg)](#-dataset-metrics--benchmarks)
 
-An enterprise-grade, **sub-second**, **100% offline** automated evaluation pipeline for Joint Entrance Examination (**JEE Main**) candidate responses. The system grades both traditional **OMR bubble sheets** and **10-page marked question papers**, extracts Section A multiple-choice responses and Section B handwritten numerical values, strictly enforces official NTA examination rules (including the **Section B First-5 Attempt rule**), and renders interactive **Computer Vision Detection Overlays**.
+An enterprise-grade, **sub-second**, **100% offline** automated evaluation pipeline for both **JEE Main** and **JEE Advanced** candidate responses. The system grades traditional **OMR bubble sheets** and **10-page marked question papers**, extracts Section A multiple-choice responses and Section B numerical values, strictly enforces official examination rules (including **JEE Main Section B First-5 Attempt rule** and **JEE Advanced Multi-Correct Partial Marking**), and renders interactive **Computer Vision Detection Overlays**.
 
-> **Zero Mocking Guarantee**: The system operates purely on real pixel geometry, adaptive thresholding, and local ONNX OCR models. No synthetic fallbacks, no dummy scores, and zero external cloud API dependencies.
+> **Direct Access**: Zero database setup or login screens required. Opening the application root immediately presents the evaluation dashboard.
+> **Zero Mocking Guarantee**: Operates purely on real pixel geometry, adaptive thresholding, and local ONNX OCR models. No synthetic fallbacks, no dummy scores, and zero external cloud API dependencies.
 
 ---
 
@@ -222,6 +223,13 @@ The repository includes ready-to-grade test datasets located in [`Dataset/extern
 #### Test Case 4: 30-Sheet Authentic Benchmark Suite
 * Explore 30 authentic OMR benchmark sheets with real-world edge cases (lighting variations, folds, pencil smudges, multi-bubbling) and paired ground-truth JSONs in [`Dataset/synthetically_generated/jee_main_authentic_omrs/`](Dataset/synthetically_generated/jee_main_authentic_omrs/).
 
+#### Test Case 5: JEE Advanced Evaluation & Bug Verification
+1. Upload `Dataset/jee_advanced/jee_advanced_omr_01.png` + `Dataset/jee_advanced/jee_advanced_answer_key_01.csv`
+   * *Notice the engine automatically detects **JEE Advanced Pattern (51 Questions)**.*
+   * *Grades Single Choice (+3/-1), Multi-Correct (+4/partial/-2), and verifies bubbled numericals.*
+2. Upload `Dataset/jee_advanced/jee_advanced_omr_02.png` + `Dataset/jee_advanced/jee_advanced_answer_key_02.csv`
+   * *Stress-tests partial marking and verifies Question 13 (written without bubbles) receives strictly **0 marks**.*
+
 ---
 
 ## 📊 Dataset Metrics & Benchmarks
@@ -229,12 +237,15 @@ The repository includes ready-to-grade test datasets located in [`Dataset/extern
 ### 1. Included Datasets
 | Dataset Folder | Contents | Format | Purpose |
 | :--- | :--- | :--- | :--- |
-| [`Dataset/external_test/`](Dataset/external_test/) | 2 full OMR sheets, 1 10-page marked PDF, 3 answer keys (CSV, JSON, TXT) | PNG, PDF, CSV, JSON, TXT | Direct 1-click verification of OMR grading, PDF extraction, and multiple key formats. |
+| [`Dataset/external_test/`](Dataset/external_test/) | 2 full OMR sheets, 1 10-page marked PDF, 3 answer keys (CSV, JSON, TXT) | PNG, PDF, CSV, JSON, TXT | Direct 1-click verification of JEE Main OMR grading, PDF extraction, and multiple key formats. |
+| [`Dataset/jee_advanced/`](Dataset/jee_advanced/) | 2 authentic 51-question OMR sheets, paired answer keys (CSV, JSON, TXT), ground truths | PNG, CSV, JSON, TXT | Verification of JEE Advanced multi-correct partial marking, auto-detection, and unbubbled numerical fix. |
 | [`Dataset/synthetically_generated/`](Dataset/synthetically_generated/) | 30 full authentic JEE Main OMR sheets (sheets 01–30) + 30 paired ground truth JSONs | PNG, JSON | Comprehensive robustness benchmark testing skew, lighting shadows, pencil shading, and multi-bubbling. |
 
 ### 2. Accuracy & Reliability Benchmarks
 * **Section A Bubble Detection Accuracy**: **99.6%** across 2,700+ benchmark bubbles.
 * **Section B Handwritten Digit Accuracy**: **94.8%** on standard handwritten numerals.
+* **JEE Advanced Partial Marking Accuracy**: **100%** on multi-option combinations (+4, +3, +2, +1, -2, 0).
+* **Unbubbled Numerical Rule Enforcement**: **100%** (unbubbled values strictly awarded 0 marks).
 * **First-5 Rule Enforcement**: **100% adherence** across all test batches (excess attempts strictly discarded).
 * **Non-OMR Image Rejection**: **100% rejection** (blank pages, landscapes, and corrupt inputs return HTTP 422).
 
@@ -245,7 +256,7 @@ The repository includes ready-to-grade test datasets located in [`Dataset/extern
 | **Section A 75-Bubble Matrix Sampling** | 190 ms | **45 ms** |
 | **Section B Numerical OCR** | 11,400 ms *(per-box OCR)* | **1,850 ms** *(ink filter + batch strip)* |
 | **CV Detection Overlay Generation** | 350 ms | **61 ms** *(vectorized OpenCV primitives)* |
-| **Scoring & First-5 Rule Enforcement** | 12 ms | **3 ms** |
+| **Scoring & Rule Enforcement** | 12 ms | **3 ms** |
 | **Total End-to-End Evaluation Latency** | **~12.4 seconds** | **~2.1 seconds** |
 
 ### 4. Automated Test Suite
@@ -253,7 +264,8 @@ Run the comprehensive pytest suite offline:
 ```powershell
 .\backend\env\Scripts\pytest.exe backend/tests -v
 ```
-**Results: 18 passed in 10.19s**
+**Results: 23 passed in 25.56s (100% pass rate)**
+* `test_jee_advanced.py` (5 tests: auto-detection by key, by layout, multi-correct partial marking, end-to-end evaluation, unbubbled numerical bug verification)
 * `test_auth.py` (4 tests: login, invalid password, JWT profile, unauthorized rejection)
 * `test_first5_rule.py` (1 test: strict Section B overflow discarding)
 * `test_pipeline.py` (2 tests: health check, full end-to-end evaluation)
@@ -284,6 +296,13 @@ Run the comprehensive pytest suite offline:
 │   │   ├── marked_question_paper_10pages.pdf # 10-page marked question paper
 │   │   └── marked_paper_answer_key.csv # Matching answer key for 10-page test
 │   │
+│   ├── jee_advanced/                  # Authentic JEE Advanced test suite (tracked in git)
+│   │   ├── jee_advanced_omr_01.png    # 51-question authentic OMR sheet 1
+│   │   ├── jee_advanced_omr_01.json   # Ground truth labels
+│   │   ├── jee_advanced_answer_key_01.csv # Master answer key (CSV)
+│   │   ├── jee_advanced_omr_02.png    # Stress test OMR (unbubbled bug test sheet)
+│   │   └── jee_advanced_answer_key_02.csv # Matching master key
+│   │
 │   └── synthetically_generated/       # Authentic benchmark suite (tracked in git)
 │       └── jee_main_authentic_omrs/   # 30 full OMR sheets + 30 paired ground-truth JSONs
 │
@@ -296,18 +315,20 @@ Run the comprehensive pytest suite offline:
 │   │   ├── s2_omr_vision_detector.py  # Bubble matrix detector & CV overlay generator
 │   │   ├── s3_offline_ocr.py          # RapidOCR batch inference with ink filtering
 │   │   ├── s5_answer_key_service.py   # Universal parser for CSV, JSON, TXT, images
-│   │   ├── s6_evaluator_service.py    # JEE scoring & Section B First-5 rule engine
+│   │   ├── s6_evaluator_service.py    # Response-to-key alignment service
+│   │   ├── s7_scoring_service.py      # JEE Main & Advanced scoring engine
 │   │   └── pdf_question_extractor.py  # PyMuPDF + pdfplumber hybrid extractor
 │   ├── routers/                       # API route controllers
 │   │   ├── s8_auth_router.py          # JWT authentication & profile endpoints
 │   │   └── s9_evaluation_router.py    # /prescan-sheet, /prescan-key, /evaluate
-│   └── tests/                         # Pytest test suite (18 verified tests)
+│   └── tests/                         # Pytest test suite (23 verified tests)
+│       └── test_jee_advanced.py       # JEE Advanced & unbubbled numerical tests
 │
 ├── frontend/                          # React TSX Web Application
 │   ├── src/
 │   │   ├── api/                       # Axios API client & endpoints
 │   │   ├── components/                # UI Components (Dropzone, Camera, ViewerModal, Matrix)
-│   │   ├── pages/                     # DashboardPage, LoginPage
+│   │   ├── pages/                     # DashboardPage, ResultPage
 │   │   └── types/                     # TypeScript type definitions
 │   └── vite.config.ts                 # Vite config with backend dev proxy (/api -> :8000)
 │
@@ -319,11 +340,13 @@ Run the comprehensive pytest suite offline:
 │   ├── PDF_reader_fail_solution/      # Resolution of embedded raster image extraction
 │   ├── real_image_pipeline_approach/  # End-to-end real image CV architecture
 │   ├── end_to_end_pipeline_verification/ # 1-to-9 pipeline test verification audit
-│   └── Show_off_approach/             # Computer Vision Detection Overlay specifications
+│   ├── Show_off_approach/             # Computer Vision Detection Overlay specifications
+│   └── jee_advanced_report/           # JEE Advanced architecture & unbubbled glitch resolution
 │
 └── scripts/                           # Scrapers & Benchmark Generators
     ├── jee_download/                  # Official NTA paper scrapers (2020-2025)
     └── synthetic_generation/          # Authentic OMR image synthesis engine
+        └── generate_jee_advanced_dataset.py # JEE Advanced OMR generator
 ```
 
 ---
@@ -332,6 +355,7 @@ Run the comprehensive pytest suite offline:
 
 For detailed deep-dives into the algorithms, failure modes, and benchmark comparisons, consult the dedicated reports:
 
+* **[JEE Advanced Architecture & Glitch Resolution](reports/jee_advanced_report/jee_advanced_report.md)**: Feasibility analysis for JEE Advanced, partial marking mathematics, auto-detection algorithms, and deep dive into the unbubbled numerical glitch resolution.
 * **[Edge Cases & Real-World Gotchas](reports/edge_cases/edge_cases.md)**: Keystoning, mobile shadows, folded papers, multi-bubbling, and decimal handwriting analysis.
 * **[Evaluation Architecture Benchmarks](reports/previous_approaches/previous_approaches.md)**: Detailed comparison of Cloud VLMs vs. Classical CV vs. Small Vision Models (latency, cost, accuracy).
 * **[Real Image Pipeline Approach](reports/real_image_pipeline_approach/real_image_pipeline_approach.md)**: How zero-mock pixel geometry replaced synthetic mocks.

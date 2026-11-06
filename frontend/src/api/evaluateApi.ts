@@ -30,6 +30,8 @@ export interface PrescanSheetResult {
   roll_number?: string;
   detected_bubbles?: number;
   attempted_count?: number;
+  exam_type?: string;
+  total_questions?: number;
   document_type?: string;
   has_overlay?: boolean;
   overlay_url?: string | null;
@@ -40,6 +42,7 @@ export interface PrescanSheetResult {
 export interface PrescanKeyResult {
   status: string;
   key_hash: string;
+  exam_type?: string;
   total_questions?: number;
   booklet_code?: string;
   cached?: boolean;

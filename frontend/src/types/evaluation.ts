@@ -8,12 +8,14 @@
 export interface CandidateInfo {
   /** Full candidate display name */
   candidate_name?: string | null;
-  /** 10-digit detected or transcribed roll number */
+  /** Candidate roll number */
   roll_number?: string | null;
   /** Booklet test version (e.g. SET A) */
   booklet_code?: string | null;
   /** Official exam title string */
   exam_title: string;
+  /** Exam type: JEE_MAIN or JEE_ADVANCED */
+  exam_type?: string | null;
 }
 
 export type QuestionStatus = "CORRECT" | "INCORRECT" | "UNATTEMPTED" | "OVERFLOW_IGNORED";
@@ -62,19 +64,23 @@ export interface SubjectAnalytics {
 }
 
 export interface ScoringSummary {
+  /** Exam type: JEE_MAIN or JEE_ADVANCED */
+  exam_type?: string | null;
   /** Net aggregated score across all subjects */
   total_score: number;
-  /** Maximum possible test marks (300) */
+  /** Maximum possible test marks */
   max_possible_score: number;
   /** Total questions answered correctly */
   correct_count: number;
+  /** Total questions with partial credit (JEE Advanced) */
+  partially_correct_count?: number;
   /** Total questions answered incorrectly */
   incorrect_count: number;
   /** Total questions skipped */
   unattempted_count: number;
   /** Total extra Section B questions discarded by First-5 rule */
   overflow_ignored_count: number;
-  /** Detailed 90-question array of question scores */
+  /** Detailed array of question scores */
   question_scores: QuestionScoreItem[];
 }
 

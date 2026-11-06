@@ -35,6 +35,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onEvaluationComple
   const [keyScanMessage, setKeyScanMessage] = useState<string | null>(null);
   const [keyHash, setKeyHash] = useState<string | null>(null);
 
+  // Auto-detected exam pattern: "JEE_MAIN" | "JEE_ADVANCED" | null
+  const [detectedExamType, setDetectedExamType] = useState<string | null>(null);
+
   // In-App Document Viewer State
   const [viewerFile, setViewerFile] = useState<File | null>(null);
   const [viewerTitle, setViewerTitle] = useState<string>("Document Viewer");
@@ -67,6 +70,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onEvaluationComple
     evaluateApi.prescanSheet(file)
       .then((res) => {
         setSheetHash(res.sheet_hash);
+        if (res.exam_type) {
+          setDetectedExamType(res.exam_type);
+        }
         const overlaySource = res.overlay_data || (res.overlay_url ? resolveApiUrl(res.overlay_url) : null);
         if (overlaySource) {
           setSheetOverlayUrl(overlaySource);
@@ -74,7 +80,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onEvaluationComple
         setSheetScanStatus("ready");
         const bubbles = res.detected_bubbles || 0;
         const attempts = res.attempted_count || 0;
-        setSheetScanMessage(`✓ Pre-scanned: ${bubbles} bubbles verified • Roll #${res.roll_number || "Detected"} • ${attempts} attempted`);
+        const examName = res.exam_type === "JEE_ADVANCED" ? "JEE Advanced" : "JEE Main";
+        const totalQ = res.total_questions || (res.exam_type === "JEE_ADVANCED" ? 51 : 90);
+        setSheetScanMessage(`✓ ${examName} OMR: ${bubbles} bubbles verified • Roll #${res.roll_number || "Detected"} • ${attempts}/${totalQ} attempted`);
       })
       .catch((err) => {
         console.warn("Background sheet pre-scan error:", err);
@@ -102,8 +110,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onEvaluationComple
     evaluateApi.prescanKey(file)
       .then((res) => {
         setKeyHash(res.key_hash);
+        if (res.exam_type) {
+          setDetectedExamType(res.exam_type);
+        }
         setKeyScanStatus("ready");
-        setKeyScanMessage(`✓ Key Ready: ${res.total_questions || 90} master keys loaded • Booklet ${res.booklet_code || "SET A"}`);
+        const examName = res.exam_type === "JEE_ADVANCED" ? "JEE Advanced" : "JEE Main";
+        const totalQ = res.total_questions || (res.exam_type === "JEE_ADVANCED" ? 51 : 90);
+        setKeyScanMessage(`✓ ${examName} Key: ${totalQ} questions mapped • Booklet ${res.booklet_code || "SET A"}`);
       })
       .catch((err) => {
         console.warn("Background key pre-parse error:", err);
@@ -180,6 +193,37 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onEvaluationComple
 
       {/* Main Upload Form */}
       <form onSubmit={handleSubmit}>
+        {detectedExamType && (
+          <div
+            style={{
+              marginBottom: "1.25rem",
+              padding: "0.75rem 1.25rem",
+              borderRadius: "8px",
+              background: detectedExamType === "JEE_ADVANCED" ? "rgba(37, 99, 235, 0.08)" : "rgba(34, 197, 94, 0.08)",
+              border: `1px solid ${detectedExamType === "JEE_ADVANCED" ? "rgba(37, 99, 235, 0.25)" : "rgba(34, 197, 94, 0.25)"}`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: "0.5rem"
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <Zap size={18} color={detectedExamType === "JEE_ADVANCED" ? "var(--blue)" : "var(--green)"} />
+              <span style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                {detectedExamType === "JEE_ADVANCED"
+                  ? "JEE Advanced Architecture Auto-Detected"
+                  : "JEE Main Architecture Auto-Detected"}
+              </span>
+            </div>
+            <span style={{ fontSize: "0.82rem", color: "var(--text-secondary)", fontWeight: 500 }}>
+              {detectedExamType === "JEE_ADVANCED"
+                ? "51 Questions • Multi-Correct (+4/-2/Partial) • Bubble Verification Enforced"
+                : "90 Questions • Section B First-5 Rule Enforced"}
+            </span>
+          </div>
+        )}
+
         <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "1.5rem" }}>
           {/* Card 1: Student Sheet File */}
           <div className="card">

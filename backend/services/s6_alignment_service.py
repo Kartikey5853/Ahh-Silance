@@ -37,8 +37,12 @@ class AlignmentService:
         }
 
         aligned_pairs: List[AlignedQuestionPair] = []
+        max_q = max(max(key_map.keys(), default=90), max(student_map.keys(), default=90))
+        exam_type = getattr(master_key, "exam_type", "JEE_MAIN")
+        if getattr(sheet_data, "exam_type", None) == "JEE_ADVANCED":
+            exam_type = "JEE_ADVANCED"
 
-        for q_no in range(1, 91):
+        for q_no in range(1, max_q + 1):
             key_item = key_map.get(q_no)
             if not key_item:
                 continue
@@ -56,6 +60,7 @@ class AlignmentService:
         return AlignmentResult(
             document_id=document_id,
             exam_id=master_key.exam_id,
+            exam_type=exam_type,
             matched_booklet_code=master_key.booklet_code,
             total_aligned_questions=len(aligned_pairs),
             aligned_pairs=aligned_pairs

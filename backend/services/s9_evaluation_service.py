@@ -76,7 +76,8 @@ class EvaluationOrchestratorService:
             candidate_name=candidate_name,
             roll_number=sheet_data.roll_number,
             booklet_code=booklet_code,
-            exam_title=master_key.exam_title
+            exam_title=master_key.exam_title,
+            exam_type=getattr(scoring, "exam_type", "JEE_MAIN")
         )
 
         scorecard = EvaluationScorecardResponse(

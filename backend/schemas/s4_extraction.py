@@ -13,10 +13,13 @@ from pydantic import BaseModel, Field
 
 class QuestionType(str, Enum):
     """
-    JEE Main question classification.
+    JEE Main and Advanced question classification.
     """
     MCQ = "MCQ"
+    MULTI_MCQ = "MULTI_MCQ"
     NUMERICAL = "NUMERICAL"
+    INTEGER = "INTEGER"
+    MATCH = "MATCH"
 
 
 class ExtractedOptionMark(BaseModel):
@@ -34,10 +37,11 @@ class ExtractedQuestionResponse(BaseModel):
     Extracted student response for a single question.
     """
     question_no: int = Field(..., ge=1, le=90, description="Question number 1 to 90")
-    question_type: QuestionType = Field(..., description="MCQ or NUMERICAL")
+    question_type: QuestionType = Field(..., description="MCQ, MULTI_MCQ, or NUMERICAL")
     selected_option: Optional[str] = Field(None, description="Marked MCQ option or None if blank")
+    selected_options: Optional[List[str]] = Field(default=None, description="List of marked options for Multi-Correct MCQs")
     numerical_value: Optional[str] = Field(None, description="Extracted numerical answer string")
-    has_multiple_marks: bool = Field(default=False, description="True if student shaded >1 bubble in Section A")
+    has_multiple_marks: bool = Field(default=False, description="True if student shaded >1 bubble in Single Choice Section")
     digit_bubble_mismatch: bool = Field(default=False, description="True if Section B written box != shaded bubble")
     is_attempted: bool = Field(..., description="True if student marked any answer")
 
@@ -47,6 +51,7 @@ class ExtractedSheetData(BaseModel):
     Complete extracted payload from an OMR answer sheet.
     """
     document_id: str = Field(..., description="Target document identifier")
+    exam_type: str = Field(default="JEE_MAIN", description="Detected exam type: JEE_MAIN or JEE_ADVANCED")
     roll_number: Optional[str] = Field(None, description="Extracted candidate roll number")
     booklet_code: Optional[str] = Field(None, description="Extracted booklet set code e.g. SET A")
     responses: List[ExtractedQuestionResponse] = Field(..., description="Responses for questions 1 to 90")

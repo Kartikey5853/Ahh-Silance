@@ -44,12 +44,12 @@ class AnswerKeyService:
                     if "items" in data and isinstance(data["items"], list):
                         for it in data["items"]:
                             q_no = int(it.get("question_no") or it.get("q"))
-                            ans = str(it.get("correct_answer") or it.get("correct_options") or it.get("answer"))
-                            raw_key_mapping[q_no] = ans
+                            ans_val = it.get("correct_answer") or it.get("correct_options") or it.get("answer")
+                            raw_key_mapping[q_no] = ans_val
                     else:
                         for k, v in data.items():
                             if str(k).isdigit():
-                                raw_key_mapping[int(k)] = str(v).strip()
+                                raw_key_mapping[int(k)] = v
             except Exception as e:
                 raise ValueError(f"Failed to parse JSON answer key: {str(e)}")
 
@@ -74,8 +74,8 @@ class AnswerKeyService:
                     line = line.strip()
                     if not line or line.startswith("#") or line.startswith("="):
                         continue
-                    # Match patterns like "Q1: A", "1. A", "1 - A", "1: 45.0"
-                    m = re.match(r"(?:Q)?(\d+)[\s.:\-]+([A-Za-z0-9.\-]+)", line)
+                    # Match patterns like "Q1: A", "Q7: A, C", "1. A,B", "1 - A", "1: 45.0"
+                    m = re.match(r"(?:Q)?(\d+)[\s.:\-]+([A-Za-z0-9.,/\s\-]+)", line)
                     if m:
                         raw_key_mapping[int(m.group(1))] = m.group(2).strip()
             except Exception as e:
@@ -95,7 +95,7 @@ class AnswerKeyService:
                 if res:
                     for item in res:
                         txt = item[1].strip()
-                        m = re.match(r"(?:Q)?(\d+)[\s.:\-]+([A-Za-z0-9.\-]+)", txt)
+                        m = re.match(r"(?:Q)?(\d+)[\s.:\-]+([A-Za-z0-9.,/\s\-]+)", txt)
                         if m:
                             raw_key_mapping[int(m.group(1))] = m.group(2).strip()
             except Exception as e:
@@ -107,46 +107,95 @@ class AnswerKeyService:
                 "Ensure file contains questions and answers (e.g. JSON {'1': 'A'}, CSV '1,A', or TXT 'Q1: A')."
             )
 
-        # Build standardized MasterKeyItem list for all questions present
-        max_q = max(max(raw_key_mapping.keys()), 90)
+        # Detect Exam Classification: JEE_ADVANCED vs JEE_MAIN
+        max_detected_q = max(raw_key_mapping.keys())
+        has_multi_options = any(
+            (isinstance(v, list) and len(v) > 1) or
+            (isinstance(v, str) and ("," in v or len(v.strip()) > 1 and v.strip().isalpha()))
+            for v in raw_key_mapping.values()
+        )
+        is_advanced = (
+            "ADVANCED" in exam_id.upper() or
+            "ADV" in exam_id.upper() or
+            "ADVANCED" in filename.upper() or
+            has_multi_options or
+            (max_detected_q <= 60 and max_detected_q in [51, 54, 48, 60]) or
+            (max_detected_q <= 60 and len(raw_key_mapping) <= 60)
+        )
+        detected_exam_type = "JEE_ADVANCED" if is_advanced else "JEE_MAIN"
+        target_total_q = 51 if detected_exam_type == "JEE_ADVANCED" else 90
+        max_q = max(max_detected_q, target_total_q)
         items = []
 
         for q_idx in range(1, max_q + 1):
-            if 1 <= q_idx <= 30:
-                subj = "CHEMISTRY"
-                is_num = 21 <= q_idx <= 30
-            elif 31 <= q_idx <= 60:
-                subj = "PHYSICS"
-                is_num = 51 <= q_idx <= 60
+            if detected_exam_type == "JEE_ADVANCED":
+                # Standard JEE Advanced 51-question structure: 17 per subject
+                if 1 <= q_idx <= 17:
+                    subj = "PHYSICS"
+                    is_multi = 7 <= q_idx <= 12
+                    is_num = 13 <= q_idx <= 17
+                elif 18 <= q_idx <= 34:
+                    subj = "CHEMISTRY"
+                    is_multi = 24 <= q_idx <= 29
+                    is_num = 30 <= q_idx <= 34
+                else:
+                    subj = "MATHEMATICS"
+                    is_multi = 41 <= q_idx <= 46
+                    is_num = 47 <= q_idx <= 51
+
+                if is_num:
+                    q_type = QuestionType.NUMERICAL
+                elif is_multi:
+                    q_type = QuestionType.MULTI_MCQ
+                else:
+                    q_type = QuestionType.MCQ
             else:
-                subj = "MATHEMATICS"
-                is_num = 81 <= q_idx <= 90
+                # Standard JEE Main 90-question structure: 30 per subject
+                if 1 <= q_idx <= 30:
+                    subj = "CHEMISTRY"
+                    is_num = 21 <= q_idx <= 30
+                elif 31 <= q_idx <= 60:
+                    subj = "PHYSICS"
+                    is_num = 51 <= q_idx <= 60
+                else:
+                    subj = "MATHEMATICS"
+                    is_num = 81 <= q_idx <= 90
+                q_type = QuestionType.NUMERICAL if is_num else QuestionType.MCQ
 
-            q_type = QuestionType.NUMERICAL if is_num else QuestionType.MCQ
-            ans_val = raw_key_mapping.get(q_idx)
-
+            ans_raw = raw_key_mapping.get(q_idx)
             correct_opts = []
             num_exact = None
             num_min = None
             num_max = None
 
-            if ans_val is not None:
-                if not is_num:
-                    correct_opts = [ans_val.upper()]
-                else:
+            if ans_raw is not None:
+                if q_type == QuestionType.NUMERICAL:
                     try:
-                        f_val = float(ans_val)
+                        clean_n = "".join([c for c in str(ans_raw) if c in "0123456789.-+"])
+                        f_val = float(clean_n)
                         num_exact = f_val
                         num_min = round(f_val - 0.05, 2)
                         num_max = round(f_val + 0.05, 2)
                     except ValueError:
-                        num_exact = None
-            else:
-                # If question not in user key, leave empty
-                if not is_num:
-                    correct_opts = ["A"]
+                        num_exact = 0.0
                 else:
+                    # MCQ or MULTI_MCQ
+                    if isinstance(ans_raw, list):
+                        correct_opts = [str(x).strip().upper() for x in ans_raw if str(x).strip()]
+                    elif isinstance(ans_raw, str):
+                        clean_str = ans_raw.strip().upper()
+                        if "," in clean_str or "/" in clean_str or " " in clean_str:
+                            correct_opts = [x.strip() for x in re.split(r"[,/| ]+", clean_str) if x.strip()]
+                        elif len(clean_str) > 1 and clean_str.isalpha():
+                            correct_opts = list(clean_str)
+                        else:
+                            correct_opts = [clean_str]
+            else:
+                # Question not in user key
+                if q_type == QuestionType.NUMERICAL:
                     num_exact = 0.0
+                else:
+                    correct_opts = ["A"]
 
             items.append(MasterKeyItem(
                 question_no=q_idx,
@@ -161,7 +210,8 @@ class AnswerKeyService:
 
         master_key = MasterAnswerKey(
             exam_id=exam_id,
-            exam_title=f"{exam_id} (User Uploaded Key)",
+            exam_title=f"{exam_id} ({detected_exam_type})",
+            exam_type=detected_exam_type,
             booklet_code=booklet_code,
             total_questions=len(items),
             items=items

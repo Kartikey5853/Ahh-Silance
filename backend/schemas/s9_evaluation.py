@@ -19,6 +19,7 @@ class CandidateInfo(BaseModel):
     roll_number: Optional[str] = Field(None, description="Roll number from OMR")
     booklet_code: Optional[str] = Field(None, description="Booklet set code")
     exam_title: str = Field(..., description="Exam title")
+    exam_type: str = Field(default="JEE_MAIN", description="Detected exam classification: JEE_MAIN or JEE_ADVANCED")
 
 
 class AuditVerificationFlags(BaseModel):

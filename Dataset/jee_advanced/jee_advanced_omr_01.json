@@ -1,0 +1,464 @@
+{
+  "exam_type": "JEE_ADVANCED",
+  "sheet_id": "jee_advanced_omr_01",
+  "roll_number": "7410293",
+  "questions": {
+    "1": {
+      "type": "MCQ",
+      "subject": "PHYSICS",
+      "key": "A",
+      "student": "B"
+    },
+    "2": {
+      "type": "MCQ",
+      "subject": "PHYSICS",
+      "key": "C",
+      "student": "B"
+    },
+    "3": {
+      "type": "MCQ",
+      "subject": "PHYSICS",
+      "key": "C",
+      "student": "D"
+    },
+    "4": {
+      "type": "MCQ",
+      "subject": "PHYSICS",
+      "key": "D",
+      "student": "D"
+    },
+    "5": {
+      "type": "MCQ",
+      "subject": "PHYSICS",
+      "key": "D",
+      "student": "A"
+    },
+    "6": {
+      "type": "MCQ",
+      "subject": "PHYSICS",
+      "key": "A",
+      "student": "A"
+    },
+    "7": {
+      "type": "MULTI_MCQ",
+      "subject": "PHYSICS",
+      "key": [
+        "A",
+        "B"
+      ],
+      "student": [
+        "A",
+        "B"
+      ]
+    },
+    "8": {
+      "type": "MULTI_MCQ",
+      "subject": "PHYSICS",
+      "key": [
+        "A",
+        "B",
+        "C"
+      ],
+      "student": [
+        "A",
+        "B",
+        "C"
+      ]
+    },
+    "9": {
+      "type": "MULTI_MCQ",
+      "subject": "PHYSICS",
+      "key": [
+        "A",
+        "C",
+        "D"
+      ],
+      "student": [
+        "B",
+        "C"
+      ]
+    },
+    "10": {
+      "type": "MULTI_MCQ",
+      "subject": "PHYSICS",
+      "key": [
+        "A",
+        "B",
+        "D"
+      ],
+      "student": [
+        "A",
+        "B",
+        "D"
+      ]
+    },
+    "11": {
+      "type": "MULTI_MCQ",
+      "subject": "PHYSICS",
+      "key": [
+        "B",
+        "D"
+      ],
+      "student": [
+        "B",
+        "D"
+      ]
+    },
+    "12": {
+      "type": "MULTI_MCQ",
+      "subject": "PHYSICS",
+      "key": [
+        "A",
+        "B",
+        "D"
+      ],
+      "student": [
+        "C",
+        "D"
+      ]
+    },
+    "13": {
+      "type": "NUMERICAL",
+      "subject": "PHYSICS",
+      "key": 87,
+      "written_in_box": "87",
+      "bubbled": "87",
+      "is_unbubbled": false
+    },
+    "14": {
+      "type": "NUMERICAL",
+      "subject": "PHYSICS",
+      "key": 61,
+      "written_in_box": "20",
+      "bubbled": "20",
+      "is_unbubbled": false
+    },
+    "15": {
+      "type": "NUMERICAL",
+      "subject": "PHYSICS",
+      "key": 42,
+      "written_in_box": "42",
+      "bubbled": "42",
+      "is_unbubbled": false
+    },
+    "16": {
+      "type": "NUMERICAL",
+      "subject": "PHYSICS",
+      "key": 43,
+      "written_in_box": "43",
+      "bubbled": "43",
+      "is_unbubbled": false
+    },
+    "17": {
+      "type": "NUMERICAL",
+      "subject": "PHYSICS",
+      "key": 44,
+      "written_in_box": "44",
+      "bubbled": "44",
+      "is_unbubbled": false
+    },
+    "18": {
+      "type": "MCQ",
+      "subject": "CHEMISTRY",
+      "key": "D",
+      "student": "D"
+    },
+    "19": {
+      "type": "MCQ",
+      "subject": "CHEMISTRY",
+      "key": "A",
+      "student": "A"
+    },
+    "20": {
+      "type": "MCQ",
+      "subject": "CHEMISTRY",
+      "key": "A",
+      "student": "A"
+    },
+    "21": {
+      "type": "MCQ",
+      "subject": "CHEMISTRY",
+      "key": "D",
+      "student": "D"
+    },
+    "22": {
+      "type": "MCQ",
+      "subject": "CHEMISTRY",
+      "key": "C",
+      "student": "C"
+    },
+    "23": {
+      "type": "MCQ",
+      "subject": "CHEMISTRY",
+      "key": "C",
+      "student": "C"
+    },
+    "24": {
+      "type": "MULTI_MCQ",
+      "subject": "CHEMISTRY",
+      "key": [
+        "A",
+        "B"
+      ],
+      "student": [
+        "D"
+      ]
+    },
+    "25": {
+      "type": "MULTI_MCQ",
+      "subject": "CHEMISTRY",
+      "key": [
+        "B",
+        "C",
+        "D"
+      ],
+      "student": [
+        "C",
+        "D"
+      ]
+    },
+    "26": {
+      "type": "MULTI_MCQ",
+      "subject": "CHEMISTRY",
+      "key": [
+        "A",
+        "B",
+        "C"
+      ],
+      "student": [
+        "A",
+        "B",
+        "C"
+      ]
+    },
+    "27": {
+      "type": "MULTI_MCQ",
+      "subject": "CHEMISTRY",
+      "key": [
+        "B",
+        "C"
+      ],
+      "student": [
+        "B",
+        "C"
+      ]
+    },
+    "28": {
+      "type": "MULTI_MCQ",
+      "subject": "CHEMISTRY",
+      "key": [
+        "A",
+        "C",
+        "D"
+      ],
+      "student": [
+        "A",
+        "C",
+        "D"
+      ]
+    },
+    "29": {
+      "type": "MULTI_MCQ",
+      "subject": "CHEMISTRY",
+      "key": [
+        "A",
+        "B",
+        "D"
+      ],
+      "student": [
+        "A",
+        "B",
+        "D"
+      ]
+    },
+    "30": {
+      "type": "NUMERICAL",
+      "subject": "CHEMISTRY",
+      "key": 62,
+      "written_in_box": "64",
+      "bubbled": "64",
+      "is_unbubbled": false
+    },
+    "31": {
+      "type": "NUMERICAL",
+      "subject": "CHEMISTRY",
+      "key": 35,
+      "written_in_box": "35",
+      "bubbled": "35",
+      "is_unbubbled": false
+    },
+    "32": {
+      "type": "NUMERICAL",
+      "subject": "CHEMISTRY",
+      "key": 36,
+      "written_in_box": "13",
+      "bubbled": "13",
+      "is_unbubbled": false
+    },
+    "33": {
+      "type": "NUMERICAL",
+      "subject": "CHEMISTRY",
+      "key": 90,
+      "written_in_box": "90",
+      "bubbled": "90",
+      "is_unbubbled": false
+    },
+    "34": {
+      "type": "NUMERICAL",
+      "subject": "CHEMISTRY",
+      "key": 82,
+      "written_in_box": "82",
+      "bubbled": "82",
+      "is_unbubbled": false
+    },
+    "35": {
+      "type": "MCQ",
+      "subject": "MATHEMATICS",
+      "key": "B",
+      "student": null
+    },
+    "36": {
+      "type": "MCQ",
+      "subject": "MATHEMATICS",
+      "key": "D",
+      "student": "D"
+    },
+    "37": {
+      "type": "MCQ",
+      "subject": "MATHEMATICS",
+      "key": "D",
+      "student": "D"
+    },
+    "38": {
+      "type": "MCQ",
+      "subject": "MATHEMATICS",
+      "key": "C",
+      "student": "C"
+    },
+    "39": {
+      "type": "MCQ",
+      "subject": "MATHEMATICS",
+      "key": "B",
+      "student": null
+    },
+    "40": {
+      "type": "MCQ",
+      "subject": "MATHEMATICS",
+      "key": "A",
+      "student": "A"
+    },
+    "41": {
+      "type": "MULTI_MCQ",
+      "subject": "MATHEMATICS",
+      "key": [
+        "A",
+        "C",
+        "D"
+      ],
+      "student": [
+        "A",
+        "C",
+        "D"
+      ]
+    },
+    "42": {
+      "type": "MULTI_MCQ",
+      "subject": "MATHEMATICS",
+      "key": [
+        "A",
+        "C"
+      ],
+      "student": [
+        "A",
+        "C"
+      ]
+    },
+    "43": {
+      "type": "MULTI_MCQ",
+      "subject": "MATHEMATICS",
+      "key": [
+        "B",
+        "C"
+      ],
+      "student": [
+        "B",
+        "C"
+      ]
+    },
+    "44": {
+      "type": "MULTI_MCQ",
+      "subject": "MATHEMATICS",
+      "key": [
+        "C",
+        "D"
+      ],
+      "student": [
+        "C"
+      ]
+    },
+    "45": {
+      "type": "MULTI_MCQ",
+      "subject": "MATHEMATICS",
+      "key": [
+        "B",
+        "C"
+      ],
+      "student": [
+        "C",
+        "D"
+      ]
+    },
+    "46": {
+      "type": "MULTI_MCQ",
+      "subject": "MATHEMATICS",
+      "key": [
+        "B",
+        "D"
+      ],
+      "student": [
+        "B",
+        "D"
+      ]
+    },
+    "47": {
+      "type": "NUMERICAL",
+      "subject": "MATHEMATICS",
+      "key": 50,
+      "written_in_box": "76",
+      "bubbled": "76",
+      "is_unbubbled": false
+    },
+    "48": {
+      "type": "NUMERICAL",
+      "subject": "MATHEMATICS",
+      "key": 86,
+      "written_in_box": "86",
+      "bubbled": "86",
+      "is_unbubbled": false
+    },
+    "49": {
+      "type": "NUMERICAL",
+      "subject": "MATHEMATICS",
+      "key": 86,
+      "written_in_box": "86",
+      "bubbled": "86",
+      "is_unbubbled": false
+    },
+    "50": {
+      "type": "NUMERICAL",
+      "subject": "MATHEMATICS",
+      "key": 48,
+      "written_in_box": "48",
+      "bubbled": "48",
+      "is_unbubbled": false
+    },
+    "51": {
+      "type": "NUMERICAL",
+      "subject": "MATHEMATICS",
+      "key": 32,
+      "written_in_box": "21",
+      "bubbled": "21",
+      "is_unbubbled": false
+    }
+  }
+}

@@ -15,6 +15,7 @@ class ScoringVerdict(str, Enum):
     Evaluation verdict for a student's answer.
     """
     CORRECT = "CORRECT"
+    PARTIALLY_CORRECT = "PARTIALLY_CORRECT"
     INCORRECT = "INCORRECT"
     UNATTEMPTED = "UNATTEMPTED"
     IGNORED_BY_FIRST_5_RULE = "IGNORED_BY_FIRST_5_RULE"
@@ -59,11 +60,13 @@ class QuestionScoreResult(BaseModel):
 
 class ScoringSummary(BaseModel):
     """
-    Aggregate score details across all 90 questions.
+    Aggregate score details across all questions in the paper.
     """
-    total_score: float = Field(..., description="Net total marks scored out of 300")
+    exam_type: str = Field(default="JEE_MAIN", description="Exam classification: JEE_MAIN or JEE_ADVANCED")
+    total_score: float = Field(..., description="Net total marks scored")
     max_possible_score: float = Field(default=300.0, description="Maximum possible marks")
     correct_count: int = Field(..., description="Count of correctly answered questions")
+    partially_correct_count: int = Field(default=0, description="Count of multi-correct questions with partial credit")
     incorrect_count: int = Field(..., description="Count of wrong answers penalized")
     unattempted_count: int = Field(..., description="Count of unattempted questions")
     overflow_ignored_count: int = Field(..., description="Section B questions dropped by first-5 rule")

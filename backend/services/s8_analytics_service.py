@@ -50,6 +50,11 @@ class AnalyticsService:
                 subj_stats[s]["correct"] += 1
                 if is_sec_b:
                     subj_stats[s]["sec_b_attempts"] += 1
+            elif q.verdict == ScoringVerdict.PARTIALLY_CORRECT:
+                subj_stats[s]["attempted"] += 1
+                subj_stats[s]["correct"] += 1
+                if is_sec_b:
+                    subj_stats[s]["sec_b_attempts"] += 1
             elif q.verdict == ScoringVerdict.INCORRECT:
                 subj_stats[s]["attempted"] += 1
                 subj_stats[s]["incorrect"] += 1
@@ -62,6 +67,8 @@ class AnalyticsService:
         breakdown: List[SubjectAnalytics] = []
         total_attempted = 0
         total_correct = 0
+        is_advanced = (getattr(scoring, "exam_type", "JEE_MAIN") == "JEE_ADVANCED")
+        subj_max_marks = round(scoring.max_possible_score / 3.0, 2) if is_advanced else 100.0
 
         for s in subjects:
             st = subj_stats[s]
@@ -75,7 +82,7 @@ class AnalyticsService:
             breakdown.append(SubjectAnalytics(
                 subject_name=s,
                 score=round(st["score"], 2),
-                total_marks=100.0,
+                total_marks=subj_max_marks,
                 attempted=att,
                 correct=corr,
                 incorrect=st["incorrect"],
