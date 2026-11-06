@@ -204,8 +204,8 @@ export const ResultPage: React.FC<ResultPageProps> = ({ scorecard, onBackToDashb
         </div>
       </div>
 
-      {/* Mount 90-Question Detailed Grid */}
-      <QuestionMatrix questions={scoring.question_scores} />
+      {/* Mount Detailed Question-by-Question Matrix */}
+      <QuestionMatrix questions={scoring.question_scores} examType={candidate.exam_type} />
     </div>
   );
 };

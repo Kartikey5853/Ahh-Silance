@@ -95,15 +95,20 @@ class OMRVisionDetector:
     ) -> str:
         """
         Determines whether the physical OMR is JEE_ADVANCED or JEE_MAIN by analyzing
-        header text and layout geometry.
+        header text and layout geometry. Uses high-speed cropped title recognition
+        for sub-250ms latency.
         """
         if "ADVANCED" in booklet_code.upper() or "ADV" in booklet_code.upper():
             return "JEE_ADVANCED"
 
-        # Check top header text (first 12% of sheet)
-        header_crop = gray[0:min(h, int(420 * sy)), :]
-        if header_crop.size > 0:
-            res, _ = ocr_engine(header_crop)
+        # Fast title strip OCR (crop only the top header banner and downscale to height 40px)
+        sx = w / 2400.0
+        title_strip = gray[int(20 * sy): min(h, int(130 * sy)), int(150 * sx): min(w, int(2250 * sx))]
+        if title_strip.size > 0:
+            th, tw = title_strip.shape[:2]
+            target_w = max(100, int(tw * 40.0 / th))
+            resized = cv2.resize(title_strip, (target_w, 40))
+            res, _ = ocr_engine(resized)
             if res:
                 header_text = " ".join([r[1].upper() for r in res])
                 if "ADVANCED" in header_text or "IIT" in header_text or "PAPER 1" in header_text or "PAPER 2" in header_text:
@@ -427,16 +432,18 @@ class OMRVisionDetector:
             {"subject": "MATHEMATICS", "start": 81, "end": 90, "x_off": 1580}
         ]
         sec_b_results: Dict[int, Optional[str]] = {}
+        sec_b_mismatch: Dict[int, bool] = {}
+
+        all_attempted_crops: List[np.ndarray] = []
+        all_attempted_qnums: List[int] = []
 
         for spec in sec_b_specs:
             x_base = spec["x_off"]
-            attempted_crops: List[np.ndarray] = []
-            attempted_qnums: List[int] = []
-
             for q_num in range(spec["start"], spec["end"] + 1):
                 y_center = int((1845 + (q_num - spec["start"]) * 145) * sy)
                 if y_center >= h - 10:
                     sec_b_results[q_num] = None
+                    sec_b_mismatch[q_num] = False
                     continue
 
                 bx1 = int((x_base + 115) * sx)
@@ -447,55 +454,87 @@ class OMRVisionDetector:
                 box_crop = img_bgr[max(0, by1): min(h, by2), max(0, bx1): min(w, bx2)]
                 gray_box = gray[max(0, by1): min(h, by2), max(0, bx1): min(w, bx2)]
 
+                box_has_ink = False
                 if gray_box.size > 0:
                     dark_pixels = np.sum(gray_box < 130)
                     dark_ratio = float(dark_pixels) / gray_box.size
                     if dark_ratio >= 0.04:
+                        box_has_ink = True
                         b_resized = cv2.resize(box_crop, (120, 36))
                         padded = cv2.copyMakeBorder(b_resized, 6, 6, 6, 6, cv2.BORDER_CONSTANT, value=(255, 255, 255))
-                        attempted_crops.append(padded)
-                        attempted_qnums.append(q_num)
-                    else:
-                        sec_b_results[q_num] = None
+                        all_attempted_crops.append(padded)
+                        all_attempted_qnums.append(q_num)
+
+                # Bubble Darkening Verification:
+                # In JEE Main, candidate must darken corresponding digit bubbles to receive credit.
+                # Check individual bubble positions in adjacent grid (external_test layout: 4 cols x 5 rows)
+                # and underneath the box (authentic vertical column layout).
+                has_bubbles = False
+                for d_col in range(4):
+                    bx_b = int((x_base + 265 + d_col * 60) * sx)
+                    for d_row in range(5):
+                        by_b = int((y_center - 10 + d_row * 24) * sy)
+                        rad = max(2, int(7 * sx))
+                        if 0 <= by_b < h and 0 <= bx_b < w:
+                            crop_b = gray[max(0, by_b - rad): min(h, by_b + rad), max(0, bx_b - rad): min(w, bx_b + rad)]
+                            if crop_b.size > 0:
+                                d_fill = 1.0 - (float(np.mean(crop_b)) / 255.0)
+                                if d_fill >= 0.35:
+                                    has_bubbles = True
+                                    break
+                    if has_bubbles:
+                        break
+
+                if not has_bubbles:
+                    col_x_list = [int((x_base + off) * sx) for off in [95, 165, 250]]
+                    box_y_b = y_center + int(10 * sy)
+                    for cx_b in col_x_list:
+                        for d_i in range(10):
+                            by_u = box_y_b + int((48 + d_i * 18) * sy)
+                            if 0 <= by_u < h and 0 <= cx_b < w:
+                                crop_u = gray[max(0, by_u - 7): min(h, by_u + 7), max(0, cx_b - 7): min(w, cx_b + 7)]
+                                if crop_u.size > 0:
+                                    d_fill = 1.0 - (float(np.mean(crop_u)) / 255.0)
+                                    if d_fill >= 0.35:
+                                        has_bubbles = True
+                                        break
+                        if has_bubbles:
+                            break
+
+                # If candidate wrote in box but failed to bubble the digits -> MISMATCH (0 marks)
+                if box_has_ink and not has_bubbles:
+                    sec_b_mismatch[q_num] = True
                 else:
-                    sec_b_results[q_num] = None
+                    sec_b_mismatch[q_num] = False
 
-            if attempted_crops:
-                col_strip = np.vstack(attempted_crops)
-                h_per_box = attempted_crops[0].shape[0]
-                ocr_res, _ = ocr_engine(col_strip)
-                if ocr_res:
-                    for item in ocr_res:
-                        pts, txt, _ = item
-                        cy = (pts[0][1] + pts[2][1]) / 2.0
-                        idx = min(len(attempted_qnums) - 1, int(cy // h_per_box))
-                        target_q = attempted_qnums[idx]
-                        match = re.search(r"[-+]?\d*\.?\d+", txt)
-                        if match and target_q not in sec_b_results:
-                            sec_b_results[target_q] = match.group(0)
-
-                for qn in attempted_qnums:
-                    if qn not in sec_b_results or sec_b_results[qn] is None:
-                        idx = attempted_qnums.index(qn)
-                        res_ind, _ = ocr_engine(attempted_crops[idx])
-                        if res_ind:
-                            found = " ".join([r[1].strip() for r in res_ind])
-                            m = re.search(r"[-+]?\d*\.?\d+", found)
-                            sec_b_results[qn] = m.group(0) if m else None
-                        else:
-                            sec_b_results[qn] = None
+        # Execute high-throughput single-pass batch OCR for all attempted boxes across all subjects
+        if all_attempted_crops:
+            col_strip = np.vstack(all_attempted_crops)
+            h_per_box = all_attempted_crops[0].shape[0]
+            ocr_res, _ = ocr_engine(col_strip)
+            if ocr_res:
+                for item in ocr_res:
+                    pts, txt, _ = item
+                    cy = (pts[0][1] + pts[2][1]) / 2.0
+                    idx = min(len(all_attempted_qnums) - 1, int(cy // h_per_box))
+                    target_q = all_attempted_qnums[idx]
+                    match = re.search(r"[-+]?\d*\.?\d+", txt)
+                    if match and target_q not in sec_b_results:
+                        sec_b_results[target_q] = match.group(0)
 
         for spec in sec_b_specs:
             for q_num in range(spec["start"], spec["end"] + 1):
                 written_number = sec_b_results.get(q_num)
-                is_attempted = written_number is not None
+                is_mismatch = sec_b_mismatch.get(q_num, False)
+                # If unbubbled, mark is_attempted=False so scoring engine awards strictly 0 marks
+                is_attempted = (written_number is not None) and (not is_mismatch)
                 responses.append(ExtractedQuestionResponse(
                     question_no=q_num,
                     question_type=QuestionType.NUMERICAL,
                     selected_option=None,
                     numerical_value=written_number,
                     has_multiple_marks=False,
-                    digit_bubble_mismatch=False,
+                    digit_bubble_mismatch=is_mismatch,
                     is_attempted=is_attempted
                 ))
 
@@ -629,11 +668,16 @@ class OMRVisionDetector:
                 for q_num in range(start, end + 1):
                     y_center = int((1845 + (q_num - start) * 145) * sy)
                     resp = resp_dict.get(q_num)
-                    if resp and resp.numerical_value:
-                        bx1 = int((x_base + 110) * sx)
-                        bx2 = int((x_base + 230) * sx)
-                        by1 = int((y_center - 10) * sy)
-                        by2 = int((y_center + 40) * sy)
+                    bx1 = int((x_base + 110) * sx)
+                    bx2 = int((x_base + 230) * sx)
+                    by1 = int((y_center - 10) * sy)
+                    by2 = int((y_center + 40) * sy)
+
+                    if resp and resp.digit_bubble_mismatch:
+                        # Highlight unbubbled attempt in red
+                        cv2.rectangle(annotated, (bx1, by1), (bx2, by2), (0, 0, 255), max(2, int(3 * sx)))
+                        cv2.putText(annotated, f"Q{q_num}: UNBUBBLED (0)", (bx1 - int(10 * sx), by1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.6 * sx, (0, 0, 255), max(1, int(2 * sx)))
+                    elif resp and resp.numerical_value:
                         cv2.rectangle(annotated, (bx1, by1), (bx2, by2), (220, 0, 180), max(2, int(3 * sx)))
                         cv2.putText(annotated, f"Q{q_num}: {resp.numerical_value}", (bx1, by1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.7 * sx, (220, 0, 180), max(2, int(2 * sx)))
 

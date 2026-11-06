@@ -11,59 +11,137 @@ import type { QuestionScoreItem } from "../types/evaluation";
 import { CheckCircle2, XCircle, MinusCircle, AlertTriangle } from "lucide-react";
 
 interface QuestionMatrixProps {
-  /** Array of 90 evaluated question score objects */
+  /** Array of evaluated question score objects (51 for JEE Advanced, 90 for JEE Main) */
   questions: QuestionScoreItem[];
+  /** Optional exam type string (e.g. JEE_ADVANCED or JEE_MAIN) */
+  examType?: string | null;
 }
 
-export const QuestionMatrix: React.FC<QuestionMatrixProps> = ({ questions }) => {
+export const QuestionMatrix: React.FC<QuestionMatrixProps> = ({ questions, examType }) => {
   const [selectedSubject, setSelectedSubject] = useState<"ALL" | "PHY" | "CHEM" | "MATH">("ALL");
 
   /**
-   * Filters the 90 questions based on the active subject tab.
+   * Auto-detect exam type based on props, question count, or question types
+   */
+  const isAdvanced =
+    examType === "JEE_ADVANCED" ||
+    questions.length <= 60 ||
+    questions.some((q) => q.question_type === "MULTI_MCQ");
+
+  /**
+   * Helper to normalize subject from question metadata or question index
+   */
+  const getQuestionSubjectCategory = (q: QuestionScoreItem): "PHY" | "CHEM" | "MATH" => {
+    const s = (q.subject || "").toUpperCase();
+    if (s.includes("PHY")) return "PHY";
+    if (s.includes("CHEM")) return "CHEM";
+    if (s.includes("MATH")) return "MATH";
+
+    // Fallback based on question number
+    if (isAdvanced) {
+      if (q.question_no <= 17) return "PHY";
+      if (q.question_no <= 34) return "CHEM";
+      return "MATH";
+    } else {
+      if (q.question_no <= 30) return "CHEM";
+      if (q.question_no <= 60) return "PHY";
+      return "MATH";
+    }
+  };
+
+  /**
+   * Filters questions based on the active subject tab.
    */
   const filteredQuestions = questions.filter((q) => {
-    if (selectedSubject === "PHY") return q.question_no >= 1 && q.question_no <= 30;
-    if (selectedSubject === "CHEM") return q.question_no >= 31 && q.question_no <= 60;
-    if (selectedSubject === "MATH") return q.question_no >= 61 && q.question_no <= 90;
-    return true;
+    if (selectedSubject === "ALL") return true;
+    return getQuestionSubjectCategory(q) === selectedSubject;
   });
 
   /**
-   * Returns a subject name based on question number.
+   * Returns a proper human-readable subject name.
    */
-  const getSubjectName = (qNo: number): string => {
-    if (qNo <= 30) return "Physics";
-    if (qNo <= 60) return "Chemistry";
+  const getSubjectName = (q: QuestionScoreItem): string => {
+    const cat = getQuestionSubjectCategory(q);
+    if (cat === "PHY") return "Physics";
+    if (cat === "CHEM") return "Chemistry";
     return "Mathematics";
   };
 
   /**
-   * Returns section category based on question number.
+   * Returns the official section category based on exam pattern.
+   * - JEE Advanced: Sec 1 (SCQ), Sec 2 (Multi-Correct), Sec 3 (Numerical)
+   * - JEE Main: Section A (MCQ), Section B (Numerical)
    */
-  const getSectionName = (qNo: number): string => {
-    const mod = qNo % 30;
-    if (mod >= 1 && mod <= 20) return "Section A (MCQ)";
-    return "Section B (Numerical)";
+  const getSectionName = (q: QuestionScoreItem): string => {
+    if (isAdvanced) {
+      const relIdx = (q.question_no - 1) % 17; // 0 to 16
+      if (relIdx < 6) return "Section 1: Single Choice (+3/-1)";
+      if (relIdx < 12) return "Section 2: Multi-Correct (+4/partial/-2)";
+      return "Section 3: Numerical Value (+3/0)";
+    } else {
+      const mod = q.question_no % 30;
+      if (mod >= 1 && mod <= 20) return "Section A (MCQ)";
+      return "Section B (Numerical)";
+    }
   };
 
   /**
-   * Renders the 4 standard OMR bubble circles (A, B, C, D)
-   * highlighting the candidate's marked bubble.
+   * Subject Question Counts for Tab Headers
    */
-  const renderBubbles = (markedOpt: string | null, isCorrect: boolean, isIncorrect: boolean) => {
+  const subjectCounts = React.useMemo(() => {
+    let phy = 0, chem = 0, math = 0;
+    for (const q of questions) {
+      const cat = getQuestionSubjectCategory(q);
+      if (cat === "PHY") phy++;
+      else if (cat === "CHEM") chem++;
+      else if (cat === "MATH") math++;
+    }
+    return { phy, chem, math, total: questions.length };
+  }, [questions, isAdvanced]);
+
+  /**
+   * Renders standard OMR bubble circles highlighting marked choice(s).
+   * Fully supports single choice (A, B, C, D) and multi-correct options (e.g. "A, C").
+   */
+  const renderBubbles = (
+    markedOpt: string | null,
+    isCorrect: boolean,
+    isIncorrect: boolean,
+    isPartial?: boolean
+  ) => {
     const options = ["A", "B", "C", "D"];
+    const chosenList = markedOpt
+      ? markedOpt
+          .replace(/[\[\]]/g, "")
+          .split(",")
+          .map((s) => s.trim().toUpperCase())
+          .filter(Boolean)
+      : [];
+
     return (
       <div style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
         {options.map((opt) => {
-          const isChosen = markedOpt === opt;
+          const isChosen = chosenList.includes(opt);
           let bg = "transparent";
           let color = "var(--text-muted)";
           let border = "1px solid var(--border-color)";
 
           if (isChosen) {
-            bg = isCorrect ? "var(--green)" : isIncorrect ? "var(--red)" : "var(--primary)";
+            bg = isCorrect
+              ? "var(--green)"
+              : isPartial
+              ? "var(--blue)"
+              : isIncorrect
+              ? "var(--red)"
+              : "var(--primary)";
             color = "#ffffff";
-            border = isCorrect ? "1px solid var(--green)" : isIncorrect ? "1px solid var(--red)" : "1px solid var(--primary)";
+            border = isCorrect
+              ? "1px solid var(--green)"
+              : isPartial
+              ? "1px solid var(--blue)"
+              : isIncorrect
+              ? "1px solid var(--red)"
+              : "1px solid var(--primary)";
           }
 
           return (
@@ -88,9 +166,24 @@ export const QuestionMatrix: React.FC<QuestionMatrixProps> = ({ questions }) => 
             </span>
           );
         })}
-        {markedOpt && (
-          <span style={{ marginLeft: "6px", fontWeight: 700, fontSize: "0.85rem", color: isCorrect ? "var(--green)" : isIncorrect ? "var(--red)" : "var(--text-primary)" }}>
-            Option {markedOpt}
+        {chosenList.length > 0 && (
+          <span
+            style={{
+              marginLeft: "6px",
+              fontWeight: 700,
+              fontSize: "0.85rem",
+              color: isCorrect
+                ? "var(--green)"
+                : isPartial
+                ? "var(--blue)"
+                : isIncorrect
+                ? "var(--red)"
+                : "var(--text-primary)"
+            }}
+          >
+            {chosenList.length > 1
+              ? `Options [${chosenList.join(", ")}]`
+              : `Option ${chosenList[0]}`}
           </span>
         )}
       </div>
@@ -103,32 +196,44 @@ export const QuestionMatrix: React.FC<QuestionMatrixProps> = ({ questions }) => 
         <div>
           <h3 className="card-title">Question-by-Question Evaluation Grid</h3>
           <p className="card-subtitle">
-            Complete 90-question response audit showing candidate response, master key, and marks awarded.
+            {isAdvanced
+              ? `Complete ${questions.length}-question JEE Advanced audit showing candidate response, master key, and marks awarded.`
+              : "Complete 90-question response audit showing candidate response, master key, and marks awarded."}
           </p>
         </div>
 
         {/* Subject Filter Tabs */}
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          {(["ALL", "PHY", "CHEM", "MATH"] as const).map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              className={`btn btn-secondary ${selectedSubject === tab ? "active" : ""}`}
-              onClick={() => setSelectedSubject(tab)}
-              style={{
-                padding: "0.35rem 0.75rem",
-                fontSize: "0.82rem",
-                fontWeight: selectedSubject === tab ? 700 : 500,
-                backgroundColor: selectedSubject === tab ? "var(--primary)" : "#ffffff",
-                color: selectedSubject === tab ? "#ffffff" : "var(--text-primary)"
-              }}
-            >
-              {tab === "ALL" && "All Questions (90)"}
-              {tab === "PHY" && "Physics (1-30)"}
-              {tab === "CHEM" && "Chemistry (31-60)"}
-              {tab === "MATH" && "Mathematics (61-90)"}
-            </button>
-          ))}
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+          {(["ALL", "PHY", "CHEM", "MATH"] as const).map((tab) => {
+            let label = "";
+            if (tab === "ALL") {
+              label = `All Questions (${subjectCounts.total})`;
+            } else if (tab === "PHY") {
+              label = isAdvanced ? `Physics (1-17)` : `Physics (${subjectCounts.phy})`;
+            } else if (tab === "CHEM") {
+              label = isAdvanced ? `Chemistry (18-34)` : `Chemistry (${subjectCounts.chem})`;
+            } else if (tab === "MATH") {
+              label = isAdvanced ? `Mathematics (35-51)` : `Mathematics (${subjectCounts.math})`;
+            }
+
+            return (
+              <button
+                key={tab}
+                type="button"
+                className={`btn btn-secondary ${selectedSubject === tab ? "active" : ""}`}
+                onClick={() => setSelectedSubject(tab)}
+                style={{
+                  padding: "0.35rem 0.75rem",
+                  fontSize: "0.82rem",
+                  fontWeight: selectedSubject === tab ? 700 : 500,
+                  backgroundColor: selectedSubject === tab ? "var(--primary)" : "#ffffff",
+                  color: selectedSubject === tab ? "#ffffff" : "var(--text-primary)"
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -136,20 +241,28 @@ export const QuestionMatrix: React.FC<QuestionMatrixProps> = ({ questions }) => 
       <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem", padding: "0.6rem 0.85rem", background: "var(--bg-secondary)", borderRadius: "6px", fontSize: "0.78rem" }}>
         <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
           <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "var(--green)" }} />
-          <strong>Correct (+4)</strong>
+          <strong>Correct {isAdvanced ? "(+3 or +4)" : "(+4)"}</strong>
         </span>
+        {isAdvanced && (
+          <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+            <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "var(--blue)" }} />
+            <strong>Partial Credit (+1 to +3)</strong>
+          </span>
+        )}
         <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
           <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "var(--red)" }} />
-          <strong>Incorrect (-1)</strong>
+          <strong>Incorrect {isAdvanced ? "(-1 or -2)" : "(-1)"}</strong>
         </span>
         <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
           <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "var(--text-muted)" }} />
           <strong>Unattempted (0)</strong>
         </span>
-        <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-          <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "var(--amber)" }} />
-          <strong>Section B Discarded (First-5 Rule)</strong>
-        </span>
+        {!isAdvanced && (
+          <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+            <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: "var(--amber)" }} />
+            <strong>Section B Discarded (First-5 Rule)</strong>
+          </span>
+        )}
       </div>
 
       {/* Question Table */}
@@ -170,20 +283,25 @@ export const QuestionMatrix: React.FC<QuestionMatrixProps> = ({ questions }) => 
             {filteredQuestions.map((q) => {
               const verdictStr = String(q.verdict || q.status || "");
               const isCorrect = verdictStr === "CORRECT" || verdictStr === "DROPPED_BONUS";
+              const isPartial = verdictStr === "PARTIALLY_CORRECT";
               const isIncorrect = verdictStr === "INCORRECT";
               const isOverflow = verdictStr === "OVERFLOW_IGNORED" || verdictStr === "IGNORED_BY_FIRST_5_RULE";
 
               let badgeClass = "badge-unattempted";
-              let statusText = "Skipped";
+              let statusText = "Skipped (0)";
               let Icon = MinusCircle;
 
               if (isCorrect) {
                 badgeClass = "badge-correct";
-                statusText = "Correct (+4)";
+                statusText = `Correct (+${q.marks_awarded})`;
+                Icon = CheckCircle2;
+              } else if (isPartial) {
+                badgeClass = "badge-partial";
+                statusText = `Partial (+${q.marks_awarded})`;
                 Icon = CheckCircle2;
               } else if (isIncorrect) {
                 badgeClass = "badge-incorrect";
-                statusText = "Incorrect (-1)";
+                statusText = `Incorrect (${q.marks_awarded})`;
                 Icon = XCircle;
               } else if (isOverflow) {
                 badgeClass = "badge-overflow";
@@ -207,7 +325,7 @@ export const QuestionMatrix: React.FC<QuestionMatrixProps> = ({ questions }) => 
                     Q{q.question_no}
                   </td>
                   <td style={{ padding: "0.6rem 0.75rem", color: "var(--text-secondary)" }}>
-                    {getSubjectName(q.question_no)} • {getSectionName(q.question_no)}
+                    {getSubjectName(q)} • {getSectionName(q)}
                   </td>
                   <td style={{ padding: "0.6rem 0.75rem" }}>
                     <span style={{ fontSize: "0.75rem", padding: "0.15rem 0.4rem", background: "var(--bg-tertiary)", borderRadius: "4px" }}>
@@ -215,13 +333,13 @@ export const QuestionMatrix: React.FC<QuestionMatrixProps> = ({ questions }) => 
                     </span>
                   </td>
                   <td style={{ padding: "0.6rem 0.75rem" }}>
-                    {qType === "MCQ" ? (
-                      candResp === "MULTIPLE_BUBBLES" ? (
+                    {qType === "MCQ" || qType === "MULTI_MCQ" ? (
+                      candResp === "MULTIPLE_BUBBLES" && qType === "MCQ" ? (
                         <span className="badge badge-incorrect" style={{ fontSize: "0.75rem" }}>
                           Multiple Bubbles Marked
                         </span>
                       ) : candResp ? (
-                        renderBubbles(candResp, isCorrect, isIncorrect)
+                        renderBubbles(candResp, isCorrect, isIncorrect, isPartial)
                       ) : (
                         <span style={{ color: "var(--text-muted)", fontStyle: "italic", fontSize: "0.82rem" }}>
                           Unattempted
@@ -259,7 +377,7 @@ export const QuestionMatrix: React.FC<QuestionMatrixProps> = ({ questions }) => 
                       {correctKey}
                     </span>
                   </td>
-                  <td style={{ padding: "0.6rem 0.75rem", fontWeight: 700, color: isCorrect ? "var(--green)" : isIncorrect ? "var(--red)" : "var(--text-muted)" }}>
+                  <td style={{ padding: "0.6rem 0.75rem", fontWeight: 700, color: isCorrect ? "var(--green)" : isPartial ? "var(--blue)" : isIncorrect ? "var(--red)" : "var(--text-muted)" }}>
                     {q.marks_awarded > 0 ? `+${q.marks_awarded}` : q.marks_awarded}
                   </td>
                   <td style={{ padding: "0.6rem 0.75rem" }}>

@@ -236,21 +236,30 @@ class JEEScoringEngine:
                 not is_advanced and any(r[0] <= q_no <= r[1] for r in subject_section_b_ranges.values())
             )
             if is_numerical:
-                # CRITICAL VERIFICATION: Bubble Darkening Check
-                # If student only wrote digits in box but did not bubble, award 0 marks
-                if resp.digit_bubble_mismatch and not resp.numerical_value:
+                # CRITICAL VERIFICATION: Bubble Darkening & Mismatch Check
+                # Per official NTA & IIT JEE guidelines:
+                # 1. Darkening of bubbles is mandatory for numerical questions.
+                # 2. Writing in the box without darkening bubbles receives 0 marks (UNATTEMPTED).
+                # 3. In case of digit-bubble mismatch, candidate receives 0 marks.
+                if resp.digit_bubble_mismatch or not is_attempted or not resp.is_attempted or not resp.numerical_value:
                     unattempted_count += 1
+                    audit_msg = (
+                        "Written in box without darkening bubble circles (or digit-bubble mismatch). "
+                        "Per official NTA/JEE guidelines, written numbers without darkened bubbles receive 0 marks (UNATTEMPTED)."
+                        if resp.digit_bubble_mismatch
+                        else "Question left unattempted."
+                    )
                     question_scores.append(QuestionScoreResult(
                         question_no=q_no,
                         subject=subj,
                         question_type="NUMERICAL",
                         verdict=ScoringVerdict.UNATTEMPTED,
                         marks_awarded=0.0,
-                        student_answer=None,
-                        candidate_response=None,
+                        student_answer=resp.numerical_value if resp.numerical_value else None,
+                        candidate_response=resp.numerical_value if resp.numerical_value else None,
                         correct_answer=f"[{key_item.numerical_min}, {key_item.numerical_max}]" if key_item.numerical_min else str(key_item.numerical_exact),
                         is_ignored_by_first_5_rule=False,
-                        audit_note="Written in box without darkening bubble circles. Invalid attempt per official JEE rules (0 marks)."
+                        audit_note=audit_msg
                     ))
                     continue
 

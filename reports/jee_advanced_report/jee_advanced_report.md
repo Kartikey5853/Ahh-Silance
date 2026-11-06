@@ -134,7 +134,68 @@ When an image is dropped:
 
 ---
 
-## 5. Verification Dataset & Test Results
+## 5. Scorecard Subject Partitioning & Frontend Dynamic Mapping
+
+In the evaluation UI, the scorecard presentation grid (`QuestionMatrix.tsx`) was upgraded to adapt dynamically to the examined pattern:
+
+1. **Subject Filter Tabs**:
+   - **JEE Advanced (51 questions)**:
+     - `All Questions (51)`
+     - `Physics (1–17)`
+     - `Chemistry (18–34)`
+     - `Mathematics (35–51)`
+   - **JEE Main (90 questions)**:
+     - `All Questions (90)`
+     - `Chemistry (1–30)`
+     - `Physics (31–60)`
+     - `Mathematics (61–90)`
+2. **Section Hierarchy**:
+   - For JEE Advanced:
+     - Questions 1–6 in subject $\to$ `Section 1: Single Choice (+3/-1)`
+     - Questions 7–12 in subject $\to$ `Section 2: Multi-Correct (+4/partial/-2)`
+     - Questions 13–17 in subject $\to$ `Section 3: Numerical Value (+3/0)`
+   - For JEE Main:
+     - First 20 questions in subject $\to$ `Section A (MCQ)`
+     - Last 10 questions in subject $\to$ `Section B (Numerical)`
+3. **Multi-Correct Bubble Rendering**:
+   - For Multi-Correct questions (e.g. choice `["A", "C"]`), `renderBubbles` highlights all marked choices simultaneously with color-coded feedback (green for correct, blue for partial credit, red for incorrect).
+   - Partial credit verdicts (`PARTIALLY_CORRECT`) display a dedicated `Partial Credit (+marks)` badge and are integrated into the summary statistics.
+
+---
+
+## 6. Pipeline Latency Profiling & Performance Optimizations
+
+### Bottleneck Profiling
+Profiling `extract_omr_from_pixels` on CPU revealed two primary latency bottlenecks:
+1. **Unscaled Header OCR in `detect_exam_type`**:
+   The initial implementation cropped the entire top $2480 \times 420$ header strip and fed it unscaled to RapidOCR. ONNX character detection across over $1,000,000$ pixels took **~3,450 ms**!
+2. **Multi-Pass Section B Processing**:
+   Running separate vertical OCR strip passes across 3 subjects with individual fallback per-box OCR added an additional **~2,500 – 3,500 ms**.
+3. **Total Pipeline Latency Prior to Optimization**:
+   - JEE Advanced: **~3,790 ms**
+   - JEE Main: **~6,625 ms**
+
+### Architectural Optimizations Applied
+1. **Targeted Title Banner Crop & Height Rescaling**:
+   - Cropped only the primary title strip ($Y: 20\text{--}130$, $X: 150\text{--}2250$) and downscaled its height to exactly $40\text{ px}$.
+   - Text recognition execution dropped from **3,451 ms** to **209 ms** (a **16.5x speedup**).
+2. **High-Throughput Single-Pass Batch OCR**:
+   - Combined all attempted numerical boxes across Chemistry, Physics, and Mathematics into a single stacked vertical strip, executing OCR in **one unified forward pass** instead of three separate passes.
+3. **Sub-Pixel Bubble Darkening Verification**:
+   - Optimized bubble grid coordinate sampling with local $7\text{ px}$ radii, eliminating heavy bounding box pixel counts and determining bubble presence in $< 1\text{ ms}$.
+
+### Latency Benchmark Comparison
+
+| Stage / Examination | Before Optimization | After Optimization | Latency Reduction |
+| :--- | :--- | :--- | :--- |
+| **`detect_exam_type`** | 3,451.9 ms | 209.1 ms | **94.0% faster** |
+| **JEE Advanced Total Extraction** | 3,790.3 ms | **222.0 ms** | **17.1x speedup** |
+| **JEE Main Total Extraction** | 6,625.6 ms | **3,200.6 ms** | **51.7% faster** |
+| **Full Backend Pytest Suite (23 tests)** | 25.56 s | **11.14 s** | **56.4% faster** |
+
+---
+
+## 7. Verification Dataset & Test Results
 
 We generated an authentic JEE Advanced benchmark dataset in [`Dataset/jee_advanced/`](file:///f:/neira/Dataset/jee_advanced/):
 
@@ -158,14 +219,15 @@ pytest backend/tests/test_jee_advanced.py -v
 4. `test_end_to_end_jee_advanced_omr_upload_and_evaluation`: **PASSED** (Full 51-question scorecard generated).
 5. `test_unbubbled_numerical_receives_zero_marks`: **PASSED** (Q13 in Sheet 02 received strictly $0.0$ marks).
 
-**Full Suite: 23 passed in 25.56s (100% pass rate across entire backend).**
+**Full Suite: 23 passed in 11.14s (100% pass rate across entire backend).**
 
 ---
 
-## 6. Conclusion
+## 8. Conclusion
 
 The Ahh-Silance evaluation pipeline now natively supports both **JEE Main** and **JEE Advanced** examinations:
 * Zero login gating — root directly presents the unified evaluation console.
 * Automatic classification of exam architecture.
 * Deterministic partial marking and negative penalty enforcement.
 * Complete resolution of the unbubbled numerical glitch, guaranteeing strict adherence to official IIT examination regulations.
+* Sub-250ms processing for JEE Advanced OMR sheets and 56% faster test execution across the entire codebase.

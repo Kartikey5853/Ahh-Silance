@@ -156,10 +156,20 @@ def generate_omr(sheet_idx: int, roll_no: str, booklet_code: str, force_overflow
                 cv2.putText(img, cand_val, (x + 120, y + 26), cv2.FONT_HERSHEY_SIMPLEX, 0.8, pen_col, 2)
 
             # Draw bubble grid for digits
+            digits_to_darken = []
+            if cand_val:
+                try:
+                    cleaned_digits = [int(c) for c in cand_val if c.isdigit()]
+                    digits_to_darken = [d % 5 for d in cleaned_digits]
+                except Exception:
+                    pass
+
             for d_col in range(4):
                 bx = x + 265 + d_col * 60
+                target_d = digits_to_darken[d_col] if d_col < len(digits_to_darken) else None
                 for d_row in range(5): # digits 0-4
-                    draw_bubble(img, bx, y - 10 + d_row * 24, 8, label=str(d_row), is_filled=False)
+                    is_bubble_shaded = (target_d is not None and d_row == target_d)
+                    draw_bubble(img, bx, y - 10 + d_row * 24, 8, label=str(d_row), is_filled=is_bubble_shaded, fill_color=pen_col)
 
             student_responses[str(q)] = {
                 "question_no": q,
