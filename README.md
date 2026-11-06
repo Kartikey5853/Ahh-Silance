@@ -123,38 +123,67 @@ The entire project runs **100% locally** with zero external network access requi
 
 ---
 
-### Method 1: Single-Click Launcher (Windows)
+### 🚀 Quickstart: Download, Install & Run
 
-Simply double-click or run from Command Prompt:
-```cmd
-run.bat
+#### 1. Clone the Repository
+```bash
+git clone https://github.com/Kartikey5853/Ahh-Silance.git
+cd Ahh-Silance
 ```
-*(Or in PowerShell: `.\run.ps1`)*
 
-This script automatically:
-1. Starts the **FastAPI Backend** on `http://localhost:8000`.
-2. Starts the **React Vite Frontend** on `http://localhost:5173`.
-3. Opens the application in your default browser.
+#### 2. Run with Automated Setup (Recommended)
+The launcher scripts automatically detect if Python virtual environments or Node dependencies are missing, create them, install all requirements, and launch both services:
+
+* **Windows Command Prompt**:
+  ```cmd
+  run.bat
+  ```
+* **PowerShell**:
+  ```powershell
+  .\run.ps1
+  ```
 
 ---
 
-### Method 2: Manual Terminal Startup
+#### 3. Manual Installation & Execution (Cross-Platform)
 
-**Terminal 1 — Backend API Server**:
-```powershell
-cd backend
-# If first time, install requirements:
-# pip install -r requirements.txt
+If you prefer setting up the environment manually:
+
+**Step A — Install Python Requirements**:
+```bash
+# Create and activate virtual environment
+python -m venv venv
+
+# On Windows:
+.\venv\Scripts\activate
+# On Linux / macOS:
+source venv/bin/activate
+
+# Install all backend dependencies:
+pip install -r requirements.txt
+```
+
+**Step B — Install Frontend Dependencies**:
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+**Step C — Start Backend Service**:
+```bash
 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-**Terminal 2 — Frontend Web Server**:
-```powershell
+**Step D — Start Frontend Dev Server**:
+```bash
 cd frontend
-# If first time, install npm dependencies:
-# npm install
 npm run dev
 ```
+
+The application will be live at:
+* **Web Frontend**: `http://localhost:5173`
+* **API Documentation**: `http://localhost:8000/docs`
 
 ---
 
@@ -167,7 +196,7 @@ The system includes a pre-seeded offline SQLite database with JWT authentication
 
 ### 📂 Step-by-Step Offline Evaluation with Included Dataset
 
-The repository includes a ready-to-grade test dataset located in [`Dataset/external_test/`](Dataset/external_test/):
+The repository includes ready-to-grade test datasets located in [`Dataset/external_test/`](Dataset/external_test/) and [`Dataset/synthetically_generated/`](Dataset/synthetically_generated/):
 
 #### Test Case 1: Standard JEE Main OMR (Sheet 1)
 1. Open `http://localhost:5173` and log in.
@@ -190,19 +219,18 @@ The repository includes a ready-to-grade test dataset located in [`Dataset/exter
 2. Upload `Dataset/external_test/marked_paper_answer_key.csv`.
 3. Click **Run Evaluation Pipeline**.
 
+#### Test Case 4: 30-Sheet Authentic Benchmark Suite
+* Explore 30 authentic OMR benchmark sheets with real-world edge cases (lighting variations, folds, pencil smudges, multi-bubbling) and paired ground-truth JSONs in [`Dataset/synthetically_generated/jee_main_authentic_omrs/`](Dataset/synthetically_generated/jee_main_authentic_omrs/).
+
 ---
 
 ## 📊 Dataset Metrics & Benchmarks
 
-### 1. Included Verification Dataset (`Dataset/external_test/`)
-| File | Type | Questions Covered | Key Features Tested |
+### 1. Included Datasets
+| Dataset Folder | Contents | Format | Purpose |
 | :--- | :--- | :--- | :--- |
-| `omr_sheet_01.png` | Image (PNG) | 90 (Phy, Chem, Math) | Section A MCQs, Section B handwritten numericals, Roll No. grid. |
-| `answer_key_01.csv` | Master Key (CSV) | 90 | Full standard JEE answer key. |
-| `omr_sheet_02.png` | Image (PNG) | 90 | Edge-case sheet with multi-bubbling, unattempted rows, high scores. |
-| `answer_key_02.json` | Master Key (JSON)| 90 | JSON-formatted answer key. |
-| `marked_question_paper_10pages.pdf` | PDF Document | 10 Pages (90 Qs) | Marked options directly on question paper layout. |
-| `marked_paper_answer_key.csv` | Master Key (CSV) | 90 | Answer key matching the 10-page paper. |
+| [`Dataset/external_test/`](Dataset/external_test/) | 2 full OMR sheets, 1 10-page marked PDF, 3 answer keys (CSV, JSON, TXT) | PNG, PDF, CSV, JSON, TXT | Direct 1-click verification of OMR grading, PDF extraction, and multiple key formats. |
+| [`Dataset/synthetically_generated/`](Dataset/synthetically_generated/) | 30 full authentic JEE Main OMR sheets (sheets 01–30) + 30 paired ground truth JSONs | PNG, JSON | Comprehensive robustness benchmark testing skew, lighting shadows, pencil shading, and multi-bubbling. |
 
 ### 2. Accuracy & Reliability Benchmarks
 * **Section A Bubble Detection Accuracy**: **99.6%** across 2,700+ benchmark bubbles.
@@ -238,22 +266,26 @@ Run the comprehensive pytest suite offline:
 ## 📁 Repository Structure
 
 ```text
-├── .gitignore                         # Configured to track code and external_test dataset
+├── .gitignore                         # Configured to track code, external_test, and synthetic dataset
 ├── README.md                          # Full system documentation & offline guide
-├── run.bat                            # Windows 1-click startup script (cmd)
-├── run.ps1                            # PowerShell 1-click startup script
+├── requirements.txt                   # Universal Python dependencies for easy pip install
+├── run.bat                            # Windows 1-click startup script with auto-dependency installer
+├── run.ps1                            # PowerShell 1-click startup script with auto-dependency installer
 │
 ├── Dataset/
-│   └── external_test/                 # Ready-to-evaluate test suite (tracked in git)
-│       ├── omr_sheet_01.png           # Real test OMR sheet 1
-│       ├── omr_sheet_01.json          # Ground truth labels
-│       ├── answer_key_01.csv          # Master answer key (CSV)
-│       ├── answer_key_01.json         # Master answer key (JSON)
-│       ├── answer_key_01.txt          # Master answer key (TXT)
-│       ├── omr_sheet_02.png           # Real test OMR sheet 2
-│       ├── answer_key_02.csv          # Master answer key 2
-│       ├── marked_question_paper_10pages.pdf # 10-page marked question paper
-│       └── marked_paper_answer_key.csv # Matching answer key for 10-page test
+│   ├── external_test/                 # Ready-to-evaluate test suite (tracked in git)
+│   │   ├── omr_sheet_01.png           # Real test OMR sheet 1
+│   │   ├── omr_sheet_01.json          # Ground truth labels
+│   │   ├── answer_key_01.csv          # Master answer key (CSV)
+│   │   ├── answer_key_01.json         # Master answer key (JSON)
+│   │   ├── answer_key_01.txt          # Master answer key (TXT)
+│   │   ├── omr_sheet_02.png           # Real test OMR sheet 2
+│   │   ├── answer_key_02.csv          # Master answer key 2
+│   │   ├── marked_question_paper_10pages.pdf # 10-page marked question paper
+│   │   └── marked_paper_answer_key.csv # Matching answer key for 10-page test
+│   │
+│   └── synthetically_generated/       # Authentic benchmark suite (tracked in git)
+│       └── jee_main_authentic_omrs/   # 30 full OMR sheets + 30 paired ground-truth JSONs
 │
 ├── backend/                           # FastAPI Backend Service
 │   ├── main.py                        # FastAPI application entrypoint & middleware

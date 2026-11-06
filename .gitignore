@@ -1,6 +1,8 @@
 # Datasets & Large Artifacts
 Dataset/*
 !Dataset/external_test/
+!Dataset/synthetically_generated/
+!Dataset/synthetically_generated/**
 *.pdf
 !Dataset/external_test/*.pdf
 

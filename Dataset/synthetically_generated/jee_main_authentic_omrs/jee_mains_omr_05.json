@@ -1,0 +1,1166 @@
+{
+  "sheet_id": "jee_mains_05",
+  "test_metadata": {
+    "candidate_name": "KARTIK MEHTA",
+    "roll_no": "2403109012",
+    "booklet_code": "SET A",
+    "exam_name": "JEE Main 2024 Apr 08 S1"
+  },
+  "pen_color": "blue_ballpoint",
+  "roll_number_audit": [
+    {
+      "column": 1,
+      "written_digit": "2",
+      "bubbled_digit": 2,
+      "is_matched": true
+    },
+    {
+      "column": 2,
+      "written_digit": "4",
+      "bubbled_digit": 4,
+      "is_matched": true
+    },
+    {
+      "column": 3,
+      "written_digit": "0",
+      "bubbled_digit": 0,
+      "is_matched": true
+    },
+    {
+      "column": 4,
+      "written_digit": "3",
+      "bubbled_digit": 3,
+      "is_matched": true
+    },
+    {
+      "column": 5,
+      "written_digit": "1",
+      "bubbled_digit": 1,
+      "is_matched": true
+    },
+    {
+      "column": 6,
+      "written_digit": "0",
+      "bubbled_digit": 0,
+      "is_matched": true
+    },
+    {
+      "column": 7,
+      "written_digit": "9",
+      "bubbled_digit": 9,
+      "is_matched": true
+    },
+    {
+      "column": 8,
+      "written_digit": "0",
+      "bubbled_digit": 0,
+      "is_matched": true
+    },
+    {
+      "column": 9,
+      "written_digit": "1",
+      "bubbled_digit": 1,
+      "is_matched": true
+    },
+    {
+      "column": 10,
+      "written_digit": "2",
+      "bubbled_digit": 2,
+      "is_matched": true
+    }
+  ],
+  "has_roll_number_mistake": false,
+  "section_a_mcq": {
+    "1": {
+      "subject": "CHEMISTRY",
+      "student_marked": "C",
+      "answer_key": "C",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "2": {
+      "subject": "CHEMISTRY",
+      "student_marked": "C",
+      "answer_key": "C",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "3": {
+      "subject": "CHEMISTRY",
+      "student_marked": "C",
+      "answer_key": "C",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "4": {
+      "subject": "CHEMISTRY",
+      "student_marked": "A",
+      "answer_key": "A",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "5": {
+      "subject": "CHEMISTRY",
+      "student_marked": "D",
+      "answer_key": "D",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "6": {
+      "subject": "CHEMISTRY",
+      "student_marked": "D",
+      "answer_key": "B",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": -1
+    },
+    "7": {
+      "subject": "CHEMISTRY",
+      "student_marked": "C",
+      "answer_key": "C",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "8": {
+      "subject": "CHEMISTRY",
+      "student_marked": "A",
+      "answer_key": "D",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": -1
+    },
+    "9": {
+      "subject": "CHEMISTRY",
+      "student_marked": "B",
+      "answer_key": "C",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": -1
+    },
+    "10": {
+      "subject": "CHEMISTRY",
+      "student_marked": "D",
+      "answer_key": "D",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "11": {
+      "subject": "CHEMISTRY",
+      "student_marked": "B",
+      "answer_key": "B",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "12": {
+      "subject": "CHEMISTRY",
+      "student_marked": "D",
+      "answer_key": "D",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "13": {
+      "subject": "CHEMISTRY",
+      "student_marked": "A",
+      "answer_key": "A",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "14": {
+      "subject": "CHEMISTRY",
+      "student_marked": null,
+      "answer_key": "D",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 0
+    },
+    "15": {
+      "subject": "CHEMISTRY",
+      "student_marked": "D",
+      "answer_key": "B",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": -1
+    },
+    "16": {
+      "subject": "CHEMISTRY",
+      "student_marked": "C",
+      "answer_key": "B",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": -1
+    },
+    "17": {
+      "subject": "CHEMISTRY",
+      "student_marked": null,
+      "answer_key": "D",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 0
+    },
+    "18": {
+      "subject": "CHEMISTRY",
+      "student_marked": "B",
+      "answer_key": "B",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "19": {
+      "subject": "CHEMISTRY",
+      "student_marked": "B",
+      "answer_key": "C",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": -1
+    },
+    "20": {
+      "subject": "CHEMISTRY",
+      "student_marked": null,
+      "answer_key": "C",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 0
+    },
+    "31": {
+      "subject": "PHYSICS",
+      "student_marked": "B",
+      "answer_key": "B",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "32": {
+      "subject": "PHYSICS",
+      "student_marked": "C",
+      "answer_key": "C",
+      "is_double_marked": false,
+      "is_faint": true,
+      "marks_awarded": 4
+    },
+    "33": {
+      "subject": "PHYSICS",
+      "student_marked": "D",
+      "answer_key": "C",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": -1
+    },
+    "34": {
+      "subject": "PHYSICS",
+      "student_marked": "C",
+      "answer_key": "B",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": -1
+    },
+    "35": {
+      "subject": "PHYSICS",
+      "student_marked": "D",
+      "answer_key": "D",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "36": {
+      "subject": "PHYSICS",
+      "student_marked": "B",
+      "answer_key": "C",
+      "is_double_marked": false,
+      "is_faint": true,
+      "marks_awarded": -1
+    },
+    "37": {
+      "subject": "PHYSICS",
+      "student_marked": "D",
+      "answer_key": "B",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": -1
+    },
+    "38": {
+      "subject": "PHYSICS",
+      "student_marked": "B",
+      "answer_key": "B",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "39": {
+      "subject": "PHYSICS",
+      "student_marked": "D",
+      "answer_key": "D",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "40": {
+      "subject": "PHYSICS",
+      "student_marked": "B",
+      "answer_key": "B",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "41": {
+      "subject": "PHYSICS",
+      "student_marked": "C",
+      "answer_key": "C",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "42": {
+      "subject": "PHYSICS",
+      "student_marked": "A",
+      "answer_key": "A",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "43": {
+      "subject": "PHYSICS",
+      "student_marked": "B",
+      "answer_key": "D",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": -1
+    },
+    "44": {
+      "subject": "PHYSICS",
+      "student_marked": "A",
+      "answer_key": "A",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "45": {
+      "subject": "PHYSICS",
+      "student_marked": "D",
+      "answer_key": "D",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "46": {
+      "subject": "PHYSICS",
+      "student_marked": "D",
+      "answer_key": "A",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": -1
+    },
+    "47": {
+      "subject": "PHYSICS",
+      "student_marked": "B",
+      "answer_key": "D",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": -1
+    },
+    "48": {
+      "subject": "PHYSICS",
+      "student_marked": "C",
+      "answer_key": "C",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "49": {
+      "subject": "PHYSICS",
+      "student_marked": "C",
+      "answer_key": "C",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "50": {
+      "subject": "PHYSICS",
+      "student_marked": "D",
+      "answer_key": "D",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "61": {
+      "subject": "MATHEMATICS",
+      "student_marked": "A",
+      "answer_key": "B",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": -1
+    },
+    "62": {
+      "subject": "MATHEMATICS",
+      "student_marked": "B",
+      "answer_key": "B",
+      "is_double_marked": true,
+      "is_faint": false,
+      "marks_awarded": -1
+    },
+    "63": {
+      "subject": "MATHEMATICS",
+      "student_marked": null,
+      "answer_key": "C",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 0
+    },
+    "64": {
+      "subject": "MATHEMATICS",
+      "student_marked": "D",
+      "answer_key": "D",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "65": {
+      "subject": "MATHEMATICS",
+      "student_marked": "D",
+      "answer_key": "D",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "66": {
+      "subject": "MATHEMATICS",
+      "student_marked": null,
+      "answer_key": "C",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 0
+    },
+    "67": {
+      "subject": "MATHEMATICS",
+      "student_marked": "A",
+      "answer_key": "A",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "68": {
+      "subject": "MATHEMATICS",
+      "student_marked": "D",
+      "answer_key": "D",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "69": {
+      "subject": "MATHEMATICS",
+      "student_marked": "B",
+      "answer_key": "A",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": -1
+    },
+    "70": {
+      "subject": "MATHEMATICS",
+      "student_marked": null,
+      "answer_key": "C",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 0
+    },
+    "71": {
+      "subject": "MATHEMATICS",
+      "student_marked": "D",
+      "answer_key": "D",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "72": {
+      "subject": "MATHEMATICS",
+      "student_marked": "D",
+      "answer_key": "A",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": -1
+    },
+    "73": {
+      "subject": "MATHEMATICS",
+      "student_marked": "B",
+      "answer_key": "B",
+      "is_double_marked": false,
+      "is_faint": true,
+      "marks_awarded": 4
+    },
+    "74": {
+      "subject": "MATHEMATICS",
+      "student_marked": "D",
+      "answer_key": "D",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "75": {
+      "subject": "MATHEMATICS",
+      "student_marked": "C",
+      "answer_key": "C",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "76": {
+      "subject": "MATHEMATICS",
+      "student_marked": null,
+      "answer_key": "A",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 0
+    },
+    "77": {
+      "subject": "MATHEMATICS",
+      "student_marked": "D",
+      "answer_key": "D",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "78": {
+      "subject": "MATHEMATICS",
+      "student_marked": "C",
+      "answer_key": "C",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    },
+    "79": {
+      "subject": "MATHEMATICS",
+      "student_marked": null,
+      "answer_key": "B",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 0
+    },
+    "80": {
+      "subject": "MATHEMATICS",
+      "student_marked": "A",
+      "answer_key": "A",
+      "is_double_marked": false,
+      "is_faint": false,
+      "marks_awarded": 4
+    }
+  },
+  "section_b_numerical": {
+    "21": {
+      "subject": "CHEMISTRY",
+      "is_attempted": true,
+      "written_value": "46.9",
+      "written_digits": [
+        4,
+        6,
+        9
+      ],
+      "bubbled_digits": [
+        4,
+        6,
+        9
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "46.9",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": 4
+    },
+    "22": {
+      "subject": "CHEMISTRY",
+      "is_attempted": false,
+      "written_value": null,
+      "written_digits": [
+        null,
+        null,
+        null
+      ],
+      "bubbled_digits": [
+        null,
+        null,
+        null
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "67.9",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": 0
+    },
+    "23": {
+      "subject": "CHEMISTRY",
+      "is_attempted": true,
+      "written_value": "93.8",
+      "written_digits": [
+        9,
+        3,
+        8
+      ],
+      "bubbled_digits": [
+        9,
+        3,
+        8
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "93.8",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": 4
+    },
+    "24": {
+      "subject": "CHEMISTRY",
+      "is_attempted": false,
+      "written_value": null,
+      "written_digits": [
+        null,
+        null,
+        null
+      ],
+      "bubbled_digits": [
+        null,
+        null,
+        null
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "59.8",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": 0
+    },
+    "25": {
+      "subject": "CHEMISTRY",
+      "is_attempted": true,
+      "written_value": "46.1",
+      "written_digits": [
+        4,
+        6,
+        1
+      ],
+      "bubbled_digits": [
+        4,
+        7,
+        1
+      ],
+      "has_discrepancy": true,
+      "discrepancy_type": "DIGIT_BUBBLE_MISMATCH",
+      "correct_answer": "46.1",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": -1
+    },
+    "26": {
+      "subject": "CHEMISTRY",
+      "is_attempted": false,
+      "written_value": null,
+      "written_digits": [
+        null,
+        null,
+        null
+      ],
+      "bubbled_digits": [
+        null,
+        null,
+        null
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "80.5",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": 0
+    },
+    "27": {
+      "subject": "CHEMISTRY",
+      "is_attempted": true,
+      "written_value": "26.1",
+      "written_digits": [
+        2,
+        6,
+        1
+      ],
+      "bubbled_digits": [
+        2,
+        6,
+        1
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "26.1",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": 4
+    },
+    "28": {
+      "subject": "CHEMISTRY",
+      "is_attempted": false,
+      "written_value": null,
+      "written_digits": [
+        null,
+        null,
+        null
+      ],
+      "bubbled_digits": [
+        null,
+        null,
+        null
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "08.0",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": 0
+    },
+    "29": {
+      "subject": "CHEMISTRY",
+      "is_attempted": true,
+      "written_value": "80.2",
+      "written_digits": [
+        8,
+        0,
+        2
+      ],
+      "bubbled_digits": [
+        8,
+        0,
+        2
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "80.2",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": 4
+    },
+    "30": {
+      "subject": "CHEMISTRY",
+      "is_attempted": false,
+      "written_value": null,
+      "written_digits": [
+        null,
+        null,
+        null
+      ],
+      "bubbled_digits": [
+        null,
+        null,
+        null
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "84.5",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": 0
+    },
+    "51": {
+      "subject": "PHYSICS",
+      "is_attempted": true,
+      "written_value": "83.8",
+      "written_digits": [
+        8,
+        3,
+        8
+      ],
+      "bubbled_digits": [
+        8,
+        3,
+        8
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "83.8",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": 4
+    },
+    "52": {
+      "subject": "PHYSICS",
+      "is_attempted": true,
+      "written_value": "55.0",
+      "written_digits": [
+        5,
+        5,
+        0
+      ],
+      "bubbled_digits": [
+        5,
+        5,
+        0
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "55.0",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": 4
+    },
+    "53": {
+      "subject": "PHYSICS",
+      "is_attempted": true,
+      "written_value": "07.5",
+      "written_digits": [
+        0,
+        7,
+        5
+      ],
+      "bubbled_digits": [
+        0,
+        7,
+        5
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "07.5",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": 4
+    },
+    "54": {
+      "subject": "PHYSICS",
+      "is_attempted": false,
+      "written_value": null,
+      "written_digits": [
+        null,
+        null,
+        null
+      ],
+      "bubbled_digits": [
+        null,
+        null,
+        null
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "52.3",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": 0
+    },
+    "55": {
+      "subject": "PHYSICS",
+      "is_attempted": false,
+      "written_value": null,
+      "written_digits": [
+        null,
+        null,
+        null
+      ],
+      "bubbled_digits": [
+        null,
+        null,
+        null
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "47.0",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": 0
+    },
+    "56": {
+      "subject": "PHYSICS",
+      "is_attempted": false,
+      "written_value": null,
+      "written_digits": [
+        null,
+        null,
+        null
+      ],
+      "bubbled_digits": [
+        null,
+        null,
+        null
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "15.5",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": 0
+    },
+    "57": {
+      "subject": "PHYSICS",
+      "is_attempted": false,
+      "written_value": null,
+      "written_digits": [
+        null,
+        null,
+        null
+      ],
+      "bubbled_digits": [
+        null,
+        null,
+        null
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "43.0",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": 0
+    },
+    "58": {
+      "subject": "PHYSICS",
+      "is_attempted": false,
+      "written_value": null,
+      "written_digits": [
+        null,
+        null,
+        null
+      ],
+      "bubbled_digits": [
+        null,
+        null,
+        null
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "42.5",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": 0
+    },
+    "59": {
+      "subject": "PHYSICS",
+      "is_attempted": true,
+      "written_value": "56.3",
+      "written_digits": [
+        5,
+        6,
+        3
+      ],
+      "bubbled_digits": [
+        5,
+        6,
+        3
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "64.5",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": -1
+    },
+    "60": {
+      "subject": "PHYSICS",
+      "is_attempted": true,
+      "written_value": "41.8",
+      "written_digits": [
+        4,
+        1,
+        8
+      ],
+      "bubbled_digits": [
+        4,
+        1,
+        8
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "41.8",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": 4
+    },
+    "81": {
+      "subject": "MATHEMATICS",
+      "is_attempted": false,
+      "written_value": null,
+      "written_digits": [
+        null,
+        null,
+        null
+      ],
+      "bubbled_digits": [
+        null,
+        null,
+        null
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "37.3",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": 0
+    },
+    "82": {
+      "subject": "MATHEMATICS",
+      "is_attempted": true,
+      "written_value": "35.6",
+      "written_digits": [
+        3,
+        5,
+        6
+      ],
+      "bubbled_digits": [
+        3,
+        5,
+        6
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "35.6",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": 4
+    },
+    "83": {
+      "subject": "MATHEMATICS",
+      "is_attempted": true,
+      "written_value": "11.0",
+      "written_digits": [
+        null,
+        1,
+        0
+      ],
+      "bubbled_digits": [
+        1,
+        1,
+        0
+      ],
+      "has_discrepancy": true,
+      "discrepancy_type": "MISSING_WRITTEN_BOX",
+      "correct_answer": "11.0",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": -1
+    },
+    "84": {
+      "subject": "MATHEMATICS",
+      "is_attempted": false,
+      "written_value": null,
+      "written_digits": [
+        null,
+        null,
+        null
+      ],
+      "bubbled_digits": [
+        null,
+        null,
+        null
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "30.2",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": 0
+    },
+    "85": {
+      "subject": "MATHEMATICS",
+      "is_attempted": false,
+      "written_value": null,
+      "written_digits": [
+        null,
+        null,
+        null
+      ],
+      "bubbled_digits": [
+        null,
+        null,
+        null
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "58.4",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": 0
+    },
+    "86": {
+      "subject": "MATHEMATICS",
+      "is_attempted": false,
+      "written_value": null,
+      "written_digits": [
+        null,
+        null,
+        null
+      ],
+      "bubbled_digits": [
+        null,
+        null,
+        null
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "66.8",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": 0
+    },
+    "87": {
+      "subject": "MATHEMATICS",
+      "is_attempted": true,
+      "written_value": "10.3",
+      "written_digits": [
+        1,
+        0,
+        3
+      ],
+      "bubbled_digits": [
+        1,
+        0,
+        3
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "10.3",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": 4
+    },
+    "88": {
+      "subject": "MATHEMATICS",
+      "is_attempted": true,
+      "written_value": "59.8",
+      "written_digits": [
+        5,
+        9,
+        8
+      ],
+      "bubbled_digits": [
+        5,
+        9,
+        8
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "59.8",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": 4
+    },
+    "89": {
+      "subject": "MATHEMATICS",
+      "is_attempted": false,
+      "written_value": null,
+      "written_digits": [
+        null,
+        null,
+        null
+      ],
+      "bubbled_digits": [
+        null,
+        null,
+        null
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "54.2",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": 0
+    },
+    "90": {
+      "subject": "MATHEMATICS",
+      "is_attempted": true,
+      "written_value": "06.7",
+      "written_digits": [
+        0,
+        6,
+        7
+      ],
+      "bubbled_digits": [
+        0,
+        6,
+        7
+      ],
+      "has_discrepancy": false,
+      "discrepancy_type": "NONE",
+      "correct_answer": "06.7",
+      "is_ignored_by_first_5_rule": false,
+      "marks_awarded": 4
+    }
+  },
+  "score_summary": {
+    "total_score": 168,
+    "max_score": 300,
+    "correct_count": 47,
+    "incorrect_count": 20,
+    "unattempted_count": 23,
+    "percentage": 56.0
+  },
+  "condition": "clean_scan"
+}
