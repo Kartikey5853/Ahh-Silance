@@ -39,7 +39,6 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="navbar-inner">
         <a href="#home" onClick={(e) => { e.preventDefault(); onSelectTab("dashboard"); }} className="brand-logo">
           <span>Ahh Silance!!!</span>
-          <span className="brand-badge">Automated JEE Evaluation</span>
         </a>
 
         <nav className="nav-links">
