@@ -126,15 +126,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       <div style={{ maxWidth: "420px", width: "100%" }}>
         {/* Brand Header */}
         <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", marginBottom: "0.4rem" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.85rem", marginBottom: "0.4rem" }}>
             <img
-              src="/niera.svg"
+              src="/niera-logo.png"
               alt="Niera Logo"
-              style={{ width: "42px", height: "42px", objectFit: "contain" }}
+              style={{ width: "52px", height: "52px", objectFit: "contain" }}
             />
             <h1
               style={{
-                fontSize: "2.2rem",
+                fontSize: "2.35rem",
                 fontWeight: 800,
                 letterSpacing: "-0.03em",
                 color: "#0f172a",

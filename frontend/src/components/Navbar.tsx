@@ -37,9 +37,9 @@ export const Navbar: React.FC<NavbarProps> = ({
           }}
         >
           <img
-            src="/niera.svg"
+            src="/niera-logo.png"
             alt="Niera Logo"
-            style={{ width: "32px", height: "32px", objectFit: "contain" }}
+            style={{ width: "36px", height: "36px", objectFit: "contain" }}
           />
           <span style={{ fontWeight: 800, fontSize: "1.3rem", color: "#0f172a", letterSpacing: "-0.02em" }}>
             Niera
