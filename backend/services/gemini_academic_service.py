@@ -19,22 +19,41 @@ import io
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-# Configurable least-pricy Gemini models
-DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
-CANDIDATE_MODELS = [DEFAULT_MODEL, "gemini-3.8-flash", "gemini-2.5-flash"]
+# Configurable least-pricy Gemini models (gemini-3.1-flash-lite provides 500 free RPD quota & ultra-low latency)
+DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
+CANDIDATE_MODELS = [
+    DEFAULT_MODEL,
+    "gemini-flash-lite-latest",
+    "gemini-3.5-flash-lite",
+    "gemini-flash-latest",
+    "gemini-3.8-flash"
+]
+
+
+def clean_json_response(raw_text: str) -> Dict[str, Any]:
+    """Cleans markdown fences (e.g. ```json ... ```) if present and safely parses JSON."""
+    cleaned = raw_text.strip()
+    if cleaned.startswith("```"):
+        parts = cleaned.split("\n", 1)
+        cleaned = parts[1] if len(parts) > 1 else cleaned
+        if cleaned.endswith("```"):
+            cleaned = cleaned.rsplit("```", 1)[0].strip()
+    return json.loads(cleaned)
 
 
 def get_gemini_client(api_key: Optional[str] = None):
     """
     Initializes and returns the official google-genai Client.
     Prioritizes passed api_key, then environment variable GEMINI_API_KEY.
+    Explicitly enforces api_version='v1beta' via HttpOptions to support JSON mode across models.
     """
     key = (api_key or os.getenv("GEMINI_API_KEY", "")).strip()
     if not key:
         return None
     try:
         from google import genai
-        return genai.Client(api_key=key)
+        from google.genai import types
+        return genai.Client(api_key=key, http_options=types.HttpOptions(api_version="v1beta"))
     except Exception as e:
         logger.warning(f"Could not initialize google-genai Client: {e}")
         return None
@@ -158,7 +177,7 @@ class GeminiAcademicService:
                             )
                         )
                         if response.text:
-                            data = json.loads(response.text)
+                            data = clean_json_response(response.text)
                             questions_list = data.get("questions", [])
                             # Ensure each question has a valid id and marks
                             for idx, q in enumerate(questions_list):
@@ -414,7 +433,7 @@ class GeminiAcademicService:
                         )
 
                         if response.text:
-                            res_data = json.loads(response.text)
+                            res_data = clean_json_response(response.text)
                             if "breakdown" in res_data and "total_score" in res_data:
                                 res_data["max_score"] = max_total_marks
                                 res_data["percentage"] = round((res_data["total_score"] / max_total_marks) * 100, 1)
