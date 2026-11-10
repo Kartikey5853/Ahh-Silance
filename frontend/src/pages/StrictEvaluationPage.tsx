@@ -163,7 +163,7 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
     }
 
     setIsEvaluating(true);
-    setEvalProgressMessage("Executing Strict Prompt: Grounded against SQLite questions, master answer key & temperature: 0.0...");
+    setEvalProgressMessage("Evaluating student answer sheet against master answer key at zero temperature...");
 
     try {
       const scorecard = await academicApi.evaluateStudent(
@@ -199,10 +199,10 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" }}>
         <div>
           <h1 style={{ fontSize: "1.75rem", fontWeight: 800, letterSpacing: "-0.03em" }}>
-            Strict Multimodal Student Evaluation
+            Student Evaluation
           </h1>
           <p style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>
-            Grounded scoring against SQLite DB questions, allocated marks, and master answer key (temperature: 0.0)
+            Strict rubric evaluation against master answer key at zero temperature
           </p>
         </div>
 

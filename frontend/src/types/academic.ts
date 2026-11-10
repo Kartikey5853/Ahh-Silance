@@ -81,6 +81,8 @@ export interface QuestionItem {
   section?: string;
   text: string;
   marks: number;
+  is_or_choice?: boolean;
+  or_group?: string | null;
   rubric: string;
   ideal_answer?: string;
 }
