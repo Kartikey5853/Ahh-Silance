@@ -457,16 +457,6 @@ body {
   white-space: nowrap;
 }
 
-.dock-active-dot {
-  position: absolute;
-  bottom: 2px;
-  width: 4px;
-  height: 4px;
-  background: #38bdf8;
-  border-radius: 50%;
-  box-shadow: 0 0 6px #38bdf8;
-}
-
 /* ==========================================================================
    ACADEMIC DASHBOARD & SPLIT EXAM SCREEN STYLING
    ========================================================================== */

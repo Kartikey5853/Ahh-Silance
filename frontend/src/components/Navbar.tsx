@@ -5,7 +5,7 @@
  */
 
 import React from "react";
-import { GraduationCap, LogOut, User } from "lucide-react";
+import { LogOut, User } from "lucide-react";
 
 interface NavbarProps {
   onSelectTab: (tab: any) => void;
@@ -17,7 +17,7 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({
   onSelectTab,
   onLogout,
-  userName = "Professor"
+  userName = "Faculty"
 }) => {
   return (
     <header className="navbar" style={{ background: "#ffffff", borderBottom: "1px solid #e2e8f0" }}>
@@ -31,33 +31,19 @@ export const Navbar: React.FC<NavbarProps> = ({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: "0.6rem",
+            gap: "0.65rem",
             textDecoration: "none",
             color: "#0f172a"
           }}
         >
-          <div
-            style={{
-              width: "34px",
-              height: "34px",
-              borderRadius: "8px",
-              background: "#0f172a",
-              color: "#ffffff",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center"
-            }}
-          >
-            <GraduationCap size={20} />
-          </div>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: "1.1rem", lineHeight: 1.1 }}>
-              ACE College of Engineering
-            </div>
-            <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 500 }}>
-              Academic Portal
-            </div>
-          </div>
+          <img
+            src="/niera.svg"
+            alt="Niera Logo"
+            style={{ width: "32px", height: "32px", objectFit: "contain" }}
+          />
+          <span style={{ fontWeight: 800, fontSize: "1.3rem", color: "#0f172a", letterSpacing: "-0.02em" }}>
+            Niera
+          </span>
         </a>
 
         <div style={{ display: "flex", alignItems: "center", gap: "1.25rem" }}>
@@ -98,7 +84,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               alignItems: "center",
               gap: "0.35rem"
             }}
-            title="Sign out of ACE Portal"
           >
             <LogOut size={14} />
             <span>Sign Out</span>

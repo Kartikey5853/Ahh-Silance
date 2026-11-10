@@ -9,11 +9,9 @@ import React, { useState } from "react";
 import { authApi } from "../api/authApi";
 import type { AuthResponse } from "../types/auth";
 import {
-  GraduationCap,
   Lock,
   User,
-  ArrowRight,
-  Key
+  ArrowRight
 } from "lucide-react";
 
 interface LoginPageProps {
@@ -33,7 +31,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("Professor");
-  const [geminiApiKey, setGeminiApiKey] = useState("");
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -92,8 +89,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         password: regPassword.trim(),
         full_name: fullName.trim() || regUsername.trim(),
         email: email.trim(),
-        role: role,
-        gemini_api_key: geminiApiKey.trim()
+        role: role
       });
       localStorage.setItem("auth_token", response.access_token);
       localStorage.setItem("auth_user", JSON.stringify(response));
@@ -120,42 +116,36 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         flexDirection: "column",
         justifyContent: "center",
         alignItems: "center",
-        backgroundColor: "#f8fafc",
+        backgroundImage: "linear-gradient(rgba(248, 250, 252, 0.82), rgba(248, 250, 252, 0.88)), url('/login-bg.jpg')",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
         padding: "1.5rem"
       }}
     >
-      <div style={{ maxWidth: "440px", width: "100%" }}>
+      <div style={{ maxWidth: "420px", width: "100%" }}>
         {/* Brand Header */}
-        <div style={{ textAlign: "center", marginBottom: "1.75rem" }}>
-          <div
-            style={{
-              width: "56px",
-              height: "56px",
-              background: "#0f172a",
-              color: "#ffffff",
-              borderRadius: "14px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 1rem",
-              boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)"
-            }}
-          >
-            <GraduationCap size={28} />
+        <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", marginBottom: "0.4rem" }}>
+            <img
+              src="/niera.svg"
+              alt="Niera Logo"
+              style={{ width: "42px", height: "42px", objectFit: "contain" }}
+            />
+            <h1
+              style={{
+                fontSize: "2.2rem",
+                fontWeight: 800,
+                letterSpacing: "-0.03em",
+                color: "#0f172a",
+                margin: 0
+              }}
+            >
+              Niera
+            </h1>
           </div>
-          <h1
-            style={{
-              fontSize: "1.75rem",
-              fontWeight: 800,
-              letterSpacing: "-0.03em",
-              color: "#0f172a",
-              marginBottom: "0.25rem"
-            }}
-          >
-            Academic Grading Platform
-          </h1>
-          <p style={{ fontSize: "0.88rem", color: "#64748b", fontWeight: 500 }}>
-            Automated examination scanning, digital papers & strict evaluation
+          <p style={{ fontSize: "0.9rem", color: "#475569", fontWeight: 500, margin: 0 }}>
+            Academic Examination & Evaluation System
           </p>
         </div>
 
@@ -163,7 +153,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         <div
           style={{
             display: "flex",
-            background: "#e2e8f0",
+            background: "rgba(226, 232, 240, 0.85)",
+            backdropFilter: "blur(8px)",
             padding: "0.25rem",
             borderRadius: "10px",
             marginBottom: "1rem"
@@ -212,11 +203,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         {/* Main Card */}
         <div
           style={{
-            background: "#ffffff",
-            border: "1px solid #e2e8f0",
+            background: "rgba(255, 255, 255, 0.95)",
+            backdropFilter: "blur(12px)",
+            border: "1px solid rgba(226, 232, 240, 0.8)",
             borderRadius: "16px",
-            padding: "2rem",
-            boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.05)"
+            padding: "1.75rem",
+            boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04)"
           }}
         >
           {errorMessage && (
@@ -435,37 +427,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 </div>
               </div>
 
-              <div>
-                <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.8rem", fontWeight: 700, color: "#334155", marginBottom: "0.3rem" }}>
-                  <span>Gemini API Key</span>
-                  <span style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 500 }}>Optional (can add later)</span>
-                </label>
-                <div style={{ position: "relative" }}>
-                  <Key size={16} style={{ position: "absolute", left: "0.85rem", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
-                  <input
-                    type="password"
-                    value={geminiApiKey}
-                    onChange={(e) => setGeminiApiKey(e.target.value)}
-                    placeholder="AIzaSy... (from Google AI Studio)"
-                    style={{
-                      width: "100%",
-                      padding: "0.55rem 0.85rem 0.55rem 2.4rem",
-                      borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
-                      fontSize: "0.88rem",
-                      fontFamily: "monospace"
-                    }}
-                  />
-                </div>
-              </div>
-
               <button
                 type="submit"
                 disabled={isLoading}
                 style={{
                   width: "100%",
                   padding: "0.75rem",
-                  background: "#2563eb",
+                  background: "#0f172a",
                   color: "#ffffff",
                   border: "none",
                   borderRadius: "8px",
@@ -479,7 +447,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                   gap: "0.5rem"
                 }}
               >
-                {isLoading ? "Creating Account..." : "Create Account & Start"}
+                {isLoading ? "Creating Account..." : "Create Account"}
                 <ArrowRight size={16} />
               </button>
             </form>

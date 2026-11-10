@@ -69,7 +69,6 @@ export const BottomDock: React.FC<BottomDockProps> = ({
                 {item.icon}
               </div>
               <span className="dock-label">{item.label}</span>
-              {isActive && <div className="dock-active-dot" />}
             </button>
           );
         })}
