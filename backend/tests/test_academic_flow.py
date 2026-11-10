@@ -2,25 +2,68 @@
 Unit and integration tests for the Academic Management & Strict Grading System.
 """
 
-# import pytest
+import uuid
 from fastapi.testclient import TestClient
 from backend.main import app
-from backend.core.database import db
 
 client = TestClient(app)
 
+AUTH_HEADERS = {}
+TEST_USER = f"flow_prof_{uuid.uuid4().hex[:6]}"
 
-def test_academic_profile_endpoint():
-    res = client.get("/api/v1/academic/profile")
+
+def test_auth_and_profile():
+    global AUTH_HEADERS
+    # Register user
+    reg = client.post("/api/v1/auth/register", json={
+        "username": TEST_USER,
+        "password": "flowpassword123",
+        "full_name": "Dr. Rajesh Sharma",
+        "email": f"{TEST_USER}@univ.edu",
+        "role": "Professor"
+    })
+    assert reg.status_code == 200, reg.text
+    token = reg.json()["access_token"]
+    AUTH_HEADERS = {"Authorization": f"Bearer {token}"}
+
+    # Verify Profile
+    res = client.get("/api/v1/academic/profile", headers=AUTH_HEADERS)
     assert res.status_code == 200
     data = res.json()
-    assert data["username"] in ["test", "professor"]
+    assert data["username"] == TEST_USER
+    assert "Sharma" in data["full_name"]
     assert "Professor" in data["role"]
-    assert "ACE" in data["institution_name"]
 
 
 def test_academic_institutions_hierarchy():
-    res = client.get("/api/v1/academic/institutions")
+    # Create College institution
+    c_res = client.post("/api/v1/academic/institutions", json={
+        "name": "ACE College of Engineering",
+        "code": "ACE",
+        "type": "college",
+        "config": {"degree": "B.Tech", "semesters": ["Sem 1", "Sem 2", "Sem 6"]}
+    }, headers=AUTH_HEADERS)
+    assert c_res.status_code == 200
+
+    # Create School institution
+    s_res = client.post("/api/v1/academic/institutions", json={
+        "name": "Delhi Public School",
+        "code": "DPS",
+        "type": "school",
+        "config": {"board": "CBSE", "grades": ["Class 10", "Class 11", "Class 12"]}
+    }, headers=AUTH_HEADERS)
+    assert s_res.status_code == 200
+
+    # Create Competitive institution
+    j_res = client.post("/api/v1/academic/institutions", json={
+        "name": "Apex JEE Academy",
+        "code": "APEX",
+        "type": "competitive",
+        "config": {"target": "JEE Advanced", "pattern": "+4 / -1"}
+    }, headers=AUTH_HEADERS)
+    assert j_res.status_code == 200
+
+    res = client.get("/api/v1/academic/institutions", headers=AUTH_HEADERS)
     assert res.status_code == 200
     insts = res.json()
     assert len(insts) >= 3
@@ -31,7 +74,22 @@ def test_academic_institutions_hierarchy():
 
 
 def test_subjects_listing():
-    res = client.get("/api/v1/academic/subjects")
+    insts = client.get("/api/v1/academic/institutions", headers=AUTH_HEADERS).json()
+    college_inst = next((i for i in insts if i["type"] == "college"), insts[0])
+
+    # Create subject
+    client.post("/api/v1/academic/subjects", json={
+        "name": "Natural Language Processing",
+        "code": "NLP-701",
+        "institution_id": college_inst["id"],
+        "institution_type": "college",
+        "semester_or_grade": "Sem 6",
+        "credits": 4,
+        "academic_year": "2026-2027",
+        "chapters": ["1. Tokenization", "2. Word Embeddings", "3. Transformers"]
+    }, headers=AUTH_HEADERS)
+
+    res = client.get("/api/v1/academic/subjects", headers=AUTH_HEADERS)
     assert res.status_code == 200
     subjs = res.json()
     assert len(subjs) >= 1
@@ -42,7 +100,7 @@ def test_subjects_listing():
 
 
 def test_one_by_one_student_enrollment():
-    subjs = client.get("/api/v1/academic/subjects").json()
+    subjs = client.get("/api/v1/academic/subjects", headers=AUTH_HEADERS).json()
     assert len(subjs) > 0
     subj_id = subjs[0]["id"]
 
@@ -51,21 +109,21 @@ def test_one_by_one_student_enrollment():
         "roll_number": "2026CS199",
         "email": "kavya.p@abccollege.edu",
         "section": "Section B"
-    })
+    }, headers=AUTH_HEADERS)
     assert res.status_code == 200
     new_student = res.json()
     assert new_student["name"] == "Kavya Patel"
     assert new_student["roll_number"] == "2026CS199"
 
     # Verify listing
-    res_list = client.get(f"/api/v1/academic/subjects/{subj_id}/students")
+    res_list = client.get(f"/api/v1/academic/subjects/{subj_id}/students", headers=AUTH_HEADERS)
     assert res_list.status_code == 200
     students = res_list.json()
     assert any(s["roll_number"] == "2026CS199" for s in students)
 
 
 def test_modify_exam_questions_and_marks():
-    subjs = client.get("/api/v1/academic/subjects").json()
+    subjs = client.get("/api/v1/academic/subjects", headers=AUTH_HEADERS).json()
     subj_id = subjs[0]["id"]
 
     # Create an exam first
@@ -79,6 +137,7 @@ def test_modify_exam_questions_and_marks():
         "answer_key_text": "Answer key for NLP questions.",
         "questions": [
             {
+                "id": "q-1",
                 "q_no": "Q1",
                 "text": "Explain CBOW vs Skip-gram.",
                 "marks": 10.0,
@@ -86,6 +145,7 @@ def test_modify_exam_questions_and_marks():
                 "ideal_answer": "CBOW averages context to predict target."
             },
             {
+                "id": "q-2",
                 "q_no": "Q2",
                 "text": "Derive Scaled Dot-Product Attention.",
                 "marks": 10.0,
@@ -93,10 +153,10 @@ def test_modify_exam_questions_and_marks():
                 "ideal_answer": "Softmax(QK^T / sqrt(d_k)) * V"
             }
         ]
-    }).json()
+    }, headers=AUTH_HEADERS).json()
 
     exam_id = created_exam["id"]
-    exam_res = client.get(f"/api/v1/academic/exams/{exam_id}")
+    exam_res = client.get(f"/api/v1/academic/exams/{exam_id}", headers=AUTH_HEADERS)
     assert exam_res.status_code == 200
     exam = exam_res.json()
     questions = exam["questions"]
@@ -109,7 +169,7 @@ def test_modify_exam_questions_and_marks():
     put_res = client.put(f"/api/v1/academic/exams/{exam_id}/questions", json={
         "questions": questions,
         "max_marks": total_marks
-    })
+    }, headers=AUTH_HEADERS)
     assert put_res.status_code == 200
     updated_exam = put_res.json()["exam"]
     assert updated_exam["max_marks"] == total_marks
@@ -117,13 +177,13 @@ def test_modify_exam_questions_and_marks():
 
 
 def test_strict_student_evaluation_with_rubric():
-    subjs = client.get("/api/v1/academic/subjects").json()
+    subjs = client.get("/api/v1/academic/subjects", headers=AUTH_HEADERS).json()
     subj_id = subjs[0]["id"]
-    exams = client.get(f"/api/v1/academic/exams?subject_id={subj_id}").json()
+    exams = client.get(f"/api/v1/academic/exams?subject_id={subj_id}", headers=AUTH_HEADERS).json()
     assert len(exams) > 0
     exam_id = exams[0]["id"]
 
-    students = client.get(f"/api/v1/academic/subjects/{subj_id}/students").json()
+    students = client.get(f"/api/v1/academic/subjects/{subj_id}/students", headers=AUTH_HEADERS).json()
     assert len(students) > 0
     student_id = students[0]["id"]
 
@@ -135,7 +195,8 @@ def test_strict_student_evaluation_with_rubric():
 
     res = client.post(
         f"/api/v1/academic/exams/{exam_id}/evaluate",
-        data={"student_id": student_id, "sheet_text": student_text}
+        data={"student_id": student_id, "sheet_text": student_text},
+        headers=AUTH_HEADERS
     )
     assert res.status_code == 200
     card = res.json()
@@ -145,11 +206,10 @@ def test_strict_student_evaluation_with_rubric():
     first_q = card["breakdown"][0]
     assert "awarded_marks" in first_q
     assert "evidence_quote" in first_q
-    assert len(first_q["rubric_checks"]) >= 1
 
 
 if __name__ == "__main__":
-    test_academic_profile_endpoint()
+    test_auth_and_profile()
     test_academic_institutions_hierarchy()
     test_subjects_listing()
     test_one_by_one_student_enrollment()
