@@ -1,29 +1,25 @@
 /**
- * User Authentication and Sign-In Page.
+ * Faculty Authentication & Sign-In Page for ACE College of Engineering.
  * 
- * Provides a clean, distraction-free white background login screen displaying
- * the brand logo 'Ahh Silance!!!' and pre-seeded test user credentials (test / test123).
+ * Provides an uncluttered, professional login screen for professors and evaluators
+ * connecting directly to the SQLite backend auth service.
  */
 
 import React, { useState } from "react";
 import { authApi } from "../api/authApi";
 import type { AuthResponse } from "../types/auth";
-import { Lock, User, ArrowRight, AlertCircle, Info } from "lucide-react";
+import { GraduationCap, Lock, User, ArrowRight, AlertCircle } from "lucide-react";
 
 interface LoginPageProps {
-  /** Callback fired upon successful credential verification and token issuance */
   onLoginSuccess: (authData: AuthResponse) => void;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
-  const [username, setUsername] = useState("test");
-  const [password, setPassword] = useState("test123");
+  const [username, setUsername] = useState("professor");
+  const [password, setPassword] = useState("ace123");
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  /**
-   * Submits credentials to backend /api/v1/auth/login and stores token on success.
-   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
@@ -38,20 +34,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       if (err.response && err.response.data && err.response.data.detail) {
         setErrorMessage(err.response.data.detail);
       } else {
-        setErrorMessage("Unable to connect to the evaluation server. Ensure backend is running on port 8000.");
+        setErrorMessage("Unable to connect to backend server. Make sure FastAPI is running on port 8000.");
       }
     } finally {
       setIsLoading(false);
     }
-  };
-
-  /**
-   * Populates default test user credentials for immediate 1-click login.
-   */
-  const handleQuickFill = () => {
-    setUsername("test");
-    setPassword("test123");
-    setErrorMessage(null);
   };
 
   return (
@@ -62,142 +49,189 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         flexDirection: "column",
         justifyContent: "center",
         alignItems: "center",
-        backgroundColor: "#ffffff",
+        backgroundColor: "#f8fafc",
         padding: "1.5rem"
       }}
     >
       <div style={{ maxWidth: "420px", width: "100%" }}>
-        {/* Brand Header */}
+        {/* Header */}
         <div style={{ textAlign: "center", marginBottom: "2rem" }}>
+          <div
+            style={{
+              width: "56px",
+              height: "56px",
+              background: "#0f172a",
+              color: "#ffffff",
+              borderRadius: "14px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 1rem",
+              boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)"
+            }}
+          >
+            <GraduationCap size={28} />
+          </div>
           <h1
             style={{
-              fontSize: "2.25rem",
+              fontSize: "1.75rem",
               fontWeight: 800,
-              letterSpacing: "-0.04em",
-              color: "var(--text-primary)",
+              letterSpacing: "-0.03em",
+              color: "#0f172a",
               marginBottom: "0.25rem"
             }}
           >
-            Ahh Silance!!!
+            ACE College of Engineering
           </h1>
-          <p style={{ fontSize: "0.95rem", color: "var(--text-secondary)", fontWeight: 500 }}>
-            Automated JEE Evaluation Engine
+          <p style={{ fontSize: "0.9rem", color: "#64748b", fontWeight: 500 }}>
+            Faculty & Academic Grading Portal
           </p>
         </div>
 
-        {/* Credentials Form Box */}
-        <div className="card" style={{ padding: "2rem" }}>
+        {/* Login Card */}
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            borderRadius: "16px",
+            padding: "2rem",
+            boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.05)"
+          }}
+        >
           <div style={{ marginBottom: "1.5rem" }}>
-            <h2 style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--text-primary)" }}>
+            <h2 style={{ fontSize: "1.2rem", fontWeight: 700, color: "#0f172a" }}>
               Sign In
             </h2>
-            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
-              Access the evaluation console to scan and score test sheets.
+            <p style={{ fontSize: "0.85rem", color: "#64748b", marginTop: "0.2rem" }}>
+              Enter your faculty credentials to access your subjects and rosters.
             </p>
           </div>
 
-          {/* Test Credentials Helper Pill */}
+          {/* Quick Credential Hint */}
           <div
-            onClick={handleQuickFill}
             style={{
-              background: "var(--bg-secondary)",
-              border: "1px solid var(--border-color)",
-              borderRadius: "6px",
-              padding: "0.75rem",
-              marginBottom: "1.5rem",
-              cursor: "pointer",
+              background: "#f1f5f9",
+              borderRadius: "8px",
+              padding: "0.6rem 0.85rem",
+              marginBottom: "1.25rem",
+              fontSize: "0.8rem",
+              color: "#334155",
               display: "flex",
-              alignItems: "center",
-              gap: "0.6rem"
+              justifyContent: "space-between",
+              alignItems: "center"
             }}
-            title="Click to auto-fill test credentials"
           >
-            <Info size={16} color="var(--blue)" style={{ flexShrink: 0 }} />
-            <div style={{ fontSize: "0.82rem" }}>
-              <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>Test Credentials: </span>
-              <code style={{ fontFamily: "var(--font-mono)", background: "#ffffff", padding: "0.15rem 0.35rem", borderRadius: "3px", border: "1px solid var(--border-color)" }}>test</code> / <code style={{ fontFamily: "var(--font-mono)", background: "#ffffff", padding: "0.15rem 0.35rem", borderRadius: "3px", border: "1px solid var(--border-color)" }}>test123</code>
-            </div>
-          </div>
-
-          {errorMessage && (
-            <div
+            <span>Credentials: <strong>professor</strong> / <strong>ace123</strong></span>
+            <button
+              type="button"
+              onClick={() => { setUsername("professor"); setPassword("ace123"); }}
               style={{
-                backgroundColor: "var(--red-bg)",
-                border: "1px solid var(--red)",
-                borderRadius: "6px",
-                padding: "0.75rem",
-                color: "var(--red)",
-                fontSize: "0.85rem",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-                marginBottom: "1.25rem"
+                background: "none",
+                border: "none",
+                color: "#2563eb",
+                fontWeight: 600,
+                cursor: "pointer",
+                fontSize: "0.78rem"
               }}
             >
-              <AlertCircle size={16} style={{ flexShrink: 0 }} />
-              <span>{errorMessage}</span>
-            </div>
-          )}
+              Fill
+            </button>
+          </div>
 
           <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label className="form-label" htmlFor="username">
+            <div style={{ marginBottom: "1rem" }}>
+              <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
                 Username
               </label>
               <div style={{ position: "relative" }}>
+                <User size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
                 <input
-                  id="username"
                   type="text"
                   required
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="form-input"
-                  style={{ paddingLeft: "2.25rem" }}
-                  placeholder="Enter username"
-                />
-                <User
-                  size={16}
-                  style={{ position: "absolute", left: "0.75rem", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }}
+                  placeholder="e.g. professor"
+                  style={{
+                    width: "100%",
+                    padding: "0.55rem 0.75rem 0.55rem 2.25rem",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "0.9rem"
+                  }}
                 />
               </div>
             </div>
 
-            <div className="form-group">
-              <label className="form-label" htmlFor="password">
+            <div style={{ marginBottom: "1.5rem" }}>
+              <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
                 Password
               </label>
               <div style={{ position: "relative" }}>
+                <Lock size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
                 <input
-                  id="password"
                   type="password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="form-input"
-                  style={{ paddingLeft: "2.25rem" }}
-                  placeholder="Enter password"
-                />
-                <Lock
-                  size={16}
-                  style={{ position: "absolute", left: "0.75rem", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }}
+                  placeholder="••••••••"
+                  style={{
+                    width: "100%",
+                    padding: "0.55rem 0.75rem 0.55rem 2.25rem",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "0.9rem"
+                  }}
                 />
               </div>
             </div>
 
+            {errorMessage && (
+              <div
+                style={{
+                  padding: "0.75rem",
+                  background: "#fef2f2",
+                  border: "1px solid #fecaca",
+                  color: "#991b1b",
+                  borderRadius: "8px",
+                  fontSize: "0.85rem",
+                  marginBottom: "1.25rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem"
+                }}
+              >
+                <AlertCircle size={16} />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={isLoading}
-              className="btn btn-primary"
-              style={{ width: "100%", marginTop: "0.5rem" }}
+              style={{
+                width: "100%",
+                padding: "0.65rem 1rem",
+                background: "#0f172a",
+                color: "#ffffff",
+                border: "none",
+                borderRadius: "8px",
+                fontWeight: 700,
+                fontSize: "0.95rem",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "0.5rem"
+              }}
             >
-              {isLoading ? "Signing in..." : "Continue to Dashboard"}
-              {!isLoading && <ArrowRight size={16} />}
+              {isLoading ? "Signing in..." : (
+                <>
+                  <span>Sign In</span>
+                  <ArrowRight size={16} />
+                </>
+              )}
             </button>
           </form>
-        </div>
-
-        <div style={{ textAlign: "center", marginTop: "1.5rem", fontSize: "0.78rem", color: "var(--text-muted)" }}>
-          Strict NTA Scoring Standard • Fast Local Edge Engine
         </div>
       </div>
     </div>

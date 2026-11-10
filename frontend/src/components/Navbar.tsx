@@ -1,68 +1,109 @@
 /**
- * Primary Application Navigation Bar.
+ * Primary Application Header for ACE College of Engineering.
  * 
- * Clean, distraction-free header displaying the system branding 'Ahh Silance!!!'
- * and navigation tabs for evaluation and results.
+ * Clean, uncluttered navigation showing institution title, faculty session, and sign-out.
  */
 
 import React from "react";
-import { FileText, Award } from "lucide-react";
+import { GraduationCap, LogOut, User } from "lucide-react";
 
 interface NavbarProps {
-  /** Active page view selector */
-  activeTab: "dashboard" | "history" | "result";
-  /** Callback to switch top-level page views */
-  onSelectTab: (tab: "dashboard" | "history") => void;
+  onSelectTab: (tab: any) => void;
+  activeTab: string;
+  onLogout: () => void;
+  userName?: string;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  activeTab,
   onSelectTab,
+  onLogout,
+  userName = "Professor"
 }) => {
   return (
-    <header className="navbar">
-      <div className="navbar-inner">
+    <header className="navbar" style={{ background: "#ffffff", borderBottom: "1px solid #e2e8f0" }}>
+      <div className="navbar-inner" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.85rem 1.5rem" }}>
         <a
-          href="#home"
+          href="#dashboard"
           onClick={(e) => {
             e.preventDefault();
             onSelectTab("dashboard");
           }}
-          className="brand-logo"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.6rem",
+            textDecoration: "none",
+            color: "#0f172a"
+          }}
         >
-          <span>Ahh Silance!!!</span>
+          <div
+            style={{
+              width: "34px",
+              height: "34px",
+              borderRadius: "8px",
+              background: "#0f172a",
+              color: "#ffffff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center"
+            }}
+          >
+            <GraduationCap size={20} />
+          </div>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: "1.1rem", lineHeight: 1.1 }}>
+              ACE College of Engineering
+            </div>
+            <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 500 }}>
+              Academic Portal
+            </div>
+          </div>
         </a>
 
-        <nav className="nav-links">
+        <div style={{ display: "flex", alignItems: "center", gap: "1.25rem" }}>
           <button
             type="button"
-            className={`nav-link btn-secondary ${activeTab === "dashboard" ? "active" : ""}`}
-            onClick={() => onSelectTab("dashboard")}
-            style={{ border: "none" }}
+            onClick={() => onSelectTab("profile")}
+            style={{
+              background: "none",
+              border: "none",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.45rem",
+              cursor: "pointer",
+              color: "#334155",
+              fontSize: "0.88rem",
+              fontWeight: 600,
+              padding: "0.35rem 0.65rem",
+              borderRadius: "6px"
+            }}
           >
-            <FileText size={16} />
-            Evaluate Sheet
+            <User size={16} style={{ color: "#2563eb" }} />
+            <span>{userName}</span>
           </button>
 
-          {activeTab === "result" && (
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.35rem",
-                fontSize: "0.85rem",
-                fontWeight: 600,
-                color: "var(--blue)",
-                backgroundColor: "rgba(37, 99, 235, 0.08)",
-                padding: "0.3rem 0.75rem",
-                borderRadius: "9999px"
-              }}
-            >
-              <Award size={14} />
-              Active Scorecard
-            </span>
-          )}
-        </nav>
+          <button
+            type="button"
+            onClick={onLogout}
+            style={{
+              background: "#f1f5f9",
+              border: "1px solid #e2e8f0",
+              color: "#475569",
+              padding: "0.35rem 0.75rem",
+              borderRadius: "6px",
+              fontSize: "0.82rem",
+              fontWeight: 600,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.35rem"
+            }}
+            title="Sign out of ACE Portal"
+          >
+            <LogOut size={14} />
+            <span>Sign Out</span>
+          </button>
+        </div>
       </div>
     </header>
   );

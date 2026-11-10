@@ -58,7 +58,7 @@ body {
   max-width: 1200px;
   width: 100%;
   margin: 0 auto;
-  padding: 2rem 1.5rem;
+  padding: 2rem 1.5rem 10rem 1.5rem;
 }
 
 /* Header & Navbar */
@@ -252,27 +252,31 @@ body {
   margin-top: 0.25rem;
 }
 
-/* Modal Backdrop */
-.modal-overlay {
+/* Modal Backdrop & Dialog */
+.modal-overlay, .modal-backdrop {
   position: fixed;
   inset: 0;
-  background-color: rgba(15, 23, 42, 0.65);
+  background-color: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 50;
+  z-index: 1050;
   padding: 1.5rem;
 }
 
-.modal-content {
+.modal-content, .modal-dialog {
   background: #ffffff;
-  border-radius: 12px;
-  max-width: 650px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  max-width: 600px;
   width: 100%;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: var(--shadow-lg);
-  padding: 1.5rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  padding: 2rem;
+  position: relative;
 }
 
 /* Status Badges */
@@ -363,3 +367,442 @@ body {
   }
 }
 
+
+
+/* ==========================================================================
+   FIXED BOTTOM DOCK NAVIGATION (STAYS PINNED DURING PAGE SCROLL)
+   ========================================================================== */
+
+.fixed-bottom-dock-container {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  pointer-events: none;
+  width: auto;
+  max-width: 95vw;
+}
+
+.bottom-dock-pill {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.65rem;
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+  box-shadow: 0 20px 35px -5px rgba(0, 0, 0, 0.3), 0 10px 15px -5px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.bottom-dock-pill:hover {
+  transform: scale(1.015);
+}
+
+.dock-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  padding: 0.45rem 0.85rem;
+  background: transparent;
+  border: none;
+  border-radius: 9999px;
+  color: #94a3b8;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease;
+  min-width: 68px;
+}
+
+.dock-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dock-btn.active {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.18);
+  font-weight: 600;
+}
+
+.dock-icon-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dock-badge {
+  position: absolute;
+  top: -4px;
+  right: -8px;
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.1rem 0.35rem;
+  border-radius: 9999px;
+  line-height: 1;
+}
+
+.dock-label {
+  font-size: 0.7rem;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.dock-active-dot {
+  position: absolute;
+  bottom: 2px;
+  width: 4px;
+  height: 4px;
+  background: #38bdf8;
+  border-radius: 50%;
+  box-shadow: 0 0 6px #38bdf8;
+}
+
+/* ==========================================================================
+   ACADEMIC DASHBOARD & SPLIT EXAM SCREEN STYLING
+   ========================================================================== */
+
+.page-header-banner {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  color: #ffffff;
+  padding: 1.75rem 2rem;
+  border-radius: 16px;
+  margin-bottom: 2rem;
+  box-shadow: var(--shadow-md);
+  position: relative;
+  overflow: hidden;
+}
+
+.page-header-banner h1 {
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin-bottom: 0.4rem;
+}
+
+.page-header-banner p {
+  color: #94a3b8;
+  font-size: 0.95rem;
+}
+
+.teacher-meta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0.35rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #e2e8f0;
+  margin-top: 0.85rem;
+}
+
+.grid-stats-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.stat-metric-card {
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1.25rem;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.stat-icon-box {
+  width: 46px;
+  height: 46px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-secondary);
+  color: var(--blue);
+}
+
+.stat-value {
+  font-size: 1.6rem;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--text-primary);
+}
+
+.stat-caption {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* Institution Type Selector Pills */
+.institution-switch-container {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  background: var(--bg-secondary);
+  padding: 0.4rem;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  width: fit-content;
+}
+
+.institution-pill-btn {
+  padding: 0.5rem 1.1rem;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.institution-pill-btn.active {
+  background: #ffffff;
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Subject Hierarchy Cards */
+.subject-card {
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 1.5rem;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  margin-bottom: 1.25rem;
+}
+
+.subject-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.subject-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.subject-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.subject-badges-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.subject-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
+}
+
+.badge-college {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+
+.badge-school {
+  background: #fdf2f8;
+  color: #be185d;
+  border-color: #fbcfe8;
+}
+
+.badge-jee {
+  background: #f0fdf4;
+  color: #15803d;
+  border-color: #bbf7d0;
+}
+
+.badge-credits {
+  background: #f8fafc;
+  color: #475569;
+  border-color: #e2e8f0;
+}
+
+.chapters-accordion {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-top: 0.75rem;
+}
+
+.chapters-list {
+  list-style: none;
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.chapter-item {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Split Screen Exam Question Editor (Left: Modify Marks / Right: Gemini Output) */
+.split-screen-editor {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+@media (max-width: 980px) {
+  .split-screen-editor {
+    grid-template-columns: 1fr;
+  }
+}
+
+.editor-pane-card {
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 1.5rem;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.question-edit-box {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.question-edit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.6rem;
+}
+
+.marks-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.marks-number-input {
+  width: 60px;
+  padding: 0.3rem 0.5rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  text-align: center;
+}
+
+/* Strict Evaluation Breakdown Cards */
+.scorecard-banner {
+  background: #ffffff;
+  border: 2px solid var(--border-color);
+  border-radius: 16px;
+  padding: 1.75rem;
+  margin-bottom: 1.75rem;
+  box-shadow: var(--shadow-md);
+}
+
+.grade-pill-large {
+  font-size: 1.15rem;
+  font-weight: 800;
+  padding: 0.45rem 1.1rem;
+  border-radius: 9999px;
+  display: inline-block;
+}
+
+.grade-pill-a {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #86efac;
+}
+
+.eval-breakdown-card {
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.rubric-status-pill {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+.status-met {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-partial {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-unmet {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.evidence-quote-box {
+  background: #f8fafc;
+  border-left: 3px solid var(--blue);
+  padding: 0.65rem 0.85rem;
+  border-radius: 0 6px 6px 0;
+  font-size: 0.84rem;
+  color: #334155;
+  font-style: italic;
+  margin-top: 0.6rem;
+}
+
+.deduction-box {
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  color: #be123c;
+  margin-top: 0.5rem;
+}
