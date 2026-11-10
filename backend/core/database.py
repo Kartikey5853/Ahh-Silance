@@ -1,27 +1,40 @@
 """
-SQLite and thread-safe database storage for users, master answer keys, and scorecards.
+SQLite and thread-safe database storage for academic institutions, subjects,
+students, exams, master answer keys, and scorecards.
 
 This module initializes the local SQLite database (evaluation.db), manages user
-authentication tables, persists evaluation scorecards, and automatically seeds
-the default test user (test / test123).
+profiles, institutions (College, School, Competitive), subject hierarchies,
+enrolled students, exams with Gemini-scanned questions, and strict evaluations.
 """
 
 import sqlite3
 import os
 import json
 import time
+import uuid
 from typing import Dict, Optional, List, Any
 import bcrypt
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "evaluation.db")
 
 
+def _add_column_if_not_exists(cursor: sqlite3.Cursor, table: str, column_name: str, column_def: str) -> None:
+    """Safely adds a column to an existing table if it does not already exist."""
+    cursor.execute(f"PRAGMA table_info({table})")
+    columns = [row[1] for row in cursor.fetchall()]
+    if column_name not in columns:
+        cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column_name} {column_def}")
+
+
 def init_sqlite_db() -> None:
     """
-    Initializes SQLite tables for users and scorecards and seeds default test user.
+    Initializes SQLite tables for users, institutions, subjects, students,
+    exams, scorecards, and evaluations. Seeds default professor profile and demo course.
     """
     with sqlite3.connect(DB_PATH) as conn:
         cursor = conn.cursor()
+
+        # 1. Users Table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -30,7 +43,108 @@ def init_sqlite_db() -> None:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        _add_column_if_not_exists(cursor, "users", "full_name", "TEXT DEFAULT 'Dr. Rajesh Sharma'")
+        _add_column_if_not_exists(cursor, "users", "email", "TEXT DEFAULT 'dr.sharma@abccollege.edu'")
+        _add_column_if_not_exists(cursor, "users", "role", "TEXT DEFAULT 'Professor & Dean'")
+        _add_column_if_not_exists(cursor, "users", "department", "TEXT DEFAULT 'Computer Science & Engineering'")
+        _add_column_if_not_exists(cursor, "users", "institution_id", "TEXT DEFAULT 'inst-college-1'")
+        _add_column_if_not_exists(cursor, "users", "gemini_api_key", "TEXT DEFAULT ''")
 
+        # 2. Institutions Table (College, School, Competitive)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS institutions (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                type TEXT NOT NULL, -- 'college', 'school', 'competitive'
+                code TEXT,
+                config_json TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # 2.1 Classes Table (Hierarchy: Organization -> Class -> Subject)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS classes (
+                id TEXT PRIMARY KEY,
+                institution_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                code TEXT,
+                department TEXT,
+                academic_year TEXT DEFAULT '2026-2027',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # 3. Subjects Table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS subjects (
+                id TEXT PRIMARY KEY,
+                user_id INTEGER,
+                institution_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                code TEXT NOT NULL,
+                institution_type TEXT NOT NULL,
+                semester_or_grade TEXT,
+                credits INTEGER DEFAULT 4,
+                academic_year TEXT DEFAULT '2026-2027',
+                chapters_json TEXT DEFAULT '[]',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        _add_column_if_not_exists(cursor, "subjects", "class_id", "TEXT DEFAULT ''")
+
+        # 4. Students Table (Added one-by-one per subject / class)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS students (
+                id TEXT PRIMARY KEY,
+                subject_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                roll_number TEXT NOT NULL,
+                email TEXT,
+                section TEXT DEFAULT 'A',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        _add_column_if_not_exists(cursor, "students", "class_id", "TEXT DEFAULT ''")
+
+        # 5. Exams Table (With question paper, scanned questions, rubrics, answer keys)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS exams (
+                id TEXT PRIMARY KEY,
+                subject_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                exam_type TEXT NOT NULL,
+                max_marks REAL NOT NULL DEFAULT 50.0,
+                passing_marks REAL NOT NULL DEFAULT 20.0,
+                academic_year TEXT DEFAULT '2026-2027',
+                exam_date TEXT,
+                question_paper_filename TEXT,
+                answer_key_text TEXT,
+                questions_json TEXT NOT NULL DEFAULT '[]',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # 6. Academic Evaluations Table (Strict evaluated student papers)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS academic_evaluations (
+                id TEXT PRIMARY KEY,
+                exam_id TEXT NOT NULL,
+                student_id TEXT NOT NULL,
+                roll_number TEXT NOT NULL,
+                student_name TEXT NOT NULL,
+                answer_sheet_filename TEXT,
+                total_score REAL NOT NULL,
+                max_score REAL NOT NULL,
+                percentage REAL NOT NULL,
+                grade TEXT,
+                breakdown_json TEXT NOT NULL,
+                teacher_feedback TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # 7. Legacy Scorecards Table (For backwards compatibility with JEE pipeline)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS scorecards (
                 evaluation_id TEXT PRIMARY KEY,
@@ -45,16 +159,65 @@ def init_sqlite_db() -> None:
             )
         """)
 
-        # Check and seed default test user (test / test123)
+        # --- CLEAN PRODUCTION INITIALIZATION (NO FAKE / CLUTTER DATA) ---
+        # 1. Seed Professor user at ACE College
+        cursor.execute("SELECT id FROM users WHERE username = 'professor'")
+        if not cursor.fetchone():
+            salt = bcrypt.gensalt()
+            hashed_pwd = bcrypt.hashpw(b"ace123", salt).decode("utf-8")
+            cursor.execute("""
+                INSERT INTO users (username, password_hash, full_name, email, role, department, institution_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, ("professor", hashed_pwd, "Professor", "professor@ace.edu", "Professor", "Computer Science & Engineering", "inst-ace"))
+
+        # 2. Seed test user (for automated test suite compatibility)
         cursor.execute("SELECT id FROM users WHERE username = 'test'")
-        row = cursor.fetchone()
-        if not row:
+        test_row = cursor.fetchone()
+        if not test_row:
             salt = bcrypt.gensalt()
             hashed_pwd = bcrypt.hashpw(b"test123", salt).decode("utf-8")
-            cursor.execute(
-                "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-                ("test", hashed_pwd)
-            )
+            cursor.execute("""
+                INSERT INTO users (username, password_hash, full_name, email, role, department, institution_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, ("test", hashed_pwd, "Professor", "professor@ace.edu", "Professor", "Computer Science & Engineering", "inst-ace"))
+        else:
+            cursor.execute("""
+                UPDATE users SET 
+                    full_name = 'Professor',
+                    email = 'professor@ace.edu',
+                    role = 'Professor',
+                    department = 'Computer Science & Engineering',
+                    institution_id = 'inst-ace'
+                WHERE username = 'test'
+            """)
+
+        # 3. Seed ACE College of Engineering as the primary institution
+        cursor.execute("""
+            INSERT OR REPLACE INTO institutions (id, name, type, code, config_json)
+            VALUES (?, ?, ?, ?, ?)
+        """, (
+            "inst-ace",
+            "ACE College of Engineering",
+            "college",
+            "ACE",
+            json.dumps({
+                "degree": "B.Tech / M.Tech",
+                "department": "Computer Science & Engineering",
+                "semesters": ["Sem 1", "Sem 2", "Sem 3", "Sem 4", "Sem 5", "Sem 6", "Sem 7", "Sem 8"],
+                "exam_types": ["Mid-Sem", "End-Sem", "Class Test / Quiz"],
+                "grading_system": "CGPA (10-point scale)",
+                "requires_credits": True
+            })
+        ))
+
+        # Clean any old placeholder mock data to ensure 100% real database state
+        cursor.execute("DELETE FROM students WHERE id LIKE 'stud-10%'")
+        cursor.execute("DELETE FROM subjects WHERE id = 'subj-nlp-101'")
+        cursor.execute("DELETE FROM exams WHERE id = 'exam-nlp-midsem-1'")
+        cursor.execute("DELETE FROM academic_evaluations WHERE id = 'eval-aarav-nlp-1'")
+
+        conn.commit()
+
         conn.commit()
 
 
@@ -64,21 +227,16 @@ init_sqlite_db()
 
 class SQLiteDatabase:
     """
-    Persistent SQLite storage and memory-backed cache for evaluation state.
+    Persistent SQLite storage and memory-backed cache for evaluation state,
+    institutions, subjects, students, exams, and strict grading.
     """
     def __init__(self, db_path: str = DB_PATH):
-        """
-        Initializes connection settings and memory caches.
-        """
         self.db_path = db_path
         self.master_keys: Dict[str, Dict[str, Any]] = {}
         self.documents: Dict[str, Dict[str, Any]] = {}
         self.evaluation_results: Dict[str, Dict[str, Any]] = {}
 
     def get_connection(self) -> sqlite3.Connection:
-        """
-        Returns a sqlite3 connection configured with Row factory.
-        """
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         return conn
@@ -86,21 +244,47 @@ class SQLiteDatabase:
     # --- User operations ---
 
     def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
-        """
-        Retrieves user record by unique username.
-        """
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT id, username, password_hash, created_at FROM users WHERE username = ?", (username,))
+            cursor.execute("""
+                SELECT id, username, password_hash, full_name, email, role, department, institution_id, gemini_api_key, created_at
+                FROM users WHERE username = ?
+            """, (username,))
             row = cursor.fetchone()
             if row:
                 return dict(row)
         return None
 
+    def get_user_by_id(self, user_id: int) -> Optional[Dict[str, Any]]:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, username, full_name, email, role, department, institution_id, gemini_api_key, created_at
+                FROM users WHERE id = ?
+            """, (user_id,))
+            row = cursor.fetchone()
+            if row:
+                return dict(row)
+        return None
+
+    def update_user_profile(self, user_id: int, updates: Dict[str, Any]) -> bool:
+        allowed = ["full_name", "email", "role", "department", "institution_id", "gemini_api_key"]
+        fields = []
+        values = []
+        for k, v in updates.items():
+            if k in allowed:
+                fields.append(f"{k} = ?")
+                values.append(v)
+        if not fields:
+            return False
+        values.append(user_id)
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"UPDATE users SET {', '.join(fields)} WHERE id = ?", tuple(values))
+            conn.commit()
+            return cursor.rowcount > 0
+
     def create_user(self, username: str, password_hash: str) -> Optional[int]:
-        """
-        Creates a new user record and returns the assigned user ID.
-        """
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
@@ -113,34 +297,377 @@ class SQLiteDatabase:
         except sqlite3.IntegrityError:
             return None
 
-    # --- Master Key operations ---
+    # --- Institution operations ---
+
+    def list_institutions(self) -> List[Dict[str, Any]]:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, name, type, code, config_json, created_at FROM institutions ORDER BY created_at ASC")
+            results = []
+            for r in cursor.fetchall():
+                d = dict(r)
+                d["config"] = json.loads(d["config_json"])
+                results.append(d)
+            return results
+
+    def get_institution(self, institution_id: str) -> Optional[Dict[str, Any]]:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, name, type, code, config_json, created_at FROM institutions WHERE id = ?", (institution_id,))
+            row = cursor.fetchone()
+            if row:
+                d = dict(row)
+                d["config"] = json.loads(d["config_json"])
+                return d
+        return None
+
+    def create_institution(self, inst_id: str, name: str, inst_type: str, code: str, config: Dict[str, Any]) -> Dict[str, Any]:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT OR REPLACE INTO institutions (id, name, type, code, config_json)
+                VALUES (?, ?, ?, ?, ?)
+            """, (inst_id, name, inst_type, code, json.dumps(config)))
+            conn.commit()
+        return self.get_institution(inst_id) # type: ignore
+
+    # --- Class operations (Organization -> Class -> Subject) ---
+
+    def list_classes(self, institution_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        query = "SELECT id, institution_id, name, code, department, academic_year, created_at FROM classes"
+        params: List[Any] = []
+        if institution_id:
+            query += " WHERE institution_id = ?"
+            params.append(institution_id)
+        query += " ORDER BY created_at DESC"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, tuple(params))
+            results = []
+            for r in cursor.fetchall():
+                d = dict(r)
+                cursor2 = conn.cursor()
+                cursor2.execute("SELECT COUNT(*) FROM subjects WHERE class_id = ?", (d["id"],))
+                d["subjects_count"] = cursor2.fetchone()[0]
+                cursor2.execute("SELECT COUNT(*) FROM students WHERE class_id = ?", (d["id"],))
+                d["students_count"] = cursor2.fetchone()[0]
+                results.append(d)
+            return results
+
+    def get_class(self, class_id: str) -> Optional[Dict[str, Any]]:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, institution_id, name, code, department, academic_year, created_at FROM classes WHERE id = ?", (class_id,))
+            row = cursor.fetchone()
+            if row:
+                d = dict(row)
+                cursor.execute("SELECT COUNT(*) FROM subjects WHERE class_id = ?", (d["id"],))
+                d["subjects_count"] = cursor.fetchone()[0]
+                cursor.execute("SELECT COUNT(*) FROM students WHERE class_id = ?", (d["id"],))
+                d["students_count"] = cursor.fetchone()[0]
+                return d
+        return None
+
+    def create_class(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        class_id = data.get("id") or f"class-{uuid.uuid4().hex[:8]}"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO classes (id, institution_id, name, code, department, academic_year)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                class_id,
+                data.get("institution_id", "inst-ace"),
+                data.get("name", "New Class"),
+                data.get("code", ""),
+                data.get("department", "Computer Science"),
+                data.get("academic_year", "2026-2027")
+            ))
+            conn.commit()
+        return self.get_class(class_id) # type: ignore
+
+    def delete_class(self, class_id: str) -> bool:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM classes WHERE id = ?", (class_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    # --- Subject operations ---
+
+    def list_subjects(self, user_id: Optional[int] = None, institution_id: Optional[str] = None, class_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        query = "SELECT id, user_id, institution_id, class_id, name, code, institution_type, semester_or_grade, credits, academic_year, chapters_json, created_at FROM subjects WHERE 1=1"
+        params: List[Any] = []
+        if user_id:
+            query += " AND user_id = ?"
+            params.append(user_id)
+        if institution_id:
+            query += " AND institution_id = ?"
+            params.append(institution_id)
+        if class_id:
+            query += " AND class_id = ?"
+            params.append(class_id)
+        query += " ORDER BY created_at DESC"
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, tuple(params))
+            results = []
+            for r in cursor.fetchall():
+                d = dict(r)
+                d["chapters"] = json.loads(d.get("chapters_json") or "[]")
+                # Count enrolled students
+                cursor2 = conn.cursor()
+                cursor2.execute("SELECT COUNT(*) FROM students WHERE subject_id = ?", (d["id"],))
+                d["enrolled_students"] = cursor2.fetchone()[0]
+                # Count scheduled exams
+                cursor2.execute("SELECT COUNT(*) FROM exams WHERE subject_id = ?", (d["id"],))
+                d["exams_count"] = cursor2.fetchone()[0]
+                results.append(d)
+            return results
+
+    def get_subject(self, subject_id: str) -> Optional[Dict[str, Any]]:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, user_id, institution_id, class_id, name, code, institution_type, semester_or_grade, credits, academic_year, chapters_json, created_at
+                FROM subjects WHERE id = ?
+            """, (subject_id,))
+            row = cursor.fetchone()
+            if row:
+                d = dict(row)
+                d["chapters"] = json.loads(d.get("chapters_json") or "[]")
+                cursor.execute("SELECT COUNT(*) FROM students WHERE subject_id = ?", (subject_id,))
+                d["enrolled_students"] = cursor.fetchone()[0]
+                cursor.execute("SELECT COUNT(*) FROM exams WHERE subject_id = ?", (subject_id,))
+                d["exams_count"] = cursor.fetchone()[0]
+                return d
+        return None
+
+    def create_subject(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        sub_id = data.get("id") or f"subj-{uuid.uuid4().hex[:8]}"
+        chapters = data.get("chapters", [])
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO subjects (id, user_id, institution_id, class_id, name, code, institution_type, semester_or_grade, credits, academic_year, chapters_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                sub_id,
+                data.get("user_id", 1),
+                data.get("institution_id", "inst-ace"),
+                data.get("class_id", ""),
+                data.get("name", "New Subject"),
+                data.get("code", "SUB-101"),
+                data.get("institution_type", "college"),
+                data.get("semester_or_grade", "Sem 6"),
+                data.get("credits", 4),
+                data.get("academic_year", "2026-2027"),
+                json.dumps(chapters)
+            ))
+            conn.commit()
+        return self.get_subject(sub_id) # type: ignore
+
+    # --- Student operations (Added one-by-one) ---
+
+    def list_students(self, subject_id: Optional[str] = None, class_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        query = "SELECT id, subject_id, class_id, name, roll_number, email, section, created_at FROM students WHERE 1=1"
+        params: List[Any] = []
+        if subject_id:
+            query += " AND subject_id = ?"
+            params.append(subject_id)
+        if class_id:
+            query += " AND class_id = ?"
+            params.append(class_id)
+        query += " ORDER BY roll_number ASC"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, tuple(params))
+            return [dict(r) for r in cursor.fetchall()]
+
+    def add_student(self, subject_id: str, name: str, roll_number: str, email: str = "", section: str = "A", class_id: str = "") -> Dict[str, Any]:
+        student_id = f"stud-{uuid.uuid4().hex[:8]}"
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO students (id, subject_id, class_id, name, roll_number, email, section)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (student_id, subject_id, class_id, name, roll_number, email, section))
+            conn.commit()
+            cursor.execute("SELECT id, subject_id, class_id, name, roll_number, email, section, created_at FROM students WHERE id = ?", (student_id,))
+            return dict(cursor.fetchone())
+
+    def delete_student(self, student_id: str) -> bool:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM students WHERE id = ?", (student_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    # --- Exam operations ---
+
+    def list_exams(self, subject_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        query = "SELECT id, subject_id, title, exam_type, max_marks, passing_marks, academic_year, exam_date, question_paper_filename, answer_key_text, questions_json, created_at FROM exams"
+        params: List[Any] = []
+        if subject_id:
+            query += " WHERE subject_id = ?"
+            params.append(subject_id)
+        query += " ORDER BY created_at DESC"
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, tuple(params))
+            results = []
+            for r in cursor.fetchall():
+                d = dict(r)
+                d["questions"] = json.loads(d.get("questions_json") or "[]")
+                # Count evaluations
+                cursor2 = conn.cursor()
+                cursor2.execute("SELECT COUNT(*) FROM academic_evaluations WHERE exam_id = ?", (d["id"],))
+                d["evaluations_count"] = cursor2.fetchone()[0]
+                results.append(d)
+            return results
+
+    def get_exam(self, exam_id: str) -> Optional[Dict[str, Any]]:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, subject_id, title, exam_type, max_marks, passing_marks, academic_year, exam_date, question_paper_filename, answer_key_text, questions_json, created_at
+                FROM exams WHERE id = ?
+            """, (exam_id,))
+            row = cursor.fetchone()
+            if row:
+                d = dict(row)
+                d["questions"] = json.loads(d.get("questions_json") or "[]")
+                cursor.execute("SELECT COUNT(*) FROM academic_evaluations WHERE exam_id = ?", (exam_id,))
+                d["evaluations_count"] = cursor.fetchone()[0]
+                return d
+        return None
+
+    def create_exam(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        exam_id = data.get("id") or f"exam-{uuid.uuid4().hex[:8]}"
+        questions = data.get("questions", [])
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO exams (
+                    id, subject_id, title, exam_type, max_marks, passing_marks,
+                    academic_year, exam_date, question_paper_filename, answer_key_text, questions_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                exam_id,
+                data.get("subject_id", "subj-nlp-101"),
+                data.get("title", "New Examination"),
+                data.get("exam_type", "Mid-Sem"),
+                float(data.get("max_marks", 50.0)),
+                float(data.get("passing_marks", 20.0)),
+                data.get("academic_year", "2026-2027"),
+                data.get("exam_date", time.strftime("%Y-%m-%d")),
+                data.get("question_paper_filename", ""),
+                data.get("answer_key_text", ""),
+                json.dumps(questions)
+            ))
+            conn.commit()
+        return self.get_exam(exam_id) # type: ignore
+
+    def update_exam_questions(self, exam_id: str, questions: List[Dict[str, Any]], max_marks: Optional[float] = None) -> bool:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if max_marks is not None:
+                cursor.execute("""
+                    UPDATE exams SET questions_json = ?, max_marks = ? WHERE id = ?
+                """, (json.dumps(questions), max_marks, exam_id))
+            else:
+                cursor.execute("UPDATE exams SET questions_json = ? WHERE id = ?", (json.dumps(questions), exam_id))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def update_exam_answer_key(self, exam_id: str, answer_key_text: str) -> bool:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE exams SET answer_key_text = ? WHERE id = ?", (answer_key_text, exam_id))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    # --- Academic Evaluation operations ---
+
+    def save_academic_evaluation(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        eval_id = data.get("id") or f"eval-{uuid.uuid4().hex[:8]}"
+        breakdown = data.get("breakdown", [])
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT OR REPLACE INTO academic_evaluations (
+                    id, exam_id, student_id, roll_number, student_name, answer_sheet_filename,
+                    total_score, max_score, percentage, grade, breakdown_json, teacher_feedback
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                eval_id,
+                data["exam_id"],
+                data["student_id"],
+                data["roll_number"],
+                data["student_name"],
+                data.get("answer_sheet_filename", ""),
+                float(data["total_score"]),
+                float(data["max_score"]),
+                float(data["percentage"]),
+                data.get("grade", "Passed"),
+                json.dumps(breakdown),
+                data.get("teacher_feedback", "")
+            ))
+            conn.commit()
+        return self.get_academic_evaluation(eval_id) # type: ignore
+
+    def get_academic_evaluation(self, eval_id: str) -> Optional[Dict[str, Any]]:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, exam_id, student_id, roll_number, student_name, answer_sheet_filename,
+                       total_score, max_score, percentage, grade, breakdown_json, teacher_feedback, created_at
+                FROM academic_evaluations WHERE id = ?
+            """, (eval_id,))
+            row = cursor.fetchone()
+            if row:
+                d = dict(row)
+                d["breakdown"] = json.loads(d.get("breakdown_json") or "[]")
+                return d
+        return None
+
+    def list_academic_evaluations(self, exam_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        query = """
+            SELECT id, exam_id, student_id, roll_number, student_name, answer_sheet_filename,
+                   total_score, max_score, percentage, grade, breakdown_json, teacher_feedback, created_at
+            FROM academic_evaluations
+        """
+        params: List[Any] = []
+        if exam_id:
+            query += " WHERE exam_id = ?"
+            params.append(exam_id)
+        query += " ORDER BY created_at DESC"
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, tuple(params))
+            results = []
+            for r in cursor.fetchall():
+                d = dict(r)
+                d["breakdown"] = json.loads(d.get("breakdown_json") or "[]")
+                results.append(d)
+            return results
+
+    # --- Legacy Master Key & Scorecard operations ---
 
     def save_master_key(self, exam_id: str, key_data: Dict[str, Any]) -> None:
-        """
-        Saves a master answer key indexed by its unique exam identifier.
-        """
         self.master_keys[exam_id] = key_data
 
     def get_master_key(self, exam_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Retrieves a master answer key by exam identifier.
-        """
         return self.master_keys.get(exam_id)
 
     def list_master_keys(self) -> List[str]:
-        """
-        Returns a list of all registered exam identifiers in the database.
-        """
         return list(self.master_keys.keys())
 
-    # --- Scorecard operations ---
-
     def save_scorecard(self, evaluation_id: str, scorecard_data: Dict[str, Any], user_id: Optional[int] = None) -> None:
-        """
-        Saves a generated student scorecard in memory and SQLite database.
-        """
         self.evaluation_results[evaluation_id] = scorecard_data
-
         exam_id = scorecard_data.get("exam_id", "JEE_MAIN_EXAM")
         mode = scorecard_data.get("evaluation_mode", "omr_standard")
         roll_number = scorecard_data.get("student_metadata", {}).get("roll_number", "UNKNOWN")
@@ -158,9 +685,6 @@ class SQLiteDatabase:
             conn.commit()
 
     def get_scorecard(self, evaluation_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Retrieves an evaluation scorecard by evaluation identifier from memory or SQLite.
-        """
         if evaluation_id in self.evaluation_results:
             return self.evaluation_results[evaluation_id]
 
@@ -175,9 +699,6 @@ class SQLiteDatabase:
         return None
 
     def list_user_scorecards(self, user_id: int) -> List[Dict[str, Any]]:
-        """
-        Returns all recent scorecards for a specific authenticated user.
-        """
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
