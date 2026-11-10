@@ -587,16 +587,22 @@ class SQLiteDatabase:
                 return d
         return None
 
-    def list_academic_evaluations(self, exam_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_academic_evaluations(self, exam_id: Optional[str] = None, student_id: Optional[str] = None) -> List[Dict[str, Any]]:
         query = """
             SELECT id, exam_id, student_id, roll_number, student_name, answer_sheet_filename,
                    total_score, max_score, percentage, grade, breakdown_json, teacher_feedback, created_at
             FROM academic_evaluations
         """
         params: List[Any] = []
+        conditions: List[str] = []
         if exam_id:
-            query += " WHERE exam_id = ?"
+            conditions.append("exam_id = ?")
             params.append(exam_id)
+        if student_id:
+            conditions.append("student_id = ?")
+            params.append(student_id)
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
         query += " ORDER BY created_at DESC"
 
         with self.get_connection() as conn:

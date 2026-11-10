@@ -12,10 +12,20 @@ from backend.main import app
 client = TestClient(app)
 
 
+def _ensure_test_user():
+    client.post("/api/v1/auth/register", json={
+        "username": "test",
+        "password": "test123",
+        "full_name": "Test User",
+        "role": "Professor"
+    })
+
+
 def test_seeded_user_login_success():
     """
-    Validates that the default seeded user (test / test123) successfully logs in.
+    Validates that the test user (test / test123) successfully logs in.
     """
+    _ensure_test_user()
     response = client.post("/api/v1/auth/login", json={
         "username": "test",
         "password": "test123"

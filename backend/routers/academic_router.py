@@ -391,9 +391,12 @@ async def evaluate_student_submission(
 
 
 @router.get("/evaluations")
-def list_evaluations(exam_id: Optional[str] = Query(None)):
-    """Lists all academic evaluations, optionally filtered by examination ID."""
-    return db.list_academic_evaluations(exam_id=exam_id)
+def list_evaluations(
+    exam_id: Optional[str] = Query(None),
+    student_id: Optional[str] = Query(None)
+):
+    """Lists all academic evaluations, optionally filtered by examination ID or student ID."""
+    return db.list_academic_evaluations(exam_id=exam_id, student_id=student_id)
 
 
 @router.get("/evaluations/{eval_id}")

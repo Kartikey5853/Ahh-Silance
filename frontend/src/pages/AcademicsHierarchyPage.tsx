@@ -100,10 +100,10 @@ export const AcademicsHierarchyPage: React.FC<AcademicsHierarchyProps> = ({ onNa
       {/* Header */}
       <div style={{ marginBottom: "1.5rem" }}>
         <h1 style={{ fontSize: "1.75rem", fontWeight: 800, letterSpacing: "-0.03em" }}>
-          Academic Structure & Institution Hierarchy
+          Subjects & Curriculum
         </h1>
         <p style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>
-          Dynamic tier rules: Colleges require Credits & Semesters; Schools require Assessment terms; Competitive requires Mock rules.
+          Curriculum structure, credits, and syllabus units across academic classes
         </p>
       </div>
 

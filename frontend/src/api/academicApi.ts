@@ -200,10 +200,11 @@ export const academicApi = {
     return res.data;
   },
 
-  listEvaluations: async (examId?: string): Promise<AcademicEvaluation[]> => {
-    const res = await apiClient.get<AcademicEvaluation[]>("/academic/evaluations", {
-      params: examId ? { exam_id: examId } : undefined
-    });
+  listEvaluations: async (examId?: string, studentId?: string): Promise<AcademicEvaluation[]> => {
+    const params: any = {};
+    if (examId) params.exam_id = examId;
+    if (studentId) params.student_id = studentId;
+    const res = await apiClient.get<AcademicEvaluation[]>("/academic/evaluations", { params });
     return res.data;
   },
 

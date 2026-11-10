@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { academicApi } from "../api/academicApi";
 import type { Subject, Student } from "../types/academic";
+import { StudentProfileModal } from "../components/StudentProfileModal";
 import {
   UserPlus,
   Trash2,
@@ -22,6 +23,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedStudentForProfile, setSelectedStudentForProfile] = useState<Student | null>(null);
 
   // One-by-one add student form state
   const [studentName, setStudentName] = useState("");
@@ -125,10 +127,10 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" }}>
         <div>
           <h1 style={{ fontSize: "1.75rem", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.03em" }}>
-            Student Enrollment Roster
+            Student Roster
           </h1>
           <p style={{ color: "#64748b", fontSize: "0.9rem" }}>
-            Real-time SQLite database: enroll students one-by-one per subject
+            Enroll and review individual student profiles and scorecards
           </p>
         </div>
 
@@ -341,28 +343,43 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                     <th style={{ padding: "0.6rem 0.75rem", color: "#64748b", fontSize: "0.78rem" }}>ROLL NUMBER</th>
                     <th style={{ padding: "0.6rem 0.75rem", color: "#64748b", fontSize: "0.78rem" }}>CANDIDATE NAME</th>
                     <th style={{ padding: "0.6rem 0.75rem", color: "#64748b", fontSize: "0.78rem" }}>SECTION</th>
-                    <th style={{ padding: "0.6rem 0.75rem", textAlign: "right", color: "#64748b", fontSize: "0.78rem" }}>ACTION</th>
+                    <th style={{ padding: "0.6rem 0.75rem", textAlign: "right", color: "#64748b", fontSize: "0.78rem" }}>ACTIONS</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredStudents.map((st) => (
-                    <tr key={st.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                    <tr
+                      key={st.id}
+                      style={{ borderBottom: "1px solid #e2e8f0", cursor: "pointer" }}
+                      onClick={() => setSelectedStudentForProfile(st)}
+                    >
                       <td style={{ padding: "0.75rem", fontWeight: 700, color: "#0f172a" }}>
                         {st.roll_number}
                       </td>
                       <td style={{ padding: "0.75rem", fontWeight: 600, color: "#1e293b" }}>
-                        {st.name}
+                        <span style={{ color: "#2563eb", textDecoration: "underline" }}>
+                          {st.name}
+                        </span>
                       </td>
                       <td style={{ padding: "0.75rem" }}>
                         <span style={{ background: "#f1f5f9", padding: "0.2rem 0.5rem", borderRadius: "4px", fontSize: "0.78rem" }}>
                           {st.section || "A"}
                         </span>
                       </td>
-                      <td style={{ padding: "0.75rem", textAlign: "right" }}>
+                      <td style={{ padding: "0.75rem", textAlign: "right" }} onClick={(e) => e.stopPropagation()}>
                         <button
+                          type="button"
+                          onClick={() => setSelectedStudentForProfile(st)}
+                          className="btn btn-secondary"
+                          style={{ fontSize: "0.75rem", padding: "0.3rem 0.6rem", marginRight: "0.5rem" }}
+                        >
+                          Profile & Scores
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => handleDelete(st.id, st.name)}
                           style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", padding: "0.25rem" }}
-                          title="Remove student from database"
+                          title="Remove student"
                         >
                           <Trash2 size={16} />
                         </button>
@@ -375,6 +392,18 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
           )}
         </div>
       </div>
+
+      {/* Student Profile Modal */}
+      {selectedStudentForProfile && (
+        <StudentProfileModal
+          student={selectedStudentForProfile}
+          onClose={() => setSelectedStudentForProfile(null)}
+          onNavigateToEvaluation={(evalId) => {
+            setSelectedStudentForProfile(null);
+            onNavigate("evaluation", { evalId });
+          }}
+        />
+      )}
     </div>
   );
 };

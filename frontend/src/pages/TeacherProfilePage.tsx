@@ -52,10 +52,10 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({ onLogout
       const updated = await academicApi.getProfile();
       setProfile(updated);
       setCustomApiKey("");
-      setSavedMessage("✓ Profile updated in SQLite database!");
+      setSavedMessage("Profile updated successfully!");
       setTimeout(() => setSavedMessage(null), 3000);
     } catch (err) {
-      alert("Error updating profile in database.");
+      alert("Error updating profile.");
     } finally {
       setIsSaving(false);
     }
@@ -68,7 +68,7 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({ onLogout
           Faculty Profile
         </h1>
         <p style={{ color: "#64748b", fontSize: "0.9rem" }}>
-          ACE College of Engineering • Faculty ID & Credentials
+          Faculty details and academic credentials
         </p>
       </div>
 

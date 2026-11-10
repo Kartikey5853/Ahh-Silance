@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { academicApi } from "../api/academicApi";
-import type { UserProfile, Subject, Institution, ClassItem, InstitutionType } from "../types/academic";
+import type { UserProfile, Subject, Institution, ClassItem, InstitutionType, Student } from "../types/academic";
+import { StudentProfileModal } from "../components/StudentProfileModal";
 import {
   BookOpen,
   Users,
@@ -26,6 +27,7 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
   const [selectedClassId, setSelectedClassId] = useState<string>("");
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedStudentForProfile, setSelectedStudentForProfile] = useState<Student | null>(null);
 
   // Modal States
   const [showOrgModal, setShowOrgModal] = useState(false);
@@ -246,19 +248,15 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
 
   return (
     <div className="academic-dashboard-page pb-32">
-      {/* 2026 Minimal Header */}
+      {/* Clean Minimal Header */}
       <div style={{ marginBottom: "2rem" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
           <div>
-            <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.25rem" }}>
-              Academic Portal
-            </div>
-            <h1 style={{ fontSize: "2rem", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.03em" }}>
-              {currentOrg ? currentOrg.name : "Setup Your Academic Portal"}
+            <h1 style={{ fontSize: "2rem", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.03em", margin: 0 }}>
+              {currentOrg ? currentOrg.name : "Academic Courses & Structure"}
             </h1>
-            <p style={{ color: "#475569", fontSize: "0.92rem", marginTop: "0.2rem" }}>
-              Logged in as <strong>{profile?.full_name || profile?.username || "Faculty"}</strong> ({profile?.role || "Professor"})
-              {currentOrg && ` • ${currentOrg.type === "college" ? "College System" : currentOrg.type === "school" ? "K-12 School" : "Competitive Coaching"}`}
+            <p style={{ color: "#475569", fontSize: "0.92rem", marginTop: "0.3rem", margin: 0 }}>
+              Faculty: {profile?.full_name || profile?.username || "Faculty"} • {profile?.role || "Professor"} • Classes, sections, and subjects
             </p>
           </div>
 
@@ -269,7 +267,7 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
               style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 0.9rem", fontSize: "0.85rem" }}
             >
               <Building2 size={15} />
-              + Add Organization
+              Add Organization
             </button>
             <button
               onClick={() => setShowClassModal(true)}
@@ -277,7 +275,7 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
               style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 0.9rem", fontSize: "0.85rem" }}
             >
               <FolderGit2 size={15} />
-              + Add Class
+              Add Class
             </button>
             <button
               onClick={() => setShowSubjModal(true)}
@@ -285,7 +283,7 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
               style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 0.95rem", fontSize: "0.85rem" }}
             >
               <Plus size={15} />
-              + Add Subject
+              Add Subject
             </button>
           </div>
         </div>
@@ -403,7 +401,7 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
       {/* Main Subjects Grid */}
       {loading ? (
         <div style={{ textAlign: "center", padding: "4rem", color: "#64748b" }}>
-          Loading curriculum from SQLite database...
+          Loading curriculum...
         </div>
       ) : subjects.length === 0 && institutions.length > 0 ? (
         <div
@@ -910,6 +908,17 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
             </form>
           </div>
         </div>
+      )}
+      {/* Student Profile Modal */}
+      {selectedStudentForProfile && (
+        <StudentProfileModal
+          student={selectedStudentForProfile}
+          onClose={() => setSelectedStudentForProfile(null)}
+          onNavigateToEvaluation={(evalId) => {
+            setSelectedStudentForProfile(null);
+            onNavigate("evaluation", { evalId });
+          }}
+        />
       )}
     </div>
   );
