@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { academicApi } from "../api/academicApi";
-import type { UserProfile, Subject, Institution, ClassItem } from "../types/academic";
+import type { UserProfile, Subject, Institution, ClassItem, InstitutionType } from "../types/academic";
 import {
   BookOpen,
   Users,
@@ -9,7 +9,9 @@ import {
   Building2,
   FolderGit2,
   GraduationCap,
-  ChevronRight
+  ChevronRight,
+  School,
+  Target
 } from "lucide-react";
 
 interface AcademicDashboardProps {
@@ -19,7 +21,7 @@ interface AcademicDashboardProps {
 export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavigate }) => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [institutions, setInstitutions] = useState<Institution[]>([]);
-  const [selectedInstId, setSelectedInstId] = useState<string>("inst-ace");
+  const [selectedInstId, setSelectedInstId] = useState<string>("");
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string>("");
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -30,43 +32,66 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
   const [showClassModal, setShowClassModal] = useState(false);
   const [showSubjModal, setShowSubjModal] = useState(false);
 
-  // New Org Form
-  const [newOrgName, setNewOrgName] = useState("");
-  const [newOrgCode, setNewOrgCode] = useState("");
+  // New Organization Form State (College vs School vs JEE)
+  const [orgType, setOrgType] = useState<InstitutionType>("college");
+  const [orgName, setOrgName] = useState("");
+  const [orgCode, setOrgCode] = useState("");
+  // College-specific
+  const [degreeProgram, setDegreeProgram] = useState("B.Tech / M.Tech");
+  const [departmentName, setDepartmentName] = useState("Computer Science & Engineering");
+  const [creditRequired, setCreditRequired] = useState(true);
+  // School-specific
+  const [schoolBoard, setSchoolBoard] = useState("CBSE");
+  const [gradeRange, setGradeRange] = useState("Class 9 to 12");
+  // JEE-specific
+  const [jeeTarget, setJeeTarget] = useState("JEE Main & Advanced");
+  const [markingPattern, setMarkingPattern] = useState("+4 / -1 Negative Marking");
 
-  // New Class Form
-  const [newClassName, setNewClassName] = useState("Semester 6 - CSE");
-  const [newClassCode, setNewClassCode] = useState("CSE-SEM6");
-  const [newClassDept, setNewClassDept] = useState("Computer Science & Engineering");
-  const [newClassYear, setNewClassYear] = useState("2026-2027");
+  // New Class Form State
+  const [className, setClassName] = useState("Semester 6 - CSE");
+  const [classCode, setClassCode] = useState("CSE-SEM6");
+  const [classDept, setClassDept] = useState("Computer Science");
+  const [classYear, setClassYear] = useState("2026-2027");
 
-  // New Subject Form
-  const [newSubjName, setNewSubjName] = useState("Natural Language Processing");
-  const [newSubjCode, setNewSubjCode] = useState("NLP-701");
-  const [newSubjCredits, setNewSubjCredits] = useState(4);
-  const [newSubjSem, setNewSubjSem] = useState("Sem 6");
+  // New Subject Form State (Adapts dynamically to Org Type)
+  const [subjName, setSubjName] = useState("Natural Language Processing");
+  const [subjCode, setSubjCode] = useState("NLP-701");
+  const [subjCredits, setSubjCredits] = useState(4);
+  const [subjSem, setSubjSem] = useState("Sem 6");
+  const [subjGrade, setSubjGrade] = useState("Class 12");
+  const [subjJeeTarget, setSubjJeeTarget] = useState("Physics");
 
   const loadHierarchy = async () => {
     try {
       setLoading(true);
       const [profData, instData] = await Promise.all([
-        academicApi.getProfile(),
-        academicApi.listInstitutions()
+        academicApi.getProfile().catch(() => null),
+        academicApi.listInstitutions().catch(() => [])
       ]);
-      setProfile(profData);
-      setInstitutions(instData);
 
-      const activeInst = profData.institution_id || "inst-ace";
-      setSelectedInstId(activeInst);
+      if (profData) setProfile(profData);
+      setInstitutions(instData || []);
 
-      const classList = await academicApi.listClasses(activeInst);
-      setClasses(classList);
+      if (instData && instData.length > 0) {
+        const activeInst = profData?.institution_id && instData.some((i) => i.id === profData.institution_id)
+          ? profData.institution_id
+          : instData[0].id;
 
-      const activeClass = classList.length > 0 ? classList[0].id : "";
-      setSelectedClassId(activeClass);
+        setSelectedInstId(activeInst);
 
-      const subjList = await academicApi.listSubjects(activeInst, activeClass || undefined);
-      setSubjects(subjList);
+        const classList = await academicApi.listClasses(activeInst);
+        setClasses(classList || []);
+
+        const activeClass = classList && classList.length > 0 ? classList[0].id : "";
+        setSelectedClassId(activeClass);
+
+        const subjList = await academicApi.listSubjects(activeInst, activeClass || undefined);
+        setSubjects(subjList || []);
+      } else {
+        setSelectedInstId("");
+        setClasses([]);
+        setSubjects([]);
+      }
     } catch (err) {
       console.error("Failed to load hierarchy:", err);
     } finally {
@@ -80,52 +105,94 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
 
   const handleSelectInstitution = async (instId: string) => {
     setSelectedInstId(instId);
-    const classList = await academicApi.listClasses(instId);
-    setClasses(classList);
-    const activeClass = classList.length > 0 ? classList[0].id : "";
-    setSelectedClassId(activeClass);
-    const subjList = await academicApi.listSubjects(instId, activeClass || undefined);
-    setSubjects(subjList);
+    try {
+      const classList = await academicApi.listClasses(instId);
+      setClasses(classList);
+      const activeClass = classList.length > 0 ? classList[0].id : "";
+      setSelectedClassId(activeClass);
+      const subjList = await academicApi.listSubjects(instId, activeClass || undefined);
+      setSubjects(subjList);
+    } catch (err) {
+      console.error("Error switching institution:", err);
+    }
   };
 
   const handleSelectClass = async (classId: string) => {
     setSelectedClassId(classId);
-    const subjList = await academicApi.listSubjects(selectedInstId, classId || undefined);
-    setSubjects(subjList);
+    try {
+      const subjList = await academicApi.listSubjects(selectedInstId, classId || undefined);
+      setSubjects(subjList);
+    } catch (err) {
+      console.error("Error switching class:", err);
+    }
   };
 
-  // Create Organization
+  // Create Organization (Decide College vs School vs JEE)
   const handleCreateOrg = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newOrgName.trim()) return;
+    if (!orgName.trim()) return;
+
+    let config: any = {};
+    if (orgType === "college") {
+      config = {
+        degree: degreeProgram,
+        department: departmentName,
+        semesters: ["Sem 1", "Sem 2", "Sem 3", "Sem 4", "Sem 5", "Sem 6", "Sem 7", "Sem 8"],
+        exam_types: ["Mid-Sem", "End-Sem", "Class Test", "Lab Practical"],
+        requires_credits: creditRequired,
+        grading_system: "CGPA (10-point scale)"
+      };
+    } else if (orgType === "school") {
+      config = {
+        board: schoolBoard,
+        grades: ["Class 6", "Class 7", "Class 8", "Class 9", "Class 10", "Class 11", "Class 12"],
+        exam_types: ["Unit Test 1", "Unit Test 2", "Half-Yearly Exam", "Annual Final Exam"],
+        grading_system: "CBSE / State Percentage"
+      };
+    } else {
+      config = {
+        target: jeeTarget,
+        pattern: markingPattern,
+        batches: ["Rankers Batch", "Droppers Batch", "Foundation"],
+        exam_types: ["JEE Main Mock Test", "JEE Advanced Paper 1", "Chapter-wise Unit Test"]
+      };
+    }
+
     try {
       const created = await academicApi.createInstitution({
-        name: newOrgName.trim(),
-        code: newOrgCode.trim().toUpperCase() || "ORG",
-        type: "college"
-      });
+        name: orgName.trim(),
+        code: orgCode.trim().toUpperCase() || "ORG",
+        type: orgType,
+        config: config
+      } as any);
+
       setInstitutions([...institutions, created]);
       setSelectedInstId(created.id);
       setShowOrgModal(false);
-      setNewOrgName("");
-      setNewOrgCode("");
+      setOrgName("");
+      setOrgCode("");
       await handleSelectInstitution(created.id);
     } catch (err) {
       alert("Error creating organization.");
     }
   };
 
-  // Create Class
+  // Create Class / Cohort
   const handleCreateClass = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newClassName.trim()) return;
+    if (!className.trim()) return;
+    if (!selectedInstId) {
+      alert("Please create an organization first.");
+      return;
+    }
+
     try {
       const created = await academicApi.createClass({
-        name: newClassName.trim(),
-        code: newClassCode.trim().toUpperCase(),
+        name: className.trim(),
+        code: classCode.trim().toUpperCase(),
         institution_id: selectedInstId,
-        department: newClassDept,
-        academic_year: newClassYear
+        department: classDept,
+        academic_year: classYear
       });
       const updatedClasses = [created, ...classes];
       setClasses(updatedClasses);
@@ -137,30 +204,38 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
     }
   };
 
-  // Create Subject
+  // Create Subject (Fields adapt to College / School / JEE)
   const handleCreateSubject = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newSubjName.trim()) return;
+    if (!subjName.trim()) return;
+    if (!selectedInstId) {
+      alert("Please select or create an organization first.");
+      return;
+    }
+
+    const currentInstType = currentOrg?.type || "college";
+
     try {
       const created = await academicApi.createSubject({
-        name: newSubjName.trim(),
-        code: newSubjCode.trim().toUpperCase(),
+        name: subjName.trim(),
+        code: subjCode.trim().toUpperCase(),
         institution_id: selectedInstId,
         class_id: selectedClassId,
-        institution_type: "college",
-        semester_or_grade: newSubjSem,
-        credits: Number(newSubjCredits),
-        academic_year: newClassYear,
+        institution_type: currentInstType,
+        semester_or_grade: currentInstType === "college" ? subjSem : currentInstType === "school" ? subjGrade : subjJeeTarget,
+        credits: currentInstType === "college" ? Number(subjCredits) : 4,
+        academic_year: classYear,
         chapters: [
-          "1. Text Preprocessing & Tokenization",
-          "2. N-gram Language Modeling & Perplexity",
-          "3. Vector Semantics (Word2Vec, GloVe)",
-          "4. Transformers, Self-Attention & Multi-Head Attention",
-          "5. Pretrained LLMs, LoRA Fine-Tuning & Evaluation"
+          "1. Foundational Core Principles",
+          "2. Theoretical Modeling & Formulations",
+          "3. Mathematical Derivations & Analysis",
+          "4. Advanced Real-World Applications"
         ]
       });
       setSubjects([created, ...subjects]);
       setShowSubjModal(false);
+      setSubjName("");
+      setSubjCode("");
     } catch (err) {
       alert("Error creating subject.");
     }
@@ -176,24 +251,33 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
           <div>
             <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.25rem" }}>
-              Faculty Examination Portal
+              Academic Portal
             </div>
             <h1 style={{ fontSize: "2rem", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.03em" }}>
-              {currentOrg?.name || "ACE College of Engineering"}
+              {currentOrg ? currentOrg.name : "Setup Your Academic Portal"}
             </h1>
-            <p style={{ color: "#475569", fontSize: "0.95rem", marginTop: "0.2rem" }}>
-              Logged in as <strong>{profile?.role || "Professor"}</strong> • {profile?.department || "Computer Science & Engineering"}
+            <p style={{ color: "#475569", fontSize: "0.92rem", marginTop: "0.2rem" }}>
+              Logged in as <strong>{profile?.full_name || profile?.username || "Faculty"}</strong> ({profile?.role || "Professor"})
+              {currentOrg && ` • ${currentOrg.type === "college" ? "College System" : currentOrg.type === "school" ? "K-12 School" : "Competitive Coaching"}`}
             </p>
           </div>
 
-          <div style={{ display: "flex", gap: "0.5rem" }}>
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+            <button
+              onClick={() => setShowOrgModal(true)}
+              className="btn btn-secondary"
+              style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 0.9rem", fontSize: "0.85rem" }}
+            >
+              <Building2 size={15} />
+              + Add Organization
+            </button>
             <button
               onClick={() => setShowClassModal(true)}
               className="btn btn-secondary"
               style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 0.9rem", fontSize: "0.85rem" }}
             >
               <FolderGit2 size={15} />
-              Set Up Class
+              + Add Class
             </button>
             <button
               onClick={() => setShowSubjModal(true)}
@@ -201,118 +285,142 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
               style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 0.95rem", fontSize: "0.85rem" }}
             >
               <Plus size={15} />
-              Add Subject
+              + Add Subject
             </button>
           </div>
         </div>
       </div>
 
-      {/* Modern Hierarchy Navigation Bar (College -> Class -> Subject) */}
-      <div
-        style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
-          borderRadius: "12px",
-          padding: "1rem 1.25rem",
-          marginBottom: "2rem",
-          display: "flex",
-          alignItems: "center",
-          gap: "1rem",
-          flexWrap: "wrap",
-          boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.03)"
-        }}
-      >
-        {/* Organization Dropdown */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <Building2 size={16} style={{ color: "#2563eb" }} />
-          <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#64748b" }}>College:</span>
-          <select
-            value={selectedInstId}
-            onChange={(e) => handleSelectInstitution(e.target.value)}
-            style={{
-              padding: "0.4rem 0.75rem",
-              borderRadius: "6px",
-              border: "1px solid #cbd5e1",
-              fontSize: "0.85rem",
-              fontWeight: 600
-            }}
-          >
-            {institutions.map((i) => (
-              <option key={i.id} value={i.id}>{i.name}</option>
-            ))}
-          </select>
+      {/* If No Organization Created Yet (Fresh User Slate) */}
+      {!loading && institutions.length === 0 ? (
+        <div
+          style={{
+            background: "#ffffff",
+            border: "2px dashed #cbd5e1",
+            borderRadius: "16px",
+            padding: "3.5rem 2rem",
+            textAlign: "center",
+            maxWidth: "600px",
+            margin: "0 auto 2rem"
+          }}
+        >
+          <Building2 size={48} style={{ color: "#2563eb", margin: "0 auto 1rem" }} />
+          <h2 style={{ fontSize: "1.4rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.5rem" }}>
+            Step 1: Set Up Your Organization
+          </h2>
+          <p style={{ color: "#64748b", fontSize: "0.9rem", lineHeight: 1.6, marginBottom: "1.5rem" }}>
+            Decide whether this is a <strong>College</strong> (Credits & Semesters), <strong>School</strong> (Grades & Terms), or <strong>JEE / Competitive Institution</strong> (Negative Marking & Mock Tests).
+          </p>
           <button
             onClick={() => setShowOrgModal(true)}
-            style={{ background: "none", border: "none", color: "#2563eb", cursor: "pointer", fontSize: "0.8rem", fontWeight: 600, padding: "0.2rem" }}
-            title="Create new college/organization"
+            className="btn btn-primary"
+            style={{ padding: "0.75rem 1.75rem", fontSize: "0.95rem", fontWeight: 700 }}
           >
-            + New
+            Create Organization
           </button>
         </div>
-
-        <ChevronRight size={16} style={{ color: "#cbd5e1" }} />
-
-        {/* Class Dropdown */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <FolderGit2 size={16} style={{ color: "#16a34a" }} />
-          <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#64748b" }}>Class:</span>
-          {classes.length === 0 ? (
-            <button
-              onClick={() => setShowClassModal(true)}
-              style={{ background: "#f1f5f9", border: "1px dashed #cbd5e1", padding: "0.35rem 0.75rem", borderRadius: "6px", fontSize: "0.8rem", cursor: "pointer", color: "#334155" }}
-            >
-              + Set Up First Class
-            </button>
-          ) : (
+      ) : (
+        /* Hierarchy Navigation Bar */
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            borderRadius: "12px",
+            padding: "1rem 1.25rem",
+            marginBottom: "2rem",
+            display: "flex",
+            alignItems: "center",
+            gap: "1rem",
+            flexWrap: "wrap",
+            boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.03)"
+          }}
+        >
+          {/* Organization Dropdown */}
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <Building2 size={16} style={{ color: "#2563eb" }} />
+            <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#64748b" }}>Organization:</span>
             <select
-              value={selectedClassId}
-              onChange={(e) => handleSelectClass(e.target.value)}
+              value={selectedInstId}
+              onChange={(e) => handleSelectInstitution(e.target.value)}
               style={{
                 padding: "0.4rem 0.75rem",
                 borderRadius: "6px",
                 border: "1px solid #cbd5e1",
                 fontSize: "0.85rem",
-                fontWeight: 600
+                fontWeight: 600,
+                background: "#ffffff"
               }}
             >
-              <option value="">All Classes in {currentOrg?.code || "College"}</option>
-              {classes.map((c) => (
-                <option key={c.id} value={c.id}>{c.name} ({c.code || "Class"})</option>
+              {institutions.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.name} ({i.type.toUpperCase()})
+                </option>
               ))}
             </select>
-          )}
-        </div>
+          </div>
 
-        <ChevronRight size={16} style={{ color: "#cbd5e1" }} />
+          <ChevronRight size={16} style={{ color: "#cbd5e1" }} />
 
-        {/* Subject Count Indicator */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem", color: "#475569", marginLeft: "auto" }}>
-          <BookOpen size={16} style={{ color: "#475569" }} />
-          <span><strong>{subjects.length}</strong> Subjects Configured</span>
+          {/* Class Dropdown */}
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <FolderGit2 size={16} style={{ color: "#16a34a" }} />
+            <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#64748b" }}>Class / Batch:</span>
+            {classes.length === 0 ? (
+              <button
+                onClick={() => setShowClassModal(true)}
+                style={{ background: "#f1f5f9", border: "1px dashed #cbd5e1", padding: "0.35rem 0.75rem", borderRadius: "6px", fontSize: "0.8rem", cursor: "pointer", color: "#334155" }}
+              >
+                + Set Up First Class
+              </button>
+            ) : (
+              <select
+                value={selectedClassId}
+                onChange={(e) => handleSelectClass(e.target.value)}
+                style={{
+                  padding: "0.4rem 0.75rem",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1",
+                  fontSize: "0.85rem",
+                  fontWeight: 600,
+                  background: "#ffffff"
+                }}
+              >
+                <option value="">All Classes in {currentOrg?.code || "Org"}</option>
+                {classes.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem", color: "#475569", marginLeft: "auto" }}>
+            <BookOpen size={16} style={{ color: "#475569" }} />
+            <span><strong>{subjects.length}</strong> Subjects</span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Main Subjects Grid */}
       {loading ? (
         <div style={{ textAlign: "center", padding: "4rem", color: "#64748b" }}>
           Loading curriculum from SQLite database...
         </div>
-      ) : subjects.length === 0 ? (
+      ) : subjects.length === 0 && institutions.length > 0 ? (
         <div
           style={{
             background: "#ffffff",
             border: "2px dashed #cbd5e1",
             borderRadius: "16px",
-            padding: "4rem 2rem",
+            padding: "3.5rem 2rem",
             textAlign: "center"
           }}
         >
-          <GraduationCap size={44} style={{ color: "#94a3b8", margin: "0 auto 1rem" }} />
+          <BookOpen size={44} style={{ color: "#94a3b8", margin: "0 auto 1rem" }} />
           <h3 style={{ fontSize: "1.25rem", fontWeight: 700, color: "#0f172a", marginBottom: "0.35rem" }}>
-            No Subjects in {currentClass ? currentClass.name : currentOrg?.name || "College"}
+            No Subjects Added Yet
           </h3>
           <p style={{ color: "#64748b", fontSize: "0.9rem", maxWidth: "460px", margin: "0 auto 1.5rem" }}>
-            Follow the flow: set up your class, create a subject like <strong>Natural Language Processing</strong>, then schedule a test and extract questions via Gemini.
+            Add your first subject to schedule tests, upload question papers, and run strict zero-temperature grading.
           </p>
           <div style={{ display: "flex", justifyContent: "center", gap: "0.75rem" }}>
             {classes.length === 0 && (
@@ -329,7 +437,7 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
               className="btn btn-primary"
               style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}
             >
-              <Plus size={16} /> 2. Add Subject (NLP)
+              <Plus size={16} /> 2. Add Subject
             </button>
           </div>
         </div>
@@ -355,7 +463,7 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
                     {s.code}
                   </span>
                   <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 600 }}>
-                    {s.semester_or_grade} • {s.credits} Credits
+                    {s.semester_or_grade} {s.credits ? `• ${s.credits} Credits` : ""}
                   </span>
                 </div>
 
@@ -376,7 +484,7 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
                   style={{ flex: 1, fontSize: "0.82rem", padding: "0.45rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.35rem" }}
                 >
                   <FileSpreadsheet size={14} />
-                  Tests & Questions
+                  Scanner & Tests
                 </button>
                 <button
                   onClick={() => onNavigate("students", { subjectId: s.id })}
@@ -392,17 +500,93 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
         </div>
       )}
 
-      {/* Modal 1: Create College / Organization */}
+      {/* MODAL 1: Create Organization (College vs School vs JEE) */}
       {showOrgModal && (
         <div className="modal-backdrop" onClick={() => setShowOrgModal(false)}>
-          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.35rem" }}>
-              Create Organization / College
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "520px" }}>
+            <h3 style={{ fontSize: "1.3rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.25rem" }}>
+              Add Academic Organization
             </h3>
             <p style={{ fontSize: "0.85rem", color: "#64748b", marginBottom: "1.25rem" }}>
-              Set up a university, college, or school organization.
+              Select the institution type to customize curriculum, credits, and grading schemas.
             </p>
+
             <form onSubmit={handleCreateOrg}>
+              {/* Type Switcher Pills */}
+              <div style={{ marginBottom: "1.25rem" }}>
+                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#334155", marginBottom: "0.4rem" }}>
+                  Institution Type *
+                </label>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem" }}>
+                  <button
+                    type="button"
+                    onClick={() => setOrgType("college")}
+                    style={{
+                      padding: "0.6rem 0.5rem",
+                      borderRadius: "8px",
+                      border: orgType === "college" ? "2px solid #2563eb" : "1px solid #cbd5e1",
+                      background: orgType === "college" ? "#eff6ff" : "#ffffff",
+                      color: orgType === "college" ? "#2563eb" : "#475569",
+                      fontWeight: 700,
+                      fontSize: "0.82rem",
+                      cursor: "pointer",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: "0.25rem"
+                    }}
+                  >
+                    <GraduationCap size={18} />
+                    College
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setOrgType("school")}
+                    style={{
+                      padding: "0.6rem 0.5rem",
+                      borderRadius: "8px",
+                      border: orgType === "school" ? "2px solid #2563eb" : "1px solid #cbd5e1",
+                      background: orgType === "school" ? "#eff6ff" : "#ffffff",
+                      color: orgType === "school" ? "#2563eb" : "#475569",
+                      fontWeight: 700,
+                      fontSize: "0.82rem",
+                      cursor: "pointer",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: "0.25rem"
+                    }}
+                  >
+                    <School size={18} />
+                    School (K-12)
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setOrgType("competitive")}
+                    style={{
+                      padding: "0.6rem 0.5rem",
+                      borderRadius: "8px",
+                      border: orgType === "competitive" ? "2px solid #2563eb" : "1px solid #cbd5e1",
+                      background: orgType === "competitive" ? "#eff6ff" : "#ffffff",
+                      color: orgType === "competitive" ? "#2563eb" : "#475569",
+                      fontWeight: 700,
+                      fontSize: "0.82rem",
+                      cursor: "pointer",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: "0.25rem"
+                    }}
+                  >
+                    <Target size={18} />
+                    JEE / Coaching
+                  </button>
+                </div>
+              </div>
+
+              {/* General Fields */}
               <div style={{ marginBottom: "1rem" }}>
                 <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
                   Organization Name *
@@ -410,24 +594,120 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
                 <input
                   type="text"
                   required
-                  placeholder="e.g. ACE College of Engineering"
-                  value={newOrgName}
-                  onChange={(e) => setNewOrgName(e.target.value)}
+                  placeholder={orgType === "college" ? "e.g. ACE College of Engineering" : orgType === "school" ? "e.g. Delhi Public School" : "e.g. Apex JEE Academy"}
+                  value={orgName}
+                  onChange={(e) => setOrgName(e.target.value)}
                   style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
                 />
               </div>
-              <div style={{ marginBottom: "1.5rem" }}>
+
+              <div style={{ marginBottom: "1rem" }}>
                 <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                  Organization Code
+                  Organization Code / Acronym
                 </label>
                 <input
                   type="text"
-                  placeholder="ACE"
-                  value={newOrgCode}
-                  onChange={(e) => setNewOrgCode(e.target.value)}
+                  placeholder="e.g. ACE / DPS / APEX"
+                  value={orgCode}
+                  onChange={(e) => setOrgCode(e.target.value)}
                   style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
                 />
               </div>
+
+              {/* Dynamic Sub-Fields by Type */}
+              {orgType === "college" ? (
+                <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "8px", marginBottom: "1.25rem", border: "1px solid #e2e8f0" }}>
+                  <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#2563eb", marginBottom: "0.5rem" }}>
+                    College Specific Settings:
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#475569", marginBottom: "0.2rem" }}>Degree Program</label>
+                      <input
+                        type="text"
+                        value={degreeProgram}
+                        onChange={(e) => setDegreeProgram(e.target.value)}
+                        style={{ width: "100%", padding: "0.4rem 0.6rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem" }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#475569", marginBottom: "0.2rem" }}>Department</label>
+                      <input
+                        type="text"
+                        value={departmentName}
+                        onChange={(e) => setDepartmentName(e.target.value)}
+                        style={{ width: "100%", padding: "0.4rem 0.6rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem" }}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ marginTop: "0.6rem", display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.8rem", color: "#334155" }}>
+                    <input
+                      type="checkbox"
+                      id="creditsCheck"
+                      checked={creditRequired}
+                      onChange={(e) => setCreditRequired(e.target.checked)}
+                    />
+                    <label htmlFor="creditsCheck">Require Subject Credits (e.g. 4 Credits / course)</label>
+                  </div>
+                </div>
+              ) : orgType === "school" ? (
+                <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "8px", marginBottom: "1.25rem", border: "1px solid #e2e8f0" }}>
+                  <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#2563eb", marginBottom: "0.5rem" }}>
+                    School Specific Settings:
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#475569", marginBottom: "0.2rem" }}>Affiliation Board</label>
+                      <select
+                        value={schoolBoard}
+                        onChange={(e) => setSchoolBoard(e.target.value)}
+                        style={{ width: "100%", padding: "0.4rem 0.6rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem", background: "#ffffff" }}
+                      >
+                        <option value="CBSE">CBSE Board</option>
+                        <option value="ICSE">ICSE Board</option>
+                        <option value="State Board">State Board</option>
+                        <option value="IB / Cambridge">IB / Cambridge</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#475569", marginBottom: "0.2rem" }}>Grade Classes</label>
+                      <input
+                        type="text"
+                        value={gradeRange}
+                        onChange={(e) => setGradeRange(e.target.value)}
+                        style={{ width: "100%", padding: "0.4rem 0.6rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem" }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "8px", marginBottom: "1.25rem", border: "1px solid #e2e8f0" }}>
+                  <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#2563eb", marginBottom: "0.5rem" }}>
+                    JEE / Competitive Coaching Settings:
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#475569", marginBottom: "0.2rem" }}>Target Exam</label>
+                      <input
+                        type="text"
+                        value={jeeTarget}
+                        onChange={(e) => setJeeTarget(e.target.value)}
+                        style={{ width: "100%", padding: "0.4rem 0.6rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem" }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#475569", marginBottom: "0.2rem" }}>Marking Pattern</label>
+                      <input
+                        type="text"
+                        value={markingPattern}
+                        onChange={(e) => setMarkingPattern(e.target.value)}
+                        style={{ width: "100%", padding: "0.4rem 0.6rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem" }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
                 <button type="button" onClick={() => setShowOrgModal(false)} className="btn btn-secondary">
                   Cancel
@@ -441,40 +721,41 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
         </div>
       )}
 
-      {/* Modal 2: Set Up Class */}
+      {/* MODAL 2: Create Class / Cohort */}
       {showClassModal && (
         <div className="modal-backdrop" onClick={() => setShowClassModal(false)}>
           <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
             <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.35rem" }}>
-              Set Up Class
+              Set Up Class / Batch
             </h3>
             <p style={{ fontSize: "0.85rem", color: "#64748b", marginBottom: "1.25rem" }}>
-              Define a cohort or class under <strong>{currentOrg?.name || "College"}</strong>.
+              Create a distinct cohort under <strong>{currentOrg?.name || "Organization"}</strong>.
             </p>
             <form onSubmit={handleCreateClass}>
               <div style={{ marginBottom: "1rem" }}>
                 <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                  Class Name *
+                  Class / Batch Name *
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Semester 6 - CSE"
-                  value={newClassName}
-                  onChange={(e) => setNewClassName(e.target.value)}
+                  placeholder={currentOrg?.type === "college" ? "e.g. Semester 6 - CSE" : currentOrg?.type === "school" ? "e.g. Class 12 - Section A" : "e.g. JEE 2027 Rankers Batch"}
+                  value={className}
+                  onChange={(e) => setClassName(e.target.value)}
                   style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
                 />
               </div>
+
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
                 <div>
                   <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                    Class Code
+                    Batch / Section Code
                   </label>
                   <input
                     type="text"
-                    placeholder="CSE-SEM6"
-                    value={newClassCode}
-                    onChange={(e) => setNewClassCode(e.target.value)}
+                    placeholder="e.g. CSE-SEM6"
+                    value={classCode}
+                    onChange={(e) => setClassCode(e.target.value)}
                     style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
                   />
                 </div>
@@ -484,23 +765,25 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
                   </label>
                   <input
                     type="text"
-                    value={newClassYear}
-                    onChange={(e) => setNewClassYear(e.target.value)}
+                    value={classYear}
+                    onChange={(e) => setClassYear(e.target.value)}
                     style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
                   />
                 </div>
               </div>
+
               <div style={{ marginBottom: "1.5rem" }}>
                 <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                  Department
+                  Department / Stream
                 </label>
                 <input
                   type="text"
-                  value={newClassDept}
-                  onChange={(e) => setNewClassDept(e.target.value)}
+                  value={classDept}
+                  onChange={(e) => setClassDept(e.target.value)}
                   style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
                 />
               </div>
+
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
                 <button type="button" onClick={() => setShowClassModal(false)} className="btn btn-secondary">
                   Cancel
@@ -514,7 +797,7 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
         </div>
       )}
 
-      {/* Modal 3: Create Subject */}
+      {/* MODAL 3: Create Subject */}
       {showSubjModal && (
         <div className="modal-backdrop" onClick={() => setShowSubjModal(false)}>
           <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
@@ -522,8 +805,9 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
               Add Subject
             </h3>
             <p style={{ fontSize: "0.85rem", color: "#64748b", marginBottom: "1.25rem" }}>
-              Assign course under <strong>{currentClass ? currentClass.name : currentOrg?.name || "College"}</strong>.
+              Assign curriculum under <strong>{currentClass ? currentClass.name : currentOrg?.name || "Organization"}</strong>.
             </p>
+
             <form onSubmit={handleCreateSubject}>
               <div style={{ marginBottom: "1rem" }}>
                 <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
@@ -533,12 +817,13 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
                   type="text"
                   required
                   placeholder="e.g. Natural Language Processing"
-                  value={newSubjName}
-                  onChange={(e) => setNewSubjName(e.target.value)}
+                  value={subjName}
+                  onChange={(e) => setSubjName(e.target.value)}
                   style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
                 />
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem", marginBottom: "1.5rem" }}>
+
+              <div style={{ display: "grid", gridTemplateColumns: currentOrg?.type === "college" ? "1fr 1fr 1fr" : "1fr 1fr", gap: "0.75rem", marginBottom: "1.5rem" }}>
                 <div>
                   <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
                     Subject Code
@@ -547,39 +832,73 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
                     type="text"
                     required
                     placeholder="NLP-701"
-                    value={newSubjCode}
-                    onChange={(e) => setNewSubjCode(e.target.value)}
+                    value={subjCode}
+                    onChange={(e) => setSubjCode(e.target.value)}
                     style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
                   />
                 </div>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                    Semester
-                  </label>
-                  <select
-                    value={newSubjSem}
-                    onChange={(e) => setNewSubjSem(e.target.value)}
-                    style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
-                  >
-                    {["Sem 1", "Sem 2", "Sem 3", "Sem 4", "Sem 5", "Sem 6", "Sem 7", "Sem 8"].map((s) => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                    Credits
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={8}
-                    value={newSubjCredits}
-                    onChange={(e) => setNewSubjCredits(Number(e.target.value))}
-                    style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
-                  />
-                </div>
+
+                {currentOrg?.type === "college" ? (
+                  <>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                        Semester
+                      </label>
+                      <select
+                        value={subjSem}
+                        onChange={(e) => setSubjSem(e.target.value)}
+                        style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", background: "#ffffff" }}
+                      >
+                        {["Sem 1", "Sem 2", "Sem 3", "Sem 4", "Sem 5", "Sem 6", "Sem 7", "Sem 8"].map((s) => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                        Credits
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={8}
+                        value={subjCredits}
+                        onChange={(e) => setSubjCredits(Number(e.target.value))}
+                        style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
+                      />
+                    </div>
+                  </>
+                ) : currentOrg?.type === "school" ? (
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                      Grade Level
+                    </label>
+                    <input
+                      type="text"
+                      value={subjGrade}
+                      onChange={(e) => setSubjGrade(e.target.value)}
+                      style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                      Discipline
+                    </label>
+                    <select
+                      value={subjJeeTarget}
+                      onChange={(e) => setSubjJeeTarget(e.target.value)}
+                      style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", background: "#ffffff" }}
+                    >
+                      <option value="Physics">Physics</option>
+                      <option value="Chemistry">Chemistry</option>
+                      <option value="Mathematics">Mathematics</option>
+                      <option value="Biology">Biology</option>
+                    </select>
+                  </div>
+                )}
               </div>
+
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
                 <button type="button" onClick={() => setShowSubjModal(false)} className="btn btn-secondary">
                   Cancel

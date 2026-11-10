@@ -76,11 +76,37 @@ export interface Student {
 }
 
 export interface QuestionItem {
+  id?: string;
   q_no: string;
+  section?: string;
   text: string;
   marks: number;
   rubric: string;
   ideal_answer?: string;
+}
+
+export interface DigitalPaperHeader {
+  title: string;
+  institution?: string;
+  course?: string;
+  time_allowed?: string;
+  max_marks?: number;
+  instructions?: string[];
+}
+
+export interface ExamScanResponse {
+  status: string;
+  source: "gemini" | "ocr_parser";
+  model_used?: string;
+  filename: string;
+  raw_text?: string;
+  header: DigitalPaperHeader;
+  sections?: { name: string; description?: string }[];
+  questions: QuestionItem[];
+  questions_count: number;
+  total_marks: number;
+  digital_paper_code?: string;
+  api_error?: string;
 }
 
 export interface Exam {

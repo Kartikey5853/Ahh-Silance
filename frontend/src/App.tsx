@@ -21,19 +21,36 @@ import { ExamManagementPage } from "./pages/ExamManagementPage";
 import { StrictEvaluationPage } from "./pages/StrictEvaluationPage";
 import { TeacherProfilePage } from "./pages/TeacherProfilePage";
 import { authApi } from "./api/authApi";
+import { academicApi } from "./api/academicApi";
 
 export const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [userName, setUserName] = useState<string>("Faculty");
   const [activeTab, setActiveTab] = useState<NavTab>("dashboard");
   const [navigationParams, setNavigationParams] = useState<any>({});
 
   useEffect(() => {
     const token = localStorage.getItem("auth_token");
-    setIsAuthenticated(Boolean(token));
+    if (!token) {
+      setIsAuthenticated(false);
+      return;
+    }
+    academicApi.getProfile()
+      .then((p) => {
+        setIsAuthenticated(true);
+        setUserName(p.full_name || p.username);
+      })
+      .catch(() => {
+        authApi.logout();
+        setIsAuthenticated(false);
+      });
   }, []);
 
   const handleLoginSuccess = () => {
     setIsAuthenticated(true);
+    academicApi.getProfile()
+      .then((p) => setUserName(p.full_name || p.username))
+      .catch(() => {});
     setActiveTab("dashboard");
   };
 
@@ -61,7 +78,7 @@ export const App: React.FC = () => {
         activeTab={activeTab}
         onSelectTab={handleNavigate}
         onLogout={handleLogout}
-        userName="Professor"
+        userName={userName}
       />
 
       <main className="main-content" style={{ paddingBottom: "7rem" }}>

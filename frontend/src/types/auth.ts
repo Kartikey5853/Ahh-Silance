@@ -12,6 +12,16 @@ export interface LoginCredentials {
   password: string;
 }
 
+export interface RegisterPayload {
+  username: string;
+  password: string;
+  full_name?: string;
+  email?: string;
+  role?: string;
+  department?: string;
+  gemini_api_key?: string;
+}
+
 export interface AuthResponse {
   /** Signed JSON Web Token issued by the backend */
   access_token: string;

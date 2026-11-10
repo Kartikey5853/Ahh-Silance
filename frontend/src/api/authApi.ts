@@ -6,7 +6,7 @@
  */
 
 import { apiClient } from "./client";
-import type { LoginCredentials, AuthResponse, UserProfile, EvaluationHistoryItem } from "../types/auth";
+import type { LoginCredentials, RegisterPayload, AuthResponse, UserProfile, EvaluationHistoryItem } from "../types/auth";
 
 export const authApi = {
   /**
@@ -14,6 +14,14 @@ export const authApi = {
    */
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     const response = await apiClient.post<AuthResponse>("/auth/login", credentials);
+    return response.data;
+  },
+
+  /**
+   * Registers a brand new account and returns a signed JWT Bearer access token.
+   */
+  async register(data: RegisterPayload): Promise<AuthResponse> {
+    const response = await apiClient.post<AuthResponse>("/auth/register", data);
     return response.data;
   },
 

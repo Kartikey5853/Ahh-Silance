@@ -15,6 +15,7 @@ interface AcademicsHierarchyProps {
 
 export const AcademicsHierarchyPage: React.FC<AcademicsHierarchyProps> = ({ onNavigate }) => {
   const [activeTier, setActiveTier] = useState<"college" | "school" | "competitive">("college");
+  const [institutions, setInstitutions] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
 
   // Add Subject Form State
@@ -27,6 +28,7 @@ export const AcademicsHierarchyPage: React.FC<AcademicsHierarchyProps> = ({ onNa
   const [chaptersText, setChaptersText] = useState("");
 
   useEffect(() => {
+    academicApi.listInstitutions().then(setInstitutions).catch(() => []);
     loadSubjects();
   }, [activeTier]);
 
@@ -49,12 +51,19 @@ export const AcademicsHierarchyPage: React.FC<AcademicsHierarchyProps> = ({ onNa
         .map((c) => c.trim())
         .filter(Boolean);
 
-      const targetInstId =
-        activeTier === "college"
-          ? "inst-college-1"
-          : activeTier === "school"
-          ? "inst-school-1"
-          : "inst-jee-1";
+      const matchedInst = institutions.find((i) => i.type === activeTier);
+      let targetInstId = matchedInst?.id;
+
+      if (!targetInstId) {
+        // Create an institution for this tier if none exists yet
+        const createdInst = await academicApi.createInstitution({
+          name: activeTier === "college" ? "College of Engineering" : activeTier === "school" ? "Academic School" : "Competitive Academy",
+          type: activeTier,
+          code: activeTier.slice(0, 4).toUpperCase()
+        });
+        targetInstId = createdInst.id;
+        setInstitutions([...institutions, createdInst]);
+      }
 
       await academicApi.createSubject({
         name,

@@ -14,7 +14,8 @@ import type {
   Student,
   Exam,
   AcademicEvaluation,
-  QuestionItem
+  QuestionItem,
+  ExamScanResponse
 } from "../types/academic";
 
 export const academicApi = {
@@ -132,16 +133,13 @@ export const academicApi = {
     return res.data;
   },
 
-  scanQuestionPaper: async (file: File): Promise<{
-    status: string;
-    filename: string;
-    questions_count: number;
-    total_marks: number;
-    questions: QuestionItem[];
-  }> => {
+  scanQuestionPaper: async (file: File, apiKey?: string): Promise<ExamScanResponse> => {
     const formData = new FormData();
     formData.append("file", file);
-    const res = await apiClient.post("/academic/exams/scan-paper", formData, {
+    if (apiKey) {
+      formData.append("gemini_api_key", apiKey);
+    }
+    const res = await apiClient.post<ExamScanResponse>("/academic/exams/scan-paper", formData, {
       headers: { "Content-Type": "multipart/form-data" }
     });
     return res.data;
@@ -178,7 +176,13 @@ export const academicApi = {
   },
 
   // Strict Evaluation
-  evaluateStudent: async (examId: string, studentId: string, file?: File | null, text?: string): Promise<AcademicEvaluation> => {
+  evaluateStudent: async (
+    examId: string,
+    studentId: string,
+    file?: File | null,
+    text?: string,
+    apiKey?: string
+  ): Promise<AcademicEvaluation> => {
     const formData = new FormData();
     formData.append("student_id", studentId);
     if (file) {
@@ -186,6 +190,9 @@ export const academicApi = {
     }
     if (text) {
       formData.append("sheet_text", text);
+    }
+    if (apiKey) {
+      formData.append("gemini_api_key", apiKey);
     }
     const res = await apiClient.post<AcademicEvaluation>(`/academic/exams/${examId}/evaluate`, formData, {
       headers: { "Content-Type": "multipart/form-data" }
