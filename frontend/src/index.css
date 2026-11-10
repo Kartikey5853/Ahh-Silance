@@ -389,13 +389,13 @@ body {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.45rem 0.65rem;
-  background: rgba(15, 23, 42, 0.94);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 0.35rem 0.5rem;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(226, 232, 240, 0.9);
   border-radius: 9999px;
-  box-shadow: 0 20px 35px -5px rgba(0, 0, 0, 0.3), 0 10px 15px -5px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 12px 30px -4px rgba(15, 23, 42, 0.12), 0 4px 10px -2px rgba(15, 23, 42, 0.06);
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -405,30 +405,32 @@ body {
 
 .dock-btn {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 0.2rem;
-  padding: 0.45rem 0.85rem;
+  gap: 0.45rem;
+  padding: 0.45rem 0.95rem;
   background: transparent;
   border: none;
   border-radius: 9999px;
-  color: #94a3b8;
+  color: #64748b;
   cursor: pointer;
   position: relative;
-  transition: all 0.2s ease;
-  min-width: 68px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  font-weight: 500;
+  font-size: 0.85rem;
 }
 
 .dock-btn:hover {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.1);
+  color: #0f172a;
+  background: #f1f5f9;
 }
 
 .dock-btn.active {
   color: #ffffff;
-  background: rgba(255, 255, 255, 0.18);
+  background: #0284c7;
   font-weight: 600;
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);
 }
 
 .dock-icon-wrapper {
@@ -452,7 +454,7 @@ body {
 }
 
 .dock-label {
-  font-size: 0.7rem;
+  font-size: 0.82rem;
   letter-spacing: -0.01em;
   white-space: nowrap;
 }

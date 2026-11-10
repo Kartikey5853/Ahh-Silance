@@ -59,6 +59,8 @@ export const academicApi = {
     institution_id?: string;
     department?: string;
     academic_year?: string;
+    start_date?: string;
+    end_date?: string;
   }): Promise<any> => {
     const res = await apiClient.post("/academic/classes", data);
     return res.data;
@@ -98,6 +100,14 @@ export const academicApi = {
   },
 
   // Students
+  listAllStudents: async (classId?: string, subjectId?: string): Promise<Student[]> => {
+    const params: any = {};
+    if (classId) params.class_id = classId;
+    if (subjectId) params.subject_id = subjectId;
+    const res = await apiClient.get<Student[]>("/academic/students", { params });
+    return res.data;
+  },
+
   listStudents: async (subjectId: string, classId?: string): Promise<Student[]> => {
     const params: any = {};
     if (classId) params.class_id = classId;
@@ -122,15 +132,19 @@ export const academicApi = {
 
   // Exams
   listExams: async (subjectId?: string): Promise<Exam[]> => {
-    const res = await apiClient.get<Exam[]>("/academic/exams", {
-      params: subjectId ? { subject_id: subjectId } : undefined
-    });
+    const params: any = {};
+    if (subjectId) params.subject_id = subjectId;
+    const res = await apiClient.get<Exam[]>("/academic/exams", { params });
     return res.data;
   },
 
   getExam: async (examId: string): Promise<Exam> => {
     const res = await apiClient.get<Exam>(`/academic/exams/${examId}`);
     return res.data;
+  },
+
+  deleteExam: async (examId: string): Promise<void> => {
+    await apiClient.delete(`/academic/exams/${examId}`);
   },
 
   scanQuestionPaper: async (file: File, apiKey?: string): Promise<ExamScanResponse> => {
@@ -153,6 +167,7 @@ export const academicApi = {
     passing_marks: number;
     academic_year: string;
     exam_date?: string;
+    correction_deadline?: string;
     answer_key_text?: string;
     questions: QuestionItem[];
   }): Promise<Exam> => {
@@ -197,6 +212,11 @@ export const academicApi = {
     const res = await apiClient.post<AcademicEvaluation>(`/academic/exams/${examId}/evaluate`, formData, {
       headers: { "Content-Type": "multipart/form-data" }
     });
+    return res.data;
+  },
+
+  evaluateAll: async (examId: string): Promise<{ status: string; evaluated_count: number; evaluations: AcademicEvaluation[] }> => {
+    const res = await apiClient.post(`/academic/exams/${examId}/evaluate-all`);
     return res.data;
   },
 

@@ -31,6 +31,8 @@ export interface ClassItem {
   code?: string;
   department?: string;
   academic_year?: string;
+  start_date?: string;
+  end_date?: string;
   subjects_count?: number;
   students_count?: number;
   created_at?: string;
@@ -120,6 +122,7 @@ export interface Exam {
   passing_marks: number;
   academic_year: string;
   exam_date?: string;
+  correction_deadline?: string;
   question_paper_filename?: string;
   answer_key_text?: string;
   questions: QuestionItem[];

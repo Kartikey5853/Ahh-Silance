@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { academicApi } from "../api/academicApi";
-import type { UserProfile, Subject, Institution, ClassItem, InstitutionType, Student } from "../types/academic";
+import type { UserProfile, Subject, Institution, ClassItem, InstitutionType, Student, Exam } from "../types/academic";
 import { StudentProfileModal } from "../components/StudentProfileModal";
 import {
   BookOpen,
@@ -12,7 +12,9 @@ import {
   GraduationCap,
   ChevronRight,
   School,
-  Target
+  Target,
+  Clock,
+  Calendar
 } from "lucide-react";
 
 interface AcademicDashboardProps {
@@ -26,6 +28,7 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string>("");
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [allExams, setAllExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStudentForProfile, setSelectedStudentForProfile] = useState<Student | null>(null);
 
@@ -49,11 +52,17 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
   const [jeeTarget, setJeeTarget] = useState("JEE Main & Advanced");
   const [markingPattern, setMarkingPattern] = useState("+4 / -1 Negative Marking");
 
-  // New Class Form State
+  // New Class Form State (with 6-Month Semester Window)
   const [className, setClassName] = useState("Semester 6 - CSE");
   const [classCode, setClassCode] = useState("CSE-SEM6");
   const [classDept, setClassDept] = useState("Computer Science");
   const [classYear, setClassYear] = useState("2026-2027");
+  const [startDate, setStartDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [endDate, setEndDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 182);
+    return d.toISOString().split("T")[0];
+  });
 
   // New Subject Form State (Adapts dynamically to Org Type)
   const [subjName, setSubjName] = useState("Natural Language Processing");
@@ -66,13 +75,15 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
   const loadHierarchy = async () => {
     try {
       setLoading(true);
-      const [profData, instData] = await Promise.all([
+      const [profData, instData, exList] = await Promise.all([
         academicApi.getProfile().catch(() => null),
-        academicApi.listInstitutions().catch(() => [])
+        academicApi.listInstitutions().catch(() => []),
+        academicApi.listExams().catch(() => [])
       ]);
 
       if (profData) setProfile(profData);
       setInstitutions(instData || []);
+      setAllExams(exList || []);
 
       if (instData && instData.length > 0) {
         const activeInst = profData?.institution_id && instData.some((i) => i.id === profData.institution_id)
@@ -194,7 +205,9 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
         code: classCode.trim().toUpperCase(),
         institution_id: selectedInstId,
         department: classDept,
-        academic_year: classYear
+        academic_year: classYear,
+        start_date: startDate,
+        end_date: endDate
       });
       const updatedClasses = [created, ...classes];
       setClasses(updatedClasses);
@@ -288,6 +301,47 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
           </div>
         </div>
       </div>
+
+      {/* Paper Corrections & Deadlines Alert Banner */}
+      {allExams.length > 0 && (
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid #bae6fd",
+            borderRadius: "14px",
+            padding: "1rem 1.25rem",
+            marginBottom: "1.75rem",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "1rem",
+            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <div style={{ padding: "0.55rem", background: "#e0f2fe", color: "#0284c7", borderRadius: "10px" }}>
+              <Clock size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#0f172a" }}>
+                Pending Paper Corrections
+              </div>
+              <div style={{ fontSize: "0.82rem", color: "#64748b" }}>
+                You have {allExams.length} scheduled {allExams.length === 1 ? "exam" : "exams"}. Please correct and submit evaluations before the deadline ({allExams[0]?.correction_deadline || "Upcoming"}).
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={() => onNavigate("evaluation", { initialExamId: allExams[0]?.id })}
+            className="btn btn-primary"
+            style={{ fontSize: "0.82rem", padding: "0.45rem 0.95rem", borderRadius: "8px" }}
+          >
+            Grade Papers Now →
+          </button>
+        </div>
+      )}
 
       {/* If No Organization Created Yet (Fresh User Slate) */}
       {!loading && institutions.length === 0 ? (
@@ -390,6 +444,13 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
               </select>
             )}
           </div>
+
+          {currentClass?.start_date && (
+            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.78rem", color: "#0369a1", background: "#f0f9ff", padding: "0.25rem 0.6rem", borderRadius: "6px", fontWeight: 600 }}>
+              <Calendar size={13} />
+              <span>Semester: {currentClass.start_date} to {currentClass.end_date || "Upcoming"} (6 Months)</span>
+            </div>
+          )}
 
           <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem", color: "#475569", marginLeft: "auto" }}>
             <BookOpen size={16} style={{ color: "#475569" }} />
@@ -770,7 +831,7 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
                 </div>
               </div>
 
-              <div style={{ marginBottom: "1.5rem" }}>
+              <div style={{ marginBottom: "1rem" }}>
                 <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
                   Department / Stream
                 </label>
@@ -780,6 +841,31 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
                   onChange={(e) => setClassDept(e.target.value)}
                   style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
                 />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1.5rem" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                    Semester Start Date
+                  </label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                    Semester End Date (6 Months)
+                  </label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
+                  />
+                </div>
               </div>
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>

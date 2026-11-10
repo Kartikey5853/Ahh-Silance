@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { academicApi } from "../api/academicApi";
-import type { Exam, Student, AcademicEvaluation, ClassItem, Subject } from "../types/academic";
+import type { Exam, Student, AcademicEvaluation, Subject } from "../types/academic";
 import {
-  FileText,
-  User,
-  RefreshCw,
   Sparkles,
-  Check,
-  Copy,
-  Code
+  UploadCloud,
+  FileCheck2,
+  CheckCircle2,
+  Clock,
+  Search,
+  RefreshCw,
+  X,
+  AlertCircle
 } from "lucide-react";
 
 interface StrictEvaluationProps {
@@ -24,531 +26,968 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
   initialEvalId,
   onNavigate
 }) => {
-  const [classes, setClasses] = useState<ClassItem[]>([]);
-  const [selectedClassId, setSelectedClassId] = useState<string>("");
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [selectedSubjectId, setSelectedSubjectId] = useState<string>("");
-
   const [exams, setExams] = useState<Exam[]>([]);
   const [selectedExamId, setSelectedExamId] = useState<string>(initialExamId || "");
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+
+  // Students and evaluations for selected exam
   const [students, setStudents] = useState<Student[]>([]);
-  const [selectedStudentId, setSelectedStudentId] = useState<string>(initialStudentId || "");
+  const [evaluations, setEvaluations] = useState<Record<string, AcademicEvaluation>>({});
+  const [loading, setLoading] = useState(false);
 
-  // Sheet file or text
-  const [sheetFile, setSheetFile] = useState<File | null>(null);
-  const [sheetText, setSheetText] = useState<string>("");
+  // Per-student uploaded files or sample text
+  const [studentSheets, setStudentSheets] = useState<Record<string, { file?: File; text?: string; filename: string }>>({});
 
-  // Evaluation Execution State
-  const [isEvaluating, setIsEvaluating] = useState(false);
-  const [evalProgressMessage, setEvalProgressMessage] = useState<string | null>(null);
+  // Active evaluation modal
   const [activeScorecard, setActiveScorecard] = useState<AcademicEvaluation | null>(null);
 
-  // View toggle: "scorecard" | "rawJson"
-  const [viewMode, setViewMode] = useState<"scorecard" | "rawJson">("scorecard");
-  const [copiedJson, setCopiedJson] = useState(false);
+  // Evaluating states
+  const [evaluatingStudentId, setEvaluatingStudentId] = useState<string | null>(null);
+  const [isEvaluatingAll, setIsEvaluatingAll] = useState(false);
+  const [evalProgressMessage, setEvalProgressMessage] = useState<string | null>(null);
 
-  // Past evaluations list
-  const [evaluationsHistory, setEvaluationsHistory] = useState<AcademicEvaluation[]>([]);
+  // Filter & Search
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "evaluated" | "pending">("all");
 
   useEffect(() => {
-    // Initial fetch of classes, subjects, exams, and history
     Promise.all([
-      academicApi.listClasses(),
-      academicApi.listSubjects(),
       academicApi.listExams(),
-      academicApi.listEvaluations()
-    ]).then(([classList, subjList, exList, history]) => {
-      setClasses(classList);
-      setSubjects(subjList);
+      academicApi.listSubjects()
+    ]).then(([exList, subjList]) => {
       setExams(exList);
-      setEvaluationsHistory(history);
-
-      if (classList.length > 0) {
-        setSelectedClassId(classList[0].id);
-      }
-      if (subjList.length > 0) {
-        setSelectedSubjectId(subjList[0].id);
-      }
-
+      setSubjects(subjList);
       if (initialExamId && exList.some((e) => e.id === initialExamId)) {
         setSelectedExamId(initialExamId);
-      } else if (exList.length > 0) {
-        setSelectedExamId(exList[0].id);
-      }
-
-      if (initialEvalId) {
-        const found = history.find((h) => h.id === initialEvalId);
-        if (found) setActiveScorecard(found);
-      } else if (history.length > 0) {
-        setActiveScorecard(history[0]);
       }
     });
-  }, [initialExamId, initialEvalId]);
+  }, [initialExamId]);
 
-  // When class changes, filter subjects
-  const handleClassChange = async (classId: string) => {
-    setSelectedClassId(classId);
-    try {
-      const filtered = await academicApi.listSubjects(undefined, classId || undefined);
-      setSubjects(filtered);
-      if (filtered.length > 0) {
-        setSelectedSubjectId(filtered[0].id);
-      }
-    } catch (err) {
-      console.error("Failed to filter subjects:", err);
-    }
-  };
-
-  // When subject changes, fetch exams and students
+  // When selected exam changes, load enrolled students and existing evaluations
   useEffect(() => {
-    if (selectedSubjectId) {
-      academicApi.listExams(selectedSubjectId).then((exList) => {
-        setExams(exList);
-        if (exList.length > 0) {
-          setSelectedExamId(exList[0].id);
-        } else {
-          setSelectedExamId("");
-        }
-      });
-
-      academicApi.listStudents(selectedSubjectId).then((studList) => {
-        setStudents(studList);
-        if (initialStudentId && studList.some((s) => s.id === initialStudentId)) {
-          setSelectedStudentId(initialStudentId);
-        } else if (studList.length > 0) {
-          setSelectedStudentId(studList[0].id);
-        } else {
-          setSelectedStudentId("");
-        }
-      });
-    }
-  }, [selectedSubjectId, initialStudentId]);
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSheetFile(file);
-      setSheetText("");
-    }
-  };
-
-  const handleLoadSamplePaper = () => {
-    setSheetFile(null);
-    setSheetText(
-      "STUDENT RESPONSE SHEET\n" +
-      "Course: Natural Language Processing | Academic Examination\n\n" +
-      "ANS TO Q1:\n" +
-      "CBOW predicts the target center word using the average of context word embeddings. It trains faster on frequent words.\n" +
-      "Skip-gram inverts this by taking the center word to predict surrounding context words. Because each context pair is sampled, it performs much better on rare words.\n\n" +
-      "ANS TO Q2:\n" +
-      "Attention(Q,K,V) = softmax(Q K^T / sqrt(d_k)) * V.\n" +
-      "Without dividing by sqrt(d_k), for large d_k, dot products grow large in magnitude. This pushes the softmax into extreme saturation zones where gradients vanish.\n\n" +
-      "ANS TO Q3:\n" +
-      "Perplexity is PPL = exp(CrossEntropy loss). It represents the effective branching factor—the geometric mean of choices. Lower perplexity indicates superior predictive accuracy.\n\n" +
-      "ANS TO Q4:\n" +
-      "BPE starts with all individual characters and iteratively merges the most frequent adjacent character pairs until reaching vocabulary capacity. It prevents Out-Of-Vocabulary (OOV) tokens.\n\n" +
-      "ANS TO Q5:\n" +
-      "LoRA freezes base weights W_0 and models weight updates as low-rank matrices B * A, where rank r << d. This reduces trainable parameters by over 99% and slashes GPU memory."
-    );
-  };
-
-  const handleRunEvaluation = async () => {
-    if (!selectedExamId || !selectedStudentId) {
-      alert("Please select both an exam and a student.");
-      return;
-    }
-    if (!sheetFile && !sheetText) {
-      alert("Please upload a student answer sheet or click 'Load Sample Response'.");
+    if (!selectedExamId) {
+      setStudents([]);
+      setEvaluations({});
       return;
     }
 
-    setIsEvaluating(true);
-    setEvalProgressMessage("Evaluating student answer sheet against master answer key at zero temperature...");
+    const currentExam = exams.find((e) => e.id === selectedExamId);
+    if (!currentExam) return;
+
+    setLoading(true);
+    Promise.all([
+      academicApi.listStudents(currentExam.subject_id),
+      academicApi.listEvaluations(selectedExamId)
+    ]).then(([studList, evalList]) => {
+      setStudents(studList);
+      const evalMap: Record<string, AcademicEvaluation> = {};
+      evalList.forEach((ev) => {
+        evalMap[ev.student_id] = ev;
+      });
+      setEvaluations(evalMap);
+
+      if (initialEvalId) {
+        const found = evalList.find((ev) => ev.id === initialEvalId);
+        if (found) setActiveScorecard(found);
+      } else if (initialStudentId) {
+        const found = evalList.find((ev) => ev.student_id === initialStudentId);
+        if (found) setActiveScorecard(found);
+      }
+    }).catch((err) => {
+      console.error("Failed to load exam students/evaluations:", err);
+    }).finally(() => {
+      setLoading(false);
+    });
+  }, [selectedExamId, exams, initialEvalId, initialStudentId]);
+
+  const activeExam = exams.find((e) => e.id === selectedExamId);
+  const activeSubject = activeExam ? subjects.find((s) => s.id === activeExam.subject_id) : null;
+
+  const handleStudentFileUpload = (studentId: string, file: File) => {
+    setStudentSheets((prev) => ({
+      ...prev,
+      [studentId]: {
+        file: file,
+        filename: file.name
+      }
+    }));
+  };
+
+  const handleAttachSamplePaper = (studentId: string) => {
+    setStudentSheets((prev) => ({
+      ...prev,
+      [studentId]: {
+        text:
+          "STUDENT ANSWER SHEET\n" +
+          "Course: Academic Examination\n\n" +
+          "ANS TO PART A:\n" +
+          "Q1.a: CBOW predicts target center word from context averages. Skip-gram predicts surrounding words from center token.\n" +
+          "Q1.b: Attention(Q,K,V) = softmax(Q K^T / sqrt(d_k)) * V. Scaling prevents vanishing gradients.\n" +
+          "Q1.c: Perplexity is PPL = exp(loss). Lower is superior.\n" +
+          "Q1.d: Overfitting occurs when a model performs equally well on train and test data.\n" +
+          "Q1.e: BPE iteratively merges frequent character pairs to prevent OOV.\n" +
+          "Q1.f: LoRA decomposes weight updates into low-rank matrices W_0 + B*A.\n" +
+          "Q1.g: Softmax normalizes logits into probability distribution summing to 1.\n" +
+          "Q1.i: Self-attention enables tokens to attend to all positions in parallel.\n" +
+          "Q1.j: Cross-entropy measures divergence between predicted and true distributions.\n\n" +
+          "ANS TO PART B:\n" +
+          "Q3 (Unit 1): Detailed 3-page formulation of Attention mechanisms, multi-head projections, and scale factor derivations (~540 words).\n" +
+          "Q4 (Unit 2): Comprehensive 3-page mathematical analysis of Word2Vec negative sampling and contrastive loss (~540 words).\n" +
+          "Q7 (Unit 3): Exhaustive 3-page walkthrough of Transformer encoder-decoder cross-attention and causal masking (~540 words).\n" +
+          "Q8 (Unit 4): 3-page derivations of Subword tokenization and vocabulary compression algorithms (~540 words).\n" +
+          "Q11 (Unit 5): Brief 1-page summary (~180 words) of K-Means and Expectation Maximization without full proofs.",
+        filename: "sample_handwritten_sheet.pdf"
+      }
+    }));
+  };
+
+  const handleEvaluateSingle = async (student: Student) => {
+    if (!selectedExamId) return;
+    const sheetData = studentSheets[student.id];
+    const file = sheetData?.file;
+    const text = sheetData?.text || "Candidate submitted examination answer booklet.";
+
+    setEvaluatingStudentId(student.id);
+    setEvalProgressMessage(`Evaluating ${student.name} at zero temperature...`);
 
     try {
       const scorecard = await academicApi.evaluateStudent(
         selectedExamId,
-        selectedStudentId,
-        sheetFile,
-        sheetText
+        student.id,
+        file,
+        text
       );
 
+      setEvaluations((prev) => ({
+        ...prev,
+        [student.id]: scorecard
+      }));
       setActiveScorecard(scorecard);
-      setEvaluationsHistory([scorecard, ...evaluationsHistory]);
-      setEvalProgressMessage(null);
-    } catch (err: any) {
-      console.error("Evaluation error:", err);
-      alert("Evaluation failed. Please verify the backend connection.");
+    } catch (err) {
+      alert(`Evaluation failed for ${student.name}. Please check connection.`);
     } finally {
-      setIsEvaluating(false);
+      setEvaluatingStudentId(null);
+      setEvalProgressMessage(null);
     }
   };
 
-  const handleCopyJson = () => {
-    if (!activeScorecard) return;
-    navigator.clipboard.writeText(JSON.stringify(activeScorecard, null, 2));
-    setCopiedJson(true);
-    setTimeout(() => setCopiedJson(false), 2000);
+  const handleEvaluateAll = async () => {
+    if (!selectedExamId) return;
+    setIsEvaluatingAll(true);
+    setEvalProgressMessage("Evaluating all student submissions with strict rubric criteria...");
+
+    try {
+      const res = await academicApi.evaluateAll(selectedExamId);
+      const evalMap: Record<string, AcademicEvaluation> = { ...evaluations };
+      res.evaluations.forEach((ev) => {
+        evalMap[ev.student_id] = ev;
+      });
+      setEvaluations(evalMap);
+    } catch (err) {
+      alert("Batch evaluation error. Evaluating available student sheets individually...");
+      for (const student of students) {
+        if (!evaluations[student.id]) {
+          await handleEvaluateSingle(student);
+        }
+      }
+    } finally {
+      setIsEvaluatingAll(false);
+      setEvalProgressMessage(null);
+    }
   };
 
-  const activeExam = exams.find((e) => e.id === selectedExamId);
+  const filteredStudents = students.filter((s) => {
+    const matchesSearch =
+      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.roll_number.toLowerCase().includes(searchQuery.toLowerCase());
+    const isEval = Boolean(evaluations[s.id]);
+    if (statusFilter === "evaluated") return matchesSearch && isEval;
+    if (statusFilter === "pending") return matchesSearch && !isEval;
+    return matchesSearch;
+  });
+
+  const evaluatedCount = students.filter((s) => Boolean(evaluations[s.id])).length;
 
   return (
-    <div className="strict-evaluation-page pb-24">
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" }}>
+    <div className="strict-evaluation-page pb-24" style={{ maxWidth: "1280px", margin: "0 auto", padding: "0 1rem" }}>
+      {/* INITIAL STATE: When no exam is selected */}
+      {!selectedExamId ? (
         <div>
-          <h1 style={{ fontSize: "1.75rem", fontWeight: 800, letterSpacing: "-0.03em" }}>
-            Student Evaluation
-          </h1>
-          <p style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>
-            Strict rubric evaluation against master answer key at zero temperature
-          </p>
+          <div style={{ marginBottom: "2rem" }}>
+            <h1 style={{ fontSize: "1.75rem", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.03em", margin: 0 }}>
+              Student Evaluation
+            </h1>
+            <p style={{ color: "#64748b", fontSize: "0.88rem", marginTop: "0.25rem", margin: 0 }}>
+              Strict zero-temperature paper grading and syllabus rubric validation
+            </p>
+          </div>
+
+          <div
+            style={{
+              background: "#ffffff",
+              border: "1px solid #e2e8f0",
+              borderRadius: "16px",
+              padding: "3.5rem 2rem",
+              textAlign: "center",
+              boxShadow: "0 1px 4px rgba(0, 0, 0, 0.04)",
+              maxWidth: "600px",
+              margin: "2rem auto"
+            }}
+          >
+            <div
+              style={{
+                display: "inline-flex",
+                padding: "1rem",
+                background: "#e0f2fe",
+                color: "#0284c7",
+                borderRadius: "50%",
+                marginBottom: "1rem"
+              }}
+            >
+              <FileCheck2 size={36} />
+            </div>
+            <h2 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.5rem" }}>
+              Select an Examination to Begin Evaluation
+            </h2>
+            <p style={{ fontSize: "0.88rem", color: "#64748b", maxWidth: "420px", margin: "0 auto 1.5rem auto" }}>
+              Choose a scheduled examination from the dropdown below to review enrolled student answer sheets and run grading.
+            </p>
+
+            {exams.length === 0 ? (
+              <div>
+                <p style={{ color: "#dc2626", fontSize: "0.85rem", marginBottom: "1rem" }}>
+                  No saved examinations found. Please create or scan an exam paper first.
+                </p>
+                <button
+                  onClick={() => onNavigate("exams")}
+                  className="btn btn-primary"
+                  style={{ padding: "0.6rem 1.25rem", borderRadius: "8px", fontSize: "0.88rem" }}
+                >
+                  + Add Examination
+                </button>
+              </div>
+            ) : (
+              <div style={{ maxWidth: "400px", margin: "0 auto" }}>
+                <select
+                  value={selectedExamId}
+                  onChange={(e) => setSelectedExamId(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.65rem 0.9rem",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "0.92rem",
+                    fontWeight: 600,
+                    color: "#0f172a",
+                    background: "#ffffff",
+                    cursor: "pointer"
+                  }}
+                >
+                  <option value="">Choose Examination...</option>
+                  {exams.map((ex) => (
+                    <option key={ex.id} value={ex.id}>
+                      {ex.title} ({ex.exam_type}) • {ex.max_marks} Marks
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
         </div>
-
-        <button
-          onClick={() => onNavigate("exams")}
-          className="btn btn-secondary"
-          style={{ fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.4rem" }}
-        >
-          <FileText size={15} /> Modify Exam Marks
-        </button>
-      </div>
-
-      {/* Selectors Bar */}
-      <div className="card" style={{ padding: "1.25rem", marginBottom: "1.5rem", background: "var(--bg-secondary)" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem", alignItems: "flex-end" }}>
-          {/* Class Filter */}
-          {classes.length > 0 && (
+      ) : (
+        /* ACTIVE EXAM STATE: Top bar with deadlines + Vantis Table of Students */
+        <div>
+          {/* Header Bar */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" }}>
             <div>
-              <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "0.25rem" }}>
-                Class / Section
-              </label>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+                <h1 style={{ fontSize: "1.65rem", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.03em", margin: 0 }}>
+                  {activeExam?.title || "Examination Evaluation"}
+                </h1>
+                <span
+                  style={{
+                    background: "#e0f2fe",
+                    color: "#0369a1",
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    padding: "0.2rem 0.65rem",
+                    borderRadius: "9999px"
+                  }}
+                >
+                  {activeExam?.exam_type || "Exam"}
+                </span>
+                <span
+                  style={{
+                    background: "#f1f5f9",
+                    color: "#334155",
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    padding: "0.2rem 0.65rem",
+                    borderRadius: "9999px"
+                  }}
+                >
+                  Total: {activeExam?.max_marks || 60.0} Marks
+                </span>
+              </div>
+              <p style={{ color: "#64748b", fontSize: "0.88rem", marginTop: "0.3rem", margin: 0 }}>
+                Subject: {activeSubject?.name || "Subject"} ({activeSubject?.code || ""}) • Exam Date: {activeExam?.exam_date || "2026-11-10"} • Correction Deadline: {activeExam?.correction_deadline || "Upcoming"}
+              </p>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
               <select
-                value={selectedClassId}
-                onChange={(e) => handleClassChange(e.target.value)}
-                style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid var(--border-color)", fontWeight: 600, background: "#ffffff" }}
+                value={selectedExamId}
+                onChange={(e) => setSelectedExamId(e.target.value)}
+                style={{
+                  padding: "0.55rem 0.85rem",
+                  borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                  fontSize: "0.85rem",
+                  background: "#ffffff",
+                  color: "#1e293b",
+                  fontWeight: 600
+                }}
               >
-                <option value="">All Classes</option>
-                {classes.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} ({c.code || "SEC"})
+                {exams.map((ex) => (
+                  <option key={ex.id} value={ex.id}>
+                    {ex.title}
                   </option>
                 ))}
               </select>
+
+              <button
+                onClick={handleEvaluateAll}
+                disabled={isEvaluatingAll || students.length === 0}
+                className="btn btn-primary"
+                style={{ display: "flex", alignItems: "center", gap: "0.45rem", padding: "0.55rem 1rem", fontSize: "0.85rem", borderRadius: "8px" }}
+              >
+                <Sparkles size={15} />
+                {isEvaluatingAll ? "Evaluating All..." : "Evaluate All"}
+              </button>
+            </div>
+          </div>
+
+          {/* Correction Deadline Alert Banner */}
+          {activeExam?.correction_deadline && (
+            <div
+              style={{
+                background: "#f0f9ff",
+                border: "1px solid #bae6fd",
+                borderRadius: "12px",
+                padding: "0.75rem 1rem",
+                marginBottom: "1.25rem",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: "0.5rem"
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                <Clock size={16} style={{ color: "#0284c7" }} />
+                <span style={{ fontSize: "0.85rem", color: "#0369a1", fontWeight: 600 }}>
+                  Submission Deadline: Grade and finalize papers by <strong>{activeExam.correction_deadline}</strong>.
+                </span>
+              </div>
+              <span style={{ fontSize: "0.8rem", color: "#0284c7", fontWeight: 700 }}>
+                {evaluatedCount} of {students.length} completed
+              </span>
             </div>
           )}
 
-          {/* Subject Filter */}
-          <div>
-            <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "0.25rem" }}>
-              Subject
-            </label>
-            <select
-              value={selectedSubjectId}
-              onChange={(e) => setSelectedSubjectId(e.target.value)}
-              style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid var(--border-color)", fontWeight: 600, background: "#ffffff" }}
+          {evalProgressMessage && (
+            <div
+              style={{
+                background: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                borderRadius: "10px",
+                padding: "0.75rem 1rem",
+                marginBottom: "1.25rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.6rem",
+                fontSize: "0.85rem",
+                color: "#0f172a",
+                fontWeight: 600
+              }}
             >
-              {subjects.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({s.code})
-                </option>
-              ))}
-            </select>
-          </div>
+              <RefreshCw size={15} className="spin" style={{ color: "#0284c7" }} />
+              {evalProgressMessage}
+            </div>
+          )}
 
-          {/* Exam Selector */}
-          <div>
-            <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "0.25rem" }}>
-              Select Examination
-            </label>
-            <select
-              value={selectedExamId}
-              onChange={(e) => setSelectedExamId(e.target.value)}
-              style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid var(--border-color)", fontWeight: 600, background: "#ffffff" }}
-            >
-              {exams.length === 0 ? (
-                <option value="">No exams scheduled for this subject</option>
-              ) : (
-                exams.map((ex) => (
-                  <option key={ex.id} value={ex.id}>
-                    {ex.title} ({(ex.questions || []).length} Qs • {ex.max_marks} pts)
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-
-          {/* Student Selector */}
-          <div>
-            <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "0.25rem" }}>
-              Select Student Candidate
-            </label>
-            <select
-              value={selectedStudentId}
-              onChange={(e) => setSelectedStudentId(e.target.value)}
-              style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid var(--border-color)", fontWeight: 600, background: "#ffffff" }}
-            >
-              {students.length === 0 ? (
-                <option value="">No enrolled students in this subject</option>
-              ) : (
-                students.map((st) => (
-                  <option key={st.id} value={st.id}>
-                    {st.name} ({st.roll_number}) - {st.section || "A"}
-                  </option>
-                ))
-              )}
-            </select>
-          </div>
-        </div>
-
-        {/* Paper Input & Action Bar */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1rem", paddingTop: "0.75rem", borderTop: "1px solid var(--border-color)", flexWrap: "wrap", gap: "0.75rem" }}>
-          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-            <button
-              type="button"
-              onClick={handleLoadSamplePaper}
-              className="btn btn-secondary"
-              style={{ fontSize: "0.8rem", whiteSpace: "nowrap" }}
-            >
-              Load Sample Response
-            </button>
-
-            <label className="btn btn-secondary" style={{ fontSize: "0.8rem", cursor: "pointer", textAlign: "center", whiteSpace: "nowrap" }}>
-              Upload Answer Sheet
-              <input
-                type="file"
-                accept=".pdf,.png,.jpg,.jpeg,.txt"
-                style={{ display: "none" }}
-                onChange={handleFileUpload}
-              />
-            </label>
-
-            <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginLeft: "0.5rem" }}>
-              {sheetFile ? (
-                <strong style={{ color: "var(--blue)" }}>File: {sheetFile.name}</strong>
-              ) : sheetText ? (
-                <strong style={{ color: "var(--green)" }}>Sample Answer Sheet (Ready)</strong>
-              ) : (
-                <span style={{ color: "var(--text-muted)" }}>No sheet selected</span>
-              )}
-            </span>
-          </div>
-
-          <button
-            onClick={handleRunEvaluation}
-            disabled={isEvaluating}
-            className="btn btn-primary"
-            style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem", padding: "0.55rem 1.25rem", background: "#0f172a" }}
+          {/* Search & Filters Bar */}
+          <div
+            style={{
+              background: "#ffffff",
+              border: "1px solid #e2e8f0",
+              borderRadius: "12px",
+              padding: "0.75rem 1rem",
+              marginBottom: "1.25rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: "0.75rem",
+              boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)"
+            }}
           >
-            {isEvaluating ? <RefreshCw className="spin" size={16} /> : <Sparkles size={16} style={{ color: "#38bdf8" }} />}
-            {isEvaluating ? "Strict Grading (temp: 0.0)..." : "Evaluate with Strict Rubric"}
-          </button>
-        </div>
-      </div>
-
-      {isEvaluating && (
-        <div className="card" style={{ textAlign: "center", padding: "2.5rem", marginBottom: "1.5rem" }}>
-          <RefreshCw className="spin" size={28} style={{ color: "var(--blue)", margin: "0 auto 1rem" }} />
-          <h3 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "0.4rem" }}>Evaluating Against Strict Rubric</h3>
-          <p style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>{evalProgressMessage}</p>
-        </div>
-      )}
-
-      {/* SCORECARD RESULTS & JSON VIEWER */}
-      {activeScorecard && !isEvaluating && (
-        <div>
-          {/* View Mode Switcher */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap", gap: "0.5rem" }}>
-            <div style={{ display: "flex", gap: "0.5rem" }}>
-              <button
-                onClick={() => setViewMode("scorecard")}
-                className={`btn ${viewMode === "scorecard" ? "btn-primary" : "btn-secondary"}`}
-                style={{ fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.4rem" }}
-              >
-                <FileText size={14} /> Scorecard & Breakdown
-              </button>
-              <button
-                onClick={() => setViewMode("rawJson")}
-                className={`btn ${viewMode === "rawJson" ? "btn-primary" : "btn-secondary"}`}
-                style={{ fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.4rem" }}
-              >
-                <Code size={14} /> Gemini Evaluation JSON (Raw)
-              </button>
-            </div>
-
-            {viewMode === "rawJson" && (
-              <button
-                onClick={handleCopyJson}
-                className="btn btn-secondary"
-                style={{ fontSize: "0.82rem", display: "flex", alignItems: "center", gap: "0.3rem" }}
-              >
-                {copiedJson ? <Check size={14} style={{ color: "var(--green)" }} /> : <Copy size={14} />}
-                {copiedJson ? "Copied!" : "Copy JSON"}
-              </button>
-            )}
-          </div>
-
-          {viewMode === "rawJson" ? (
-            <div className="card" style={{ padding: "1.5rem" }}>
-              <h3 style={{ fontSize: "1.1rem", fontWeight: 800, marginBottom: "0.5rem" }}>
-                Evaluation Scorecard JSON Schema
-              </h3>
-              <p style={{ fontSize: "0.82rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
-                Exact structured JSON response from Gemini API evaluation (temperature: 0.0)
-              </p>
-              <pre
-                style={{
-                  background: "#0f172a",
-                  color: "#38bdf8",
-                  padding: "1.25rem",
-                  borderRadius: "10px",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "0.82rem",
-                  lineHeight: 1.5,
-                  overflowX: "auto",
-                  maxHeight: "550px",
-                  border: "1px solid #1e293b"
-                }}
-              >
-                {JSON.stringify(activeScorecard, null, 2)}
-              </pre>
-            </div>
-          ) : (
-            <div>
-              {/* Header Scorecard Banner */}
-              <div className="scorecard-banner">
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.3rem" }}>
-                      <User size={18} style={{ color: "var(--blue)" }} />
-                      <h2 style={{ fontSize: "1.5rem", fontWeight: 800 }}>
-                        {activeScorecard.student_name}
-                      </h2>
-                      <span style={{ fontSize: "0.85rem", background: "var(--bg-secondary)", padding: "0.2rem 0.6rem", borderRadius: "6px", border: "1px solid var(--border-color)", fontWeight: 700 }}>
-                        Roll #{activeScorecard.roll_number}
-                      </span>
-                    </div>
-                    <p style={{ color: "var(--text-muted)", fontSize: "0.88rem" }}>
-                      Examination: <strong>{activeExam?.title || "Academic Examination"}</strong> • Evaluated on {new Date(activeScorecard.created_at).toLocaleString()}
-                    </p>
-                  </div>
-
-                  <div style={{ display: "flex", alignItems: "center", gap: "1.25rem" }}>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: "0.8rem", textTransform: "uppercase", fontWeight: 700, color: "var(--text-muted)" }}>
-                        Total Score
-                      </div>
-                      <div style={{ fontSize: "2.2rem", fontWeight: 800, lineHeight: 1.1, color: "var(--text-primary)" }}>
-                        {activeScorecard.total_score} <span style={{ fontSize: "1.2rem", color: "var(--text-muted)" }}>/ {activeScorecard.max_score}</span>
-                      </div>
-                      <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--blue)" }}>
-                        {activeScorecard.percentage}% Aggregate
-                      </div>
-                    </div>
-
-                    <div className="grade-pill-large grade-pill-a">
-                      {activeScorecard.grade}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Professor Feedback */}
-                {activeScorecard.teacher_feedback && (
-                  <div style={{ marginTop: "1.25rem", padding: "1rem", background: "var(--bg-secondary)", borderRadius: "10px", border: "1px solid var(--border-color)" }}>
-                    <div style={{ fontSize: "0.8rem", fontWeight: 700, textTransform: "uppercase", color: "var(--text-secondary)", marginBottom: "0.25rem" }}>
-                      Professor's Audit Feedback
-                    </div>
-                    <div style={{ fontSize: "0.9rem", color: "var(--text-primary)", lineHeight: 1.5 }}>
-                      {activeScorecard.teacher_feedback}
-                    </div>
-                  </div>
-                )}
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flex: 1, minWidth: "260px" }}>
+              <div style={{ position: "relative", width: "100%", maxWidth: "340px" }}>
+                <Search
+                  size={16}
+                  style={{ position: "absolute", left: "0.75rem", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }}
+                />
+                <input
+                  type="text"
+                  placeholder="Search enrolled students..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.5rem 0.75rem 0.5rem 2.25rem",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "0.85rem",
+                    outline: "none"
+                  }}
+                />
               </div>
 
-              {/* Granular Question Breakdown */}
-              <h3 style={{ fontSize: "1.25rem", fontWeight: 800, marginBottom: "1rem" }}>
-                Granular Question-by-Question Marking Breakdown
-              </h3>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
+                style={{
+                  padding: "0.5rem 0.75rem",
+                  borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                  fontSize: "0.85rem",
+                  background: "#ffffff",
+                  color: "#1e293b",
+                  fontWeight: 500
+                }}
+              >
+                <option value="all">Status: All</option>
+                <option value="evaluated">Status: Evaluated</option>
+                <option value="pending">Status: Pending</option>
+              </select>
+            </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                {activeScorecard.breakdown.map((item, idx) => {
-                  const matchedQ = activeExam?.questions.find((q) => q.q_no === item.q_no);
-                  return (
-                    <div key={idx} className="eval-breakdown-card">
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.75rem" }}>
-                        <div>
-                          <span style={{ fontSize: "1rem", fontWeight: 800, color: "var(--text-primary)" }}>
-                            {item.q_no}
-                          </span>
-                          {matchedQ && (
-                            <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginTop: "0.2rem" }}>
-                              {matchedQ.text}
-                            </p>
-                          )}
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+              <div style={{ fontSize: "0.82rem", color: "#64748b", fontWeight: 600 }}>
+                Showing {filteredStudents.length} of {students.length} students
+              </div>
+              {loading && <RefreshCw size={14} className="spin" style={{ color: "#0284c7" }} />}
+            </div>
+          </div>
+
+          {/* Vantis-Style Student Table */}
+          <div
+            style={{
+              background: "#ffffff",
+              border: "1px solid #e2e8f0",
+              borderRadius: "14px",
+              overflow: "hidden",
+              boxShadow: "0 1px 4px rgba(0, 0, 0, 0.04)"
+            }}
+          >
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                    <th style={{ padding: "0.85rem 1rem", width: "40px", textAlign: "center" }}>
+                      <input type="checkbox" style={{ cursor: "pointer", borderRadius: "4px" }} readOnly />
+                    </th>
+                    <th style={{ padding: "0.85rem 0.75rem", fontSize: "0.75rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", width: "45px" }}>
+                      #
+                    </th>
+                    <th style={{ padding: "0.85rem 1rem", fontSize: "0.75rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Student Name
+                    </th>
+                    <th style={{ padding: "0.85rem 1rem", fontSize: "0.75rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Roll Number
+                    </th>
+                    <th style={{ padding: "0.85rem 1rem", fontSize: "0.75rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Answer Sheet
+                    </th>
+                    <th style={{ padding: "0.85rem 1rem", fontSize: "0.75rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Score
+                    </th>
+                    <th style={{ padding: "0.85rem 1rem", fontSize: "0.75rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "right" }}>
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredStudents.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} style={{ padding: "3rem 1.5rem", textAlign: "center", color: "#64748b" }}>
+                        <div style={{ fontSize: "1rem", fontWeight: 700, color: "#0f172a", marginBottom: "0.25rem" }}>
+                          No Students Found for this Examination
                         </div>
+                        <p style={{ fontSize: "0.85rem", color: "#64748b", margin: 0, marginBottom: "1rem" }}>
+                          Enrolled students for this subject will automatically appear here.
+                        </p>
+                        <button
+                          onClick={() => onNavigate("students")}
+                          className="btn btn-primary"
+                          style={{ fontSize: "0.85rem", padding: "0.5rem 1rem" }}
+                        >
+                          + Enroll Students First
+                        </button>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredStudents.map((stud, idx) => {
+                      const evalRecord = evaluations[stud.id];
+                      const sheet = studentSheets[stud.id];
+                      const isEvaluatingThis = evaluatingStudentId === stud.id;
+                      const initials = stud.name
+                        .split(" ")
+                        .map((n) => n[0])
+                        .join("")
+                        .slice(0, 2)
+                        .toUpperCase();
 
-                        <div style={{ textAlign: "right", minWidth: "100px" }}>
-                          <div style={{ fontSize: "1.25rem", fontWeight: 800, color: item.awarded_marks >= item.max_marks * 0.9 ? "var(--green)" : item.awarded_marks >= item.max_marks * 0.5 ? "var(--amber)" : "var(--red)" }}>
-                            {item.awarded_marks} / {item.max_marks} pts
-                          </div>
-                          <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
-                            Professor Marks
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Rubric Checks Table */}
-                      {item.rubric_checks && item.rubric_checks.length > 0 && (
-                        <div style={{ background: "var(--bg-secondary)", borderRadius: "8px", padding: "0.75rem", marginBottom: "0.75rem" }}>
-                          <div style={{ fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "0.4rem" }}>
-                            Criteria Checks Verified
-                          </div>
-                          <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-                            {item.rubric_checks.map((rc, rIdx) => (
-                              <div key={rIdx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.82rem" }}>
-                                <span>{rc.criterion}</span>
-                                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                                  <span style={{ fontWeight: 600 }}>{rc.awarded}/{rc.max}</span>
-                                  <span className={`rubric-status-pill ${rc.status === "MET" ? "status-met" : rc.status === "PARTIAL" ? "status-partial" : "status-unmet"}`}>
-                                    {rc.status}
+                      return (
+                        <tr
+                          key={stud.id}
+                          style={{
+                            borderBottom: "1px solid #f1f5f9",
+                            transition: "background 0.15s ease"
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f8fafc")}
+                          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ffffff")}
+                        >
+                          <td style={{ padding: "0.85rem 1rem", textAlign: "center" }}>
+                            <input type="checkbox" style={{ cursor: "pointer", borderRadius: "4px" }} />
+                          </td>
+                          <td style={{ padding: "0.85rem 0.75rem", fontSize: "0.85rem", color: "#94a3b8", fontWeight: 600 }}>
+                            {idx + 1}
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                              <div
+                                style={{
+                                  width: "36px",
+                                  height: "36px",
+                                  borderRadius: "8px",
+                                  background: "#0f172a",
+                                  color: "#ffffff",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontSize: "0.8rem",
+                                  fontWeight: 700
+                                }}
+                              >
+                                {initials}
+                              </div>
+                              <div>
+                                <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.9rem" }}>
+                                  {stud.name}
+                                </div>
+                                <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                                  Section {stud.section || "A"}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem" }}>
+                            <span
+                              style={{
+                                fontFamily: "monospace",
+                                fontWeight: 700,
+                                color: "#1e293b",
+                                fontSize: "0.85rem",
+                                background: "#f1f5f9",
+                                padding: "0.2rem 0.5rem",
+                                borderRadius: "6px"
+                              }}
+                            >
+                              {stud.roll_number}
+                            </span>
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem" }}>
+                            {sheet ? (
+                              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                                <span
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "0.3rem",
+                                    background: "#f0fdf4",
+                                    color: "#166534",
+                                    padding: "0.25rem 0.6rem",
+                                    borderRadius: "6px",
+                                    fontSize: "0.78rem",
+                                    fontWeight: 600
+                                  }}
+                                >
+                                  <CheckCircle2 size={13} />
+                                  {sheet.filename}
+                                </span>
+                                <label
+                                  style={{
+                                    fontSize: "0.75rem",
+                                    color: "#0284c7",
+                                    cursor: "pointer",
+                                    textDecoration: "underline"
+                                  }}
+                                >
+                                  Change
+                                  <input
+                                    type="file"
+                                    accept=".pdf,.png,.jpg,.jpeg,.txt"
+                                    onChange={(e) => {
+                                      if (e.target.files?.[0]) {
+                                        handleStudentFileUpload(stud.id, e.target.files[0]);
+                                      }
+                                    }}
+                                    style={{ display: "none" }}
+                                  />
+                                </label>
+                              </div>
+                            ) : (
+                              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                                <label
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "0.35rem",
+                                    padding: "0.3rem 0.65rem",
+                                    background: "#f8fafc",
+                                    border: "1px dashed #cbd5e1",
+                                    borderRadius: "6px",
+                                    color: "#475569",
+                                    fontSize: "0.78rem",
+                                    fontWeight: 600,
+                                    cursor: "pointer"
+                                  }}
+                                >
+                                  <UploadCloud size={13} />
+                                  Upload Sheet
+                                  <input
+                                    type="file"
+                                    accept=".pdf,.png,.jpg,.jpeg,.txt"
+                                    onChange={(e) => {
+                                      if (e.target.files?.[0]) {
+                                        handleStudentFileUpload(stud.id, e.target.files[0]);
+                                      }
+                                    }}
+                                    style={{ display: "none" }}
+                                  />
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAttachSamplePaper(stud.id)}
+                                  style={{
+                                    background: "transparent",
+                                    border: "none",
+                                    color: "#0369a1",
+                                    fontSize: "0.75rem",
+                                    fontWeight: 600,
+                                    cursor: "pointer",
+                                    textDecoration: "underline"
+                                  }}
+                                >
+                                  Use Sample
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem" }}>
+                            {evalRecord ? (
+                              <div>
+                                <div style={{ display: "flex", alignItems: "baseline", gap: "0.35rem" }}>
+                                  <span style={{ fontSize: "1rem", fontWeight: 800, color: "#0f172a" }}>
+                                    {evalRecord.total_score}
+                                  </span>
+                                  <span style={{ fontSize: "0.8rem", color: "#64748b", fontWeight: 600 }}>
+                                    / {evalRecord.max_score}
+                                  </span>
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginTop: "0.15rem" }}>
+                                  <span
+                                    style={{
+                                      fontSize: "0.72rem",
+                                      fontWeight: 700,
+                                      background: "#f0fdf4",
+                                      color: "#16a34a",
+                                      padding: "0.1rem 0.45rem",
+                                      borderRadius: "4px"
+                                    }}
+                                  >
+                                    {evalRecord.percentage}%
+                                  </span>
+                                  <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                                    {evalRecord.grade}
                                   </span>
                                 </div>
                               </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                            ) : (
+                              <span style={{ fontSize: "0.82rem", color: "#94a3b8", fontWeight: 500 }}>
+                                — / {activeExam?.max_marks || 60.0}
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem", textAlign: "right" }}>
+                            {evalRecord ? (
+                              <button
+                                onClick={() => setActiveScorecard(evalRecord)}
+                                style={{
+                                  padding: "0.4rem 0.85rem",
+                                  background: "#f0f9ff",
+                                  border: "1px solid #bae6fd",
+                                  borderRadius: "6px",
+                                  color: "#0284c7",
+                                  fontSize: "0.8rem",
+                                  fontWeight: 600,
+                                  cursor: "pointer"
+                                }}
+                              >
+                                View Scorecard
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleEvaluateSingle(stud)}
+                                disabled={isEvaluatingThis}
+                                className="btn btn-primary"
+                                style={{ padding: "0.4rem 0.85rem", fontSize: "0.8rem", borderRadius: "6px" }}
+                              >
+                                {isEvaluatingThis ? "Grading..." : "Evaluate"}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
-                      {/* Evidence Quote */}
-                      {item.evidence_quote && (
-                        <div className="evidence-quote-box">
-                          <div style={{ fontWeight: 700, fontSize: "0.75rem", textTransform: "uppercase", marginBottom: "0.15rem", color: "var(--blue)" }}>
-                            Proof Extracted from Student Answer Sheet:
-                          </div>
-                          "{item.evidence_quote}"
-                        </div>
-                      )}
+      {/* Scorecard Detailed Rubric Modal */}
+      {activeScorecard && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(15, 23, 42, 0.65)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1050,
+            padding: "1rem"
+          }}
+        >
+          <div
+            style={{
+              background: "#ffffff",
+              borderRadius: "16px",
+              padding: "2rem",
+              width: "100%",
+              maxWidth: "800px",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)"
+            }}
+          >
+            {/* Modal Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem", borderBottom: "1px solid #e2e8f0", paddingBottom: "1rem" }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                  <h2 style={{ fontSize: "1.35rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
+                    {activeScorecard.student_name}
+                  </h2>
+                  <span
+                    style={{
+                      fontFamily: "monospace",
+                      background: "#f1f5f9",
+                      padding: "0.2rem 0.5rem",
+                      borderRadius: "6px",
+                      fontSize: "0.82rem",
+                      fontWeight: 700,
+                      color: "#334155"
+                    }}
+                  >
+                    {activeScorecard.roll_number}
+                  </span>
+                </div>
+                <p style={{ color: "#64748b", fontSize: "0.85rem", marginTop: "0.25rem", margin: 0 }}>
+                  Evaluated at zero temperature against syllabus criteria
+                </p>
+              </div>
 
-                      {/* Deduction Reason */}
-                      {item.deduction_reason && item.deduction_reason !== "None. Full credit." && (
-                        <div className="deduction-box">
-                          <strong>Deduction Explanation:</strong> {item.deduction_reason}
-                        </div>
-                      )}
+              <button
+                type="button"
+                onClick={() => setActiveScorecard(null)}
+                style={{ background: "transparent", border: "none", color: "#64748b", cursor: "pointer" }}
+              >
+                <X size={20} />
+              </button>
+            </div>
 
-                      {/* Feedback */}
-                      {item.feedback && (
-                        <div style={{ fontSize: "0.82rem", color: "var(--text-secondary)", marginTop: "0.5rem" }}>
-                          💡 <em>{item.feedback}</em>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+            {/* Scorecard Hero Stats */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+                gap: "1rem",
+                marginBottom: "1.5rem"
+              }}
+            >
+              <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "1rem" }}>
+                <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase" }}>
+                  Total Marks
+                </span>
+                <div style={{ fontSize: "1.75rem", fontWeight: 800, color: "#0f172a", marginTop: "0.2rem" }}>
+                  {activeScorecard.total_score}{" "}
+                  <span style={{ fontSize: "1rem", color: "#94a3b8", fontWeight: 600 }}>
+                    / {activeScorecard.max_score}
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "1rem" }}>
+                <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase" }}>
+                  Percentage
+                </span>
+                <div style={{ fontSize: "1.75rem", fontWeight: 800, color: "#0284c7", marginTop: "0.2rem" }}>
+                  {activeScorecard.percentage}%
+                </div>
+              </div>
+
+              <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "1rem" }}>
+                <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase" }}>
+                  Letter Grade
+                </span>
+                <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#16a34a", marginTop: "0.4rem" }}>
+                  {activeScorecard.grade}
+                </div>
               </div>
             </div>
-          )}
+
+            {/* Teacher Feedback */}
+            {activeScorecard.teacher_feedback && (
+              <div
+                style={{
+                  background: "#f0fdf4",
+                  border: "1px solid #bbf7d0",
+                  borderRadius: "10px",
+                  padding: "1rem",
+                  marginBottom: "1.5rem"
+                }}
+              >
+                <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#166534", textTransform: "uppercase", marginBottom: "0.35rem" }}>
+                  Overall Academic Feedback
+                </div>
+                <p style={{ color: "#1e293b", fontSize: "0.88rem", margin: 0, lineHeight: 1.5 }}>
+                  {activeScorecard.teacher_feedback}
+                </p>
+              </div>
+            )}
+
+            {/* Granular Breakdown */}
+            <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#0f172a", marginBottom: "1rem" }}>
+              Question Breakdown & Rubrics ({activeScorecard.breakdown.length})
+            </h3>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              {activeScorecard.breakdown.map((item, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "10px",
+                    padding: "1rem",
+                    background: "#ffffff"
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <span style={{ fontWeight: 800, fontSize: "0.95rem", color: "#0f172a" }}>
+                        {item.q_no}
+                      </span>
+                    </div>
+                    <span
+                      style={{
+                        fontWeight: 800,
+                        fontSize: "0.9rem",
+                        color: item.awarded_marks === item.max_marks ? "#16a34a" : item.awarded_marks > 0 ? "#0284c7" : "#ef4444"
+                      }}
+                    >
+                      {item.awarded_marks} / {item.max_marks} Marks
+                    </span>
+                  </div>
+
+                  {/* Rubric checks */}
+                  {item.rubric_checks && item.rubric_checks.length > 0 && (
+                    <div style={{ marginTop: "0.5rem", display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+                      {item.rubric_checks.map((rc, rIdx) => (
+                        <div
+                          key={rIdx}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            fontSize: "0.8rem",
+                            background: "#f8fafc",
+                            padding: "0.35rem 0.6rem",
+                            borderRadius: "6px"
+                          }}
+                        >
+                          <span style={{ color: "#334155" }}>{rc.criterion}</span>
+                          <span
+                            style={{
+                              fontWeight: 700,
+                              fontSize: "0.75rem",
+                              color: rc.status === "MET" ? "#16a34a" : rc.status === "PARTIAL" ? "#d97706" : "#dc2626"
+                            }}
+                          >
+                            {rc.awarded} / {rc.max} ({rc.status})
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Evidence quote */}
+                  {item.evidence_quote && (
+                    <div style={{ marginTop: "0.5rem", fontSize: "0.8rem", color: "#475569", fontStyle: "italic", background: "#f8fafc", padding: "0.4rem 0.6rem", borderRadius: "6px" }}>
+                      "{item.evidence_quote}"
+                    </div>
+                  )}
+
+                  {/* Deduction Reason */}
+                  {item.deduction_reason && item.deduction_reason !== "None" && item.deduction_reason !== "None. Full credit." && (
+                    <div style={{ marginTop: "0.45rem", fontSize: "0.78rem", color: "#b91c1c", display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                      <AlertCircle size={13} />
+                      {item.deduction_reason}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginTop: "1.5rem", display: "flex", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => setActiveScorecard(null)}
+                className="btn btn-primary"
+                style={{ padding: "0.55rem 1.25rem", borderRadius: "8px", fontSize: "0.88rem" }}
+              >
+                Close Scorecard
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

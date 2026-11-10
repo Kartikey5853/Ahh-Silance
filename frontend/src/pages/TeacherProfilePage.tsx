@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { academicApi } from "../api/academicApi";
 import type { UserProfile } from "../types/academic";
 import {
-  Key,
   Save,
   GraduationCap
 } from "lucide-react";
@@ -17,7 +16,6 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({ onLogout
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("Professor");
   const [department, setDepartment] = useState("");
-  const [customApiKey, setCustomApiKey] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
 
@@ -43,14 +41,10 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({ onLogout
         role: role.trim(),
         department: department.trim()
       };
-      if (customApiKey.trim()) {
-        payload.gemini_api_key = customApiKey.trim();
-      }
 
       await academicApi.updateProfile(payload);
       const updated = await academicApi.getProfile();
       setProfile(updated);
-      setCustomApiKey("");
       setSavedMessage("Profile updated successfully!");
       setTimeout(() => setSavedMessage(null), 3000);
     } catch (err) {
@@ -163,24 +157,6 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({ onLogout
                 style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
               />
             </div>
-          </div>
-
-          {/* Optional Gemini API Key Override */}
-          <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "1.25rem", marginBottom: "1.5rem" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", marginBottom: "0.35rem" }}>
-              <Key size={16} style={{ color: "#2563eb" }} />
-              <strong style={{ fontSize: "0.9rem", color: "#0f172a" }}>Gemini API Key (Optional)</strong>
-            </div>
-            <p style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: "0.75rem" }}>
-              Status: <strong>{profile?.has_custom_api_key ? `Configured (${profile.masked_api_key})` : "Using server environment key"}</strong>.
-            </p>
-            <input
-              type="password"
-              placeholder="Paste custom GEMINI_API_KEY if desired..."
-              value={customApiKey}
-              onChange={(e) => setCustomApiKey(e.target.value)}
-              style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem", fontFamily: "var(--font-mono)" }}
-            />
           </div>
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>

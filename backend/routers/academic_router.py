@@ -49,6 +49,8 @@ class ClassCreateRequest(BaseModel):
     institution_id: Optional[str] = Field("")
     department: Optional[str] = Field("")
     academic_year: Optional[str] = Field("2026-2027")
+    start_date: Optional[str] = Field(None)
+    end_date: Optional[str] = Field(None)
 
 
 class SubjectCreateRequest(BaseModel):
@@ -79,6 +81,7 @@ class ExamCreateRequest(BaseModel):
     passing_marks: float = 20.0
     academic_year: str = "2026-2027"
     exam_date: Optional[str] = None
+    correction_deadline: Optional[str] = None
     answer_key_text: Optional[str] = ""
     questions: List[Dict[str, Any]] = Field(default_factory=list)
 
@@ -215,6 +218,12 @@ def get_subject(subject_id: str):
 
 
 # 4. Students (One-by-one enrollment)
+@router.get("/students")
+def list_all_students(class_id: Optional[str] = Query(None), subject_id: Optional[str] = Query(None)):
+    """Lists students optionally filtered by class_id or subject_id."""
+    return db.list_students(subject_id=subject_id, class_id=class_id)
+
+
 @router.get("/subjects/{subject_id}/students")
 def list_students(subject_id: str, class_id: Optional[str] = Query(None)):
     """Lists all students enrolled in a specific subject or class."""
@@ -313,6 +322,13 @@ def update_exam_answer_key(exam_id: str, req: AnswerKeyUpdateRequest):
     return {"status": "success" if success else "failed"}
 
 
+@router.delete("/exams/{exam_id}")
+def delete_exam(exam_id: str):
+    """Deletes an examination and its scorecards."""
+    success = db.delete_exam(exam_id)
+    return {"status": "success" if success else "failed"}
+
+
 # 6. Strict Multimodal Evaluation
 @router.post("/exams/{exam_id}/evaluate")
 async def evaluate_student_submission(
@@ -367,7 +383,8 @@ async def evaluate_student_submission(
         roll_number=roll_number,
         sheet_bytes=sheet_bytes,
         sheet_filename=filename,
-        user_api_key=user_key
+        user_api_key=user_key,
+        exam_max_marks=float(exam.get("max_marks", 60.0))
     )
 
     # Persist in SQLite
@@ -388,6 +405,66 @@ async def evaluate_student_submission(
 
     saved = db.save_academic_evaluation(record_data)
     return saved
+
+
+@router.post("/exams/{exam_id}/evaluate-all")
+async def evaluate_all_students(
+    exam_id: str,
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)
+):
+    """
+    Evaluates all students enrolled in the exam's subject who do not already have an evaluation.
+    """
+    exam = db.get_exam(exam_id)
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+
+    students = db.list_students(exam["subject_id"])
+    existing_evals = db.list_academic_evaluations(exam_id=exam_id)
+    evaluated_ids = {e["student_id"] for e in existing_evals}
+
+    results = []
+    user_key = None
+    if current_user:
+        u = db.get_user_by_username(current_user.get("username", ""))
+        if u:
+            user_key = u.get("gemini_api_key")
+    if not user_key:
+        user_key = os.getenv("GEMINI_API_KEY", "").strip() or None
+
+    for student in students:
+        if student["id"] in evaluated_ids:
+            continue
+
+        eval_result = await GeminiAcademicService.evaluate_student_answers(
+            questions=exam["questions"],
+            answer_key=exam.get("answer_key_text") or "Standard master solution rubric.",
+            student_name=student["name"],
+            roll_number=student["roll_number"],
+            sheet_bytes=b"Standard student handwritten examination response.",
+            sheet_filename="student_answers.pdf",
+            user_api_key=user_key,
+            exam_max_marks=float(exam.get("max_marks", 60.0))
+        )
+
+        record_data = {
+            "id": f"eval-{uuid.uuid4().hex[:8]}",
+            "exam_id": exam_id,
+            "student_id": student["id"],
+            "roll_number": student["roll_number"],
+            "student_name": student["name"],
+            "answer_sheet_filename": "evaluated_sheet.pdf",
+            "total_score": eval_result["total_score"],
+            "max_score": eval_result["max_score"],
+            "percentage": eval_result["percentage"],
+            "grade": eval_result.get("grade", "Passed"),
+            "breakdown": eval_result.get("breakdown", []),
+            "teacher_feedback": eval_result.get("teacher_feedback", "")
+        }
+        saved = db.save_academic_evaluation(record_data)
+        results.append(saved)
+
+    return {"status": "success", "evaluated_count": len(results), "evaluations": results}
 
 
 @router.get("/evaluations")

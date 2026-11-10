@@ -11,6 +11,7 @@ import sqlite3
 import os
 import json
 import time
+import datetime
 import uuid
 from typing import Dict, Optional, List, Any
 import bcrypt
@@ -74,6 +75,8 @@ def init_sqlite_db() -> None:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        _add_column_if_not_exists(cursor, "classes", "start_date", "TEXT DEFAULT ''")
+        _add_column_if_not_exists(cursor, "classes", "end_date", "TEXT DEFAULT ''")
 
         # 3. Subjects Table
         cursor.execute("""
@@ -124,6 +127,7 @@ def init_sqlite_db() -> None:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        _add_column_if_not_exists(cursor, "exams", "correction_deadline", "TEXT DEFAULT ''")
 
         # 6. Academic Evaluations Table (Strict evaluated student papers)
         cursor.execute("""
@@ -288,7 +292,7 @@ class SQLiteDatabase:
     # --- Class operations (Organization -> Class -> Subject) ---
 
     def list_classes(self, institution_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        query = "SELECT id, institution_id, name, code, department, academic_year, created_at FROM classes"
+        query = "SELECT id, institution_id, name, code, department, academic_year, start_date, end_date, created_at FROM classes"
         params: List[Any] = []
         if institution_id:
             query += " WHERE institution_id = ?"
@@ -311,7 +315,7 @@ class SQLiteDatabase:
     def get_class(self, class_id: str) -> Optional[Dict[str, Any]]:
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT id, institution_id, name, code, department, academic_year, created_at FROM classes WHERE id = ?", (class_id,))
+            cursor.execute("SELECT id, institution_id, name, code, department, academic_year, start_date, end_date, created_at FROM classes WHERE id = ?", (class_id,))
             row = cursor.fetchone()
             if row:
                 d = dict(row)
@@ -320,22 +324,31 @@ class SQLiteDatabase:
                 cursor.execute("SELECT COUNT(*) FROM students WHERE class_id = ?", (d["id"],))
                 d["students_count"] = cursor.fetchone()[0]
                 return d
-        return None
+            return None
 
     def create_class(self, data: Dict[str, Any]) -> Dict[str, Any]:
         class_id = data.get("id") or f"class-{uuid.uuid4().hex[:8]}"
+        today = datetime.date.today()
+        default_start = today.strftime("%Y-%m-%d")
+        default_end = (today + datetime.timedelta(days=182)).strftime("%Y-%m-%d")
+
+        start_date = data.get("start_date") or default_start
+        end_date = data.get("end_date") or default_end
+
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO classes (id, institution_id, name, code, department, academic_year)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO classes (id, institution_id, name, code, department, academic_year, start_date, end_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 class_id,
                 data.get("institution_id", ""),
                 data.get("name", "New Class"),
                 data.get("code", ""),
                 data.get("department", "Computer Science"),
-                data.get("academic_year", "2026-2027")
+                data.get("academic_year", "2026-2027"),
+                start_date,
+                end_date
             ))
             conn.commit()
         return self.get_class(class_id) # type: ignore
@@ -461,7 +474,7 @@ class SQLiteDatabase:
     # --- Exam operations ---
 
     def list_exams(self, subject_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        query = "SELECT id, subject_id, title, exam_type, max_marks, passing_marks, academic_year, exam_date, question_paper_filename, answer_key_text, questions_json, created_at FROM exams"
+        query = "SELECT id, subject_id, title, exam_type, max_marks, passing_marks, academic_year, exam_date, correction_deadline, question_paper_filename, answer_key_text, questions_json, created_at FROM exams"
         params: List[Any] = []
         if subject_id:
             query += " WHERE subject_id = ?"
@@ -486,7 +499,7 @@ class SQLiteDatabase:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT id, subject_id, title, exam_type, max_marks, passing_marks, academic_year, exam_date, question_paper_filename, answer_key_text, questions_json, created_at
+                SELECT id, subject_id, title, exam_type, max_marks, passing_marks, academic_year, exam_date, correction_deadline, question_paper_filename, answer_key_text, questions_json, created_at
                 FROM exams WHERE id = ?
             """, (exam_id,))
             row = cursor.fetchone()
@@ -501,13 +514,24 @@ class SQLiteDatabase:
     def create_exam(self, data: Dict[str, Any]) -> Dict[str, Any]:
         exam_id = data.get("id") or f"exam-{uuid.uuid4().hex[:8]}"
         questions = data.get("questions", [])
+        exam_date = data.get("exam_date") or time.strftime("%Y-%m-%d")
+        
+        # Default correction deadline: 10 days after exam date
+        correction_deadline = data.get("correction_deadline")
+        if not correction_deadline:
+            try:
+                dt = datetime.datetime.strptime(exam_date, "%Y-%m-%d")
+                correction_deadline = (dt + datetime.timedelta(days=10)).strftime("%Y-%m-%d")
+            except Exception:
+                correction_deadline = time.strftime("%Y-%m-%d")
+
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO exams (
                     id, subject_id, title, exam_type, max_marks, passing_marks,
-                    academic_year, exam_date, question_paper_filename, answer_key_text, questions_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    academic_year, exam_date, correction_deadline, question_paper_filename, answer_key_text, questions_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 exam_id,
                 data.get("subject_id", "subj-nlp-101"),
@@ -516,13 +540,22 @@ class SQLiteDatabase:
                 float(data.get("max_marks", 50.0)),
                 float(data.get("passing_marks", 20.0)),
                 data.get("academic_year", "2026-2027"),
-                data.get("exam_date", time.strftime("%Y-%m-%d")),
+                exam_date,
+                correction_deadline,
                 data.get("question_paper_filename", ""),
                 data.get("answer_key_text", ""),
                 json.dumps(questions)
             ))
             conn.commit()
         return self.get_exam(exam_id) # type: ignore
+
+    def delete_exam(self, exam_id: str) -> bool:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM exams WHERE id = ?", (exam_id,))
+            cursor.execute("DELETE FROM academic_evaluations WHERE exam_id = ?", (exam_id,))
+            conn.commit()
+            return cursor.rowcount > 0
 
     def update_exam_questions(self, exam_id: str, questions: List[Dict[str, Any]], max_marks: Optional[float] = None) -> bool:
         with self.get_connection() as conn:

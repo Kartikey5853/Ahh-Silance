@@ -327,7 +327,8 @@ class GeminiAcademicService:
         roll_number: str,
         sheet_bytes: bytes,
         sheet_filename: str,
-        user_api_key: Optional[str] = None
+        user_api_key: Optional[str] = None,
+        exam_max_marks: Optional[float] = None
     ) -> Dict[str, Any]:
         """
         Executes a strict evaluation prompt using Gemini API (or structured offline evaluator).
@@ -338,20 +339,23 @@ class GeminiAcademicService:
         client = get_gemini_client(user_api_key)
         sheet_text = extract_text_from_file_bytes(sheet_bytes, sheet_filename)
 
-        # Calculate actual achievable max marks considering OR choice groups
-        groups_seen = set()
-        max_total_marks = 0.0
-        for q in questions:
-            og = q.get("or_group")
-            m = float(q.get("marks", 10.0))
-            if og:
-                if og not in groups_seen:
-                    groups_seen.add(og)
+        # Calculate actual achievable max marks considering OR choice groups or explicit exam_max_marks
+        if exam_max_marks is not None and exam_max_marks > 0:
+            max_total_marks = float(exam_max_marks)
+        else:
+            groups_seen = set()
+            max_total_marks = 0.0
+            for q in questions:
+                og = q.get("or_group")
+                m = float(q.get("marks", 10.0))
+                if og:
+                    if og not in groups_seen:
+                        groups_seen.add(og)
+                        max_total_marks += m
+                else:
                     max_total_marks += m
-            else:
-                max_total_marks += m
-        if max_total_marks <= 0:
-            max_total_marks = 60.0
+            if max_total_marks <= 0:
+                max_total_marks = 60.0
 
         if client:
             try:
@@ -432,9 +436,11 @@ class GeminiAcademicService:
 
                         if response.text:
                             res_data = clean_json_response(response.text)
-                            if "breakdown" in res_data and "total_score" in res_data:
-                                res_data["max_score"] = max_total_marks
-                                res_data["percentage"] = round((res_data["total_score"] / max_total_marks) * 100, 1)
+                            if "breakdown" in res_data:
+                                sum_awarded = sum(float(item.get("awarded_marks", 0.0)) for item in res_data["breakdown"])
+                                res_data["total_score"] = round(sum_awarded, 1)
+                                res_data["max_score"] = round(max_total_marks, 1)
+                                res_data["percentage"] = round((res_data["total_score"] / max_total_marks) * 100, 1) if max_total_marks > 0 else 0.0
                                 return res_data
                     except Exception as model_err:
                         logger.warning(f"Evaluation model {model_name} failed: {model_err}")
@@ -561,28 +567,5 @@ class GeminiAcademicService:
             "percentage": percentage,
             "grade": grade,
             "teacher_feedback": f"Academic examination evaluation completed for {student_name} ({roll_number}). Total score: {round(total_awarded, 1)}/{round(max_total_marks, 1)} ({percentage}%). Evaluated with strict zero-temperature criteria and length cap rules.",
-            "breakdown": breakdown
-        }
-
-        percentage = round((total_awarded / max_total_marks) * 100, 1)
-        if percentage >= 90:
-            grade = "A+ (Outstanding)"
-        elif percentage >= 80:
-            grade = "A (Excellent)"
-        elif percentage >= 70:
-            grade = "B+ (Very Good)"
-        elif percentage >= 60:
-            grade = "B (Good)"
-        elif percentage >= 50:
-            grade = "C (Pass)"
-        else:
-            grade = "F (Fail)"
-
-        return {
-            "total_score": round(total_awarded, 1),
-            "max_score": round(max_total_marks, 1),
-            "percentage": percentage,
-            "grade": grade,
-            "teacher_feedback": f"Strong submission by {student_name} ({roll_number}). Conceptually rigorous with clear analytical derivations and structured reasoning across all rubric criteria.",
             "breakdown": breakdown
         }
