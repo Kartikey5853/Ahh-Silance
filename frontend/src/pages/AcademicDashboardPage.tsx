@@ -71,6 +71,10 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
   const [subjSem, setSubjSem] = useState("Sem 6");
   const [subjGrade, setSubjGrade] = useState("Class 12");
   const [subjJeeTarget, setSubjJeeTarget] = useState("Physics");
+  const [subjGradingSystem, setSubjGradingSystem] = useState("10-Point CGPA Scale (O, A+, A, B+, B, C, P, F)");
+  const [subjSplit, setSubjSplit] = useState("80% Theory + 20% Internal Assessment");
+  const [subjBoardOrProgram, setSubjBoardOrProgram] = useState("B.Tech Computer Science");
+  const [subjLtpHours, setSubjLtpHours] = useState("3-1-0");
 
   const loadHierarchy = async () => {
     try {
@@ -238,8 +242,12 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
         class_id: selectedClassId,
         institution_type: currentInstType,
         semester_or_grade: currentInstType === "college" ? subjSem : currentInstType === "school" ? subjGrade : subjJeeTarget,
-        credits: currentInstType === "college" ? Number(subjCredits) : 4,
+        credits: currentInstType === "college" ? Number(subjCredits) : 0,
         academic_year: classYear,
+        grading_system: subjGradingSystem,
+        theory_practical_split: currentInstType === "school" ? subjSplit : undefined,
+        board_or_program: subjBoardOrProgram,
+        ltp_hours: currentInstType === "college" ? subjLtpHours : undefined,
         chapters: [
           "1. Foundational Core Principles",
           "2. Theoretical Modeling & Formulations",
@@ -907,31 +915,165 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
                 />
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: currentOrg?.type === "college" ? "1fr 1fr 1fr" : "1fr 1fr", gap: "0.75rem", marginBottom: "1.5rem" }}>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                    Subject Code
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="NLP-701"
-                    value={subjCode}
-                    onChange={(e) => setSubjCode(e.target.value)}
-                    style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
-                  />
-                </div>
-
-                {currentOrg?.type === "college" ? (
-                  <>
+              {/* Dynamic Academic Details */}
+              {currentOrg?.type === "school" ? (
+                <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "8px", border: "1px solid #e2e8f0", marginBottom: "1.25rem" }}>
+                  <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#0369a1", marginBottom: "0.6rem" }}>
+                    School Curriculum & Evaluation (No Credits)
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "0.75rem" }}>
                     <div>
-                      <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
+                        Subject Code
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. SCI-10"
+                        value={subjCode}
+                        onChange={(e) => setSubjCode(e.target.value)}
+                        style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
+                        Grade Level / Term
+                      </label>
+                      <input
+                        type="text"
+                        value={subjGrade}
+                        onChange={(e) => setSubjGrade(e.target.value)}
+                        placeholder="e.g. Class 10 - Term 1"
+                        style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
+                        Grading Scale
+                      </label>
+                      <select
+                        value={subjGradingSystem}
+                        onChange={(e) => setSubjGradingSystem(e.target.value)}
+                        style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem", background: "#ffffff" }}
+                      >
+                        <option value="CBSE 9-Point Scale (A1 to E)">CBSE 9-Point Scale (A1 to E)</option>
+                        <option value="ICSE Percentage Scale (1-100)">ICSE Percentage Scale (1-100)</option>
+                        <option value="State Board Grading (A+, A, B, C)">State Board Grading (A+, A, B, C)</option>
+                        <option value="Cambridge Assessment (A* to G)">Cambridge Assessment (A* to G)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
+                        Theory vs Practical Split
+                      </label>
+                      <select
+                        value={subjSplit}
+                        onChange={(e) => setSubjSplit(e.target.value)}
+                        style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem", background: "#ffffff" }}
+                      >
+                        <option value="80% Theory + 20% Internal Assessment">80% Theory + 20% Internal Assessment</option>
+                        <option value="70% Theory + 30% Practical Assessment">70% Theory + 30% Practical Assessment</option>
+                        <option value="100% Theory">100% Theory Examination</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              ) : currentOrg?.type === "competitive" ? (
+                <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "8px", border: "1px solid #e2e8f0", marginBottom: "1.25rem" }}>
+                  <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#0369a1", marginBottom: "0.6rem" }}>
+                    Competitive & JEE Marking Framework (No Credits)
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "0.75rem" }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
+                        Subject Code
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. JEE-PHY"
+                        value={subjCode}
+                        onChange={(e) => setSubjCode(e.target.value)}
+                        style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
+                        Discipline
+                      </label>
+                      <select
+                        value={subjJeeTarget}
+                        onChange={(e) => setSubjJeeTarget(e.target.value)}
+                        style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#ffffff" }}
+                      >
+                        <option value="Physics">Physics</option>
+                        <option value="Chemistry">Chemistry</option>
+                        <option value="Mathematics">Mathematics</option>
+                        <option value="Biology">Biology</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
+                        Target Exam
+                      </label>
+                      <select
+                        value={subjBoardOrProgram}
+                        onChange={(e) => setSubjBoardOrProgram(e.target.value)}
+                        style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem", background: "#ffffff" }}
+                      >
+                        <option value="JEE Main & Advanced">JEE Main & Advanced</option>
+                        <option value="NEET-UG">NEET-UG</option>
+                        <option value="BITSAT">BITSAT</option>
+                        <option value="Foundation & Olympiads">Foundation & Olympiads</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
+                        Marking Pattern
+                      </label>
+                      <select
+                        value={subjGradingSystem}
+                        onChange={(e) => setSubjGradingSystem(e.target.value)}
+                        style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem", background: "#ffffff" }}
+                      >
+                        <option value="+4 / -1 Negative Marking Scheme">+4 / -1 Negative Marking Scheme</option>
+                        <option value="+3 / -1 Marking Scheme">+3 / -1 Marking Scheme</option>
+                        <option value="Numerical (+4 / 0) No Negative">Numerical (+4 / 0) No Negative</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "8px", border: "1px solid #e2e8f0", marginBottom: "1.25rem" }}>
+                  <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#0369a1", marginBottom: "0.6rem" }}>
+                    College & University Framework (Credits & CGPA)
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem", marginBottom: "0.75rem" }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
+                        Subject Code
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="NLP-701"
+                        value={subjCode}
+                        onChange={(e) => setSubjCode(e.target.value)}
+                        style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
                         Semester
                       </label>
                       <select
                         value={subjSem}
                         onChange={(e) => setSubjSem(e.target.value)}
-                        style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", background: "#ffffff" }}
+                        style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", background: "#ffffff", fontSize: "0.85rem" }}
                       >
                         {["Sem 1", "Sem 2", "Sem 3", "Sem 4", "Sem 5", "Sem 6", "Sem 7", "Sem 8"].map((s) => (
                           <option key={s} value={s}>{s}</option>
@@ -939,7 +1081,7 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
                       </select>
                     </div>
                     <div>
-                      <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
                         Credits
                       </label>
                       <input
@@ -948,40 +1090,40 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
                         max={8}
                         value={subjCredits}
                         onChange={(e) => setSubjCredits(Number(e.target.value))}
-                        style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
+                        style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
                       />
                     </div>
-                  </>
-                ) : currentOrg?.type === "school" ? (
-                  <div>
-                    <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                      Grade Level
-                    </label>
-                    <input
-                      type="text"
-                      value={subjGrade}
-                      onChange={(e) => setSubjGrade(e.target.value)}
-                      style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
-                    />
                   </div>
-                ) : (
-                  <div>
-                    <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                      Discipline
-                    </label>
-                    <select
-                      value={subjJeeTarget}
-                      onChange={(e) => setSubjJeeTarget(e.target.value)}
-                      style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", background: "#ffffff" }}
-                    >
-                      <option value="Physics">Physics</option>
-                      <option value="Chemistry">Chemistry</option>
-                      <option value="Mathematics">Mathematics</option>
-                      <option value="Biology">Biology</option>
-                    </select>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
+                        Grading Scale (CGPA)
+                      </label>
+                      <select
+                        value={subjGradingSystem}
+                        onChange={(e) => setSubjGradingSystem(e.target.value)}
+                        style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem", background: "#ffffff" }}
+                      >
+                        <option value="10-Point CGPA Scale (O, A+, A, B+, B, C, P, F)">10-Point CGPA Scale (O, A+, A, B+, B, C, P, F)</option>
+                        <option value="4.0 GPA Scale">4.0 GPA Scale</option>
+                        <option value="Absolute Percentage (1-100)">Absolute Percentage (1-100)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
+                        L-T-P Hours
+                      </label>
+                      <input
+                        type="text"
+                        value={subjLtpHours}
+                        onChange={(e) => setSubjLtpHours(e.target.value)}
+                        placeholder="e.g. 3-1-0"
+                        style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
+                      />
+                    </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
                 <button type="button" onClick={() => setShowSubjModal(false)} className="btn btn-secondary">

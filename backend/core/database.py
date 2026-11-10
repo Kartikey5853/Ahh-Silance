@@ -95,6 +95,10 @@ def init_sqlite_db() -> None:
             )
         """)
         _add_column_if_not_exists(cursor, "subjects", "class_id", "TEXT DEFAULT ''")
+        _add_column_if_not_exists(cursor, "subjects", "grading_system", "TEXT DEFAULT ''")
+        _add_column_if_not_exists(cursor, "subjects", "theory_practical_split", "TEXT DEFAULT ''")
+        _add_column_if_not_exists(cursor, "subjects", "board_or_program", "TEXT DEFAULT ''")
+        _add_column_if_not_exists(cursor, "subjects", "ltp_hours", "TEXT DEFAULT '3-1-0'")
 
         # 4. Students Table (Added one-by-one per subject / class)
         cursor.execute("""
@@ -109,6 +113,16 @@ def init_sqlite_db() -> None:
             )
         """)
         _add_column_if_not_exists(cursor, "students", "class_id", "TEXT DEFAULT ''")
+        _add_column_if_not_exists(cursor, "students", "phone", "TEXT DEFAULT ''")
+        _add_column_if_not_exists(cursor, "students", "parent_name", "TEXT DEFAULT ''")
+        _add_column_if_not_exists(cursor, "students", "parent_phone", "TEXT DEFAULT ''")
+        _add_column_if_not_exists(cursor, "students", "dob", "TEXT DEFAULT ''")
+        _add_column_if_not_exists(cursor, "students", "blood_group", "TEXT DEFAULT ''")
+        _add_column_if_not_exists(cursor, "students", "attendance_percentage", "REAL DEFAULT 85.0")
+        _add_column_if_not_exists(cursor, "students", "cgpa_or_percentage", "REAL DEFAULT 0.0")
+        _add_column_if_not_exists(cursor, "students", "admission_year", "TEXT DEFAULT '2024'")
+        _add_column_if_not_exists(cursor, "students", "status", "TEXT DEFAULT 'Active'")
+        _add_column_if_not_exists(cursor, "students", "notes", "TEXT DEFAULT ''")
 
         # 5. Exams Table (With question paper, scanned questions, rubrics, answer keys)
         cursor.execute("""
@@ -363,7 +377,7 @@ class SQLiteDatabase:
     # --- Subject operations ---
 
     def list_subjects(self, user_id: Optional[int] = None, institution_id: Optional[str] = None, class_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        query = "SELECT id, user_id, institution_id, class_id, name, code, institution_type, semester_or_grade, credits, academic_year, chapters_json, created_at FROM subjects WHERE 1=1"
+        query = "SELECT id, user_id, institution_id, class_id, name, code, institution_type, semester_or_grade, credits, academic_year, chapters_json, grading_system, theory_practical_split, board_or_program, ltp_hours, created_at FROM subjects WHERE 1=1"
         params: List[Any] = []
         if user_id:
             query += " AND user_id = ?"
@@ -397,7 +411,7 @@ class SQLiteDatabase:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT id, user_id, institution_id, class_id, name, code, institution_type, semester_or_grade, credits, academic_year, chapters_json, created_at
+                SELECT id, user_id, institution_id, class_id, name, code, institution_type, semester_or_grade, credits, academic_year, chapters_json, grading_system, theory_practical_split, board_or_program, ltp_hours, created_at
                 FROM subjects WHERE id = ?
             """, (subject_id,))
             row = cursor.fetchone()
@@ -417,8 +431,11 @@ class SQLiteDatabase:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO subjects (id, user_id, institution_id, class_id, name, code, institution_type, semester_or_grade, credits, academic_year, chapters_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO subjects (
+                    id, user_id, institution_id, class_id, name, code, institution_type,
+                    semester_or_grade, credits, academic_year, chapters_json,
+                    grading_system, theory_practical_split, board_or_program, ltp_hours
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 sub_id,
                 data.get("user_id", 1),
@@ -428,17 +445,26 @@ class SQLiteDatabase:
                 data.get("code", "SUB-101"),
                 data.get("institution_type", "college"),
                 data.get("semester_or_grade", "Sem 6"),
-                data.get("credits", 4),
+                int(data.get("credits", 4)),
                 data.get("academic_year", "2026-2027"),
-                json.dumps(chapters)
+                json.dumps(chapters),
+                data.get("grading_system", ""),
+                data.get("theory_practical_split", ""),
+                data.get("board_or_program", ""),
+                data.get("ltp_hours", "3-1-0")
             ))
             conn.commit()
         return self.get_subject(sub_id) # type: ignore
 
-    # --- Student operations (Added one-by-one) ---
+    # --- Student operations (Added one-by-one with rich academic profile) ---
 
     def list_students(self, subject_id: Optional[str] = None, class_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        query = "SELECT id, subject_id, class_id, name, roll_number, email, section, created_at FROM students WHERE 1=1"
+        query = """
+            SELECT id, subject_id, class_id, name, roll_number, email, section,
+                   phone, parent_name, parent_phone, dob, blood_group,
+                   attendance_percentage, cgpa_or_percentage, admission_year, status, notes, created_at
+            FROM students WHERE 1=1
+        """
         params: List[Any] = []
         if subject_id:
             query += " AND subject_id = ?"
@@ -452,22 +478,82 @@ class SQLiteDatabase:
             cursor.execute(query, tuple(params))
             return [dict(r) for r in cursor.fetchall()]
 
-    def add_student(self, subject_id: str, name: str, roll_number: str, email: str = "", section: str = "A", class_id: str = "") -> Dict[str, Any]:
+    def get_student(self, student_id: str) -> Optional[Dict[str, Any]]:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, subject_id, class_id, name, roll_number, email, section,
+                       phone, parent_name, parent_phone, dob, blood_group,
+                       attendance_percentage, cgpa_or_percentage, admission_year, status, notes, created_at
+                FROM students WHERE id = ?
+            """, (student_id,))
+            row = cursor.fetchone()
+            if row:
+                return dict(row)
+        return None
+
+    def add_student(
+        self,
+        subject_id: str,
+        name: str,
+        roll_number: str,
+        email: str = "",
+        section: str = "A",
+        class_id: str = "",
+        phone: str = "",
+        parent_name: str = "",
+        parent_phone: str = "",
+        dob: str = "",
+        blood_group: str = "",
+        attendance_percentage: float = 85.0,
+        cgpa_or_percentage: float = 0.0,
+        admission_year: str = "2024",
+        status: str = "Active",
+        notes: str = ""
+    ) -> Dict[str, Any]:
         student_id = f"stud-{uuid.uuid4().hex[:8]}"
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO students (id, subject_id, class_id, name, roll_number, email, section)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (student_id, subject_id, class_id, name, roll_number, email, section))
+                INSERT INTO students (
+                    id, subject_id, class_id, name, roll_number, email, section,
+                    phone, parent_name, parent_phone, dob, blood_group,
+                    attendance_percentage, cgpa_or_percentage, admission_year, status, notes
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                student_id, subject_id, class_id, name, roll_number, email, section,
+                phone, parent_name, parent_phone, dob, blood_group,
+                attendance_percentage, cgpa_or_percentage, admission_year, status, notes
+            ))
             conn.commit()
-            cursor.execute("SELECT id, subject_id, class_id, name, roll_number, email, section, created_at FROM students WHERE id = ?", (student_id,))
-            return dict(cursor.fetchone())
+            return self.get_student(student_id) # type: ignore
+
+    def update_student(self, student_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        allowed = [
+            "name", "roll_number", "email", "section", "class_id", "subject_id",
+            "phone", "parent_name", "parent_phone", "dob", "blood_group",
+            "attendance_percentage", "cgpa_or_percentage", "admission_year", "status", "notes"
+        ]
+        fields = []
+        values = []
+        for k, v in updates.items():
+            if k in allowed and v is not None:
+                fields.append(f"{k} = ?")
+                values.append(v)
+        if not fields:
+            return self.get_student(student_id)
+        values.append(student_id)
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"UPDATE students SET {', '.join(fields)} WHERE id = ?", tuple(values))
+            conn.commit()
+        return self.get_student(student_id)
 
     def delete_student(self, student_id: str) -> bool:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM students WHERE id = ?", (student_id,))
+            cursor.execute("DELETE FROM academic_evaluations WHERE student_id = ?", (student_id,))
             conn.commit()
             return cursor.rowcount > 0
 

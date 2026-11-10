@@ -88,6 +88,10 @@ export const academicApi = {
     semester_or_grade: string;
     credits: number;
     academic_year: string;
+    grading_system?: string;
+    theory_practical_split?: string;
+    board_or_program?: string;
+    ltp_hours?: string;
     chapters: string[];
   }): Promise<Subject> => {
     const res = await apiClient.post<Subject>("/academic/subjects", data);
@@ -115,14 +119,18 @@ export const academicApi = {
     return res.data;
   },
 
-  addStudent: async (subjectId: string, data: {
-    name: string;
-    roll_number: string;
-    email?: string;
-    section?: string;
-    class_id?: string;
-  }): Promise<Student> => {
+  getStudentProfile: async (studentId: string): Promise<any> => {
+    const res = await apiClient.get<any>(`/academic/students/${studentId}`);
+    return res.data;
+  },
+
+  addStudent: async (subjectId: string, data: Partial<Student> & { name: string; roll_number: string }): Promise<Student> => {
     const res = await apiClient.post<Student>(`/academic/subjects/${subjectId}/students`, data);
+    return res.data;
+  },
+
+  updateStudent: async (studentId: string, data: Partial<Student>): Promise<Student> => {
+    const res = await apiClient.put<Student>(`/academic/students/${studentId}`, data);
     return res.data;
   },
 

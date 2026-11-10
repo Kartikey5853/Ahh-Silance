@@ -303,10 +303,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
           <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
             <thead>
               <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-                <th style={{ padding: "0.85rem 1rem", width: "40px", textAlign: "center" }}>
-                  <input type="checkbox" style={{ cursor: "pointer", borderRadius: "4px" }} readOnly />
-                </th>
-                <th style={{ padding: "0.85rem 0.75rem", fontSize: "0.75rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", width: "45px" }}>
+                <th style={{ padding: "0.85rem 1rem", fontSize: "0.75rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", width: "50px" }}>
                   #
                 </th>
                 <th style={{ padding: "0.85rem 1rem", fontSize: "0.75rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
@@ -329,7 +326,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
             <tbody>
               {filteredStudents.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ padding: "3rem 1.5rem", textAlign: "center", color: "#64748b" }}>
+                  <td colSpan={6} style={{ padding: "3rem 1.5rem", textAlign: "center", color: "#64748b" }}>
                     <div style={{ display: "inline-flex", padding: "1rem", background: "#f1f5f9", borderRadius: "50%", color: "#94a3b8", marginBottom: "0.75rem" }}>
                       <Users size={32} />
                     </div>
@@ -350,12 +347,6 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                 </tr>
               ) : (
                 filteredStudents.map((stud, idx) => {
-                  const initials = stud.name
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")
-                    .slice(0, 2)
-                    .toUpperCase();
                   const subj = subjects.find((s) => s.id === stud.subject_id);
 
                   return (
@@ -368,48 +359,27 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                       onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f8fafc")}
                       onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ffffff")}
                     >
-                      <td style={{ padding: "0.85rem 1rem", textAlign: "center" }}>
-                        <input type="checkbox" style={{ cursor: "pointer", borderRadius: "4px" }} />
-                      </td>
-                      <td style={{ padding: "0.85rem 0.75rem", fontSize: "0.85rem", color: "#94a3b8", fontWeight: 600 }}>
+                      <td style={{ padding: "0.85rem 1rem", fontSize: "0.85rem", color: "#94a3b8", fontWeight: 600 }}>
                         {idx + 1}
                       </td>
                       <td style={{ padding: "0.85rem 1rem" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                        <div>
                           <div
+                            onClick={() => setSelectedStudentForProfile(stud)}
                             style={{
-                              width: "36px",
-                              height: "36px",
-                              borderRadius: "8px",
-                              background: "#0f172a",
-                              color: "#ffffff",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: "0.8rem",
-                              fontWeight: 700
+                              fontWeight: 700,
+                              color: "#0f172a",
+                              fontSize: "0.9rem",
+                              cursor: "pointer",
+                              textDecoration: "none"
                             }}
+                            onMouseEnter={(e) => ((e.target as HTMLElement).style.textDecoration = "underline")}
+                            onMouseLeave={(e) => ((e.target as HTMLElement).style.textDecoration = "none")}
                           >
-                            {initials}
+                            {stud.name}
                           </div>
-                          <div>
-                            <div
-                              onClick={() => setSelectedStudentForProfile(stud)}
-                              style={{
-                                fontWeight: 700,
-                                color: "#0f172a",
-                                fontSize: "0.9rem",
-                                cursor: "pointer",
-                                textDecoration: "none"
-                              }}
-                              onMouseEnter={(e) => ((e.target as HTMLElement).style.textDecoration = "underline")}
-                              onMouseLeave={(e) => ((e.target as HTMLElement).style.textDecoration = "none")}
-                            >
-                              {stud.name}
-                            </div>
-                            <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
-                              {stud.email || "No email"}
-                            </div>
+                          <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                            {stud.email || "No email"}
                           </div>
                         </div>
                       </td>
@@ -677,6 +647,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
         <StudentProfileModal
           student={selectedStudentForProfile}
           onClose={() => setSelectedStudentForProfile(null)}
+          onStudentUpdated={() => loadStudents()}
           onNavigateToEvaluation={(evalId) => onNavigate("evaluation", { initialEvalId: evalId })}
         />
       )}

@@ -95,8 +95,8 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
 
       if (initialSubjectId && subjList.some((s) => s.id === initialSubjectId)) {
         setSelectedSubjectId(initialSubjectId);
-      } else if (subjList.length > 0) {
-        setSelectedSubjectId(subjList[0].id);
+      } else {
+        setSelectedSubjectId("");
       }
     });
   }, [initialSubjectId]);
@@ -541,9 +541,6 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
               <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
                 <thead>
                   <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-                    <th style={{ padding: "0.85rem 1rem", width: "40px", textAlign: "center" }}>
-                      <input type="checkbox" style={{ cursor: "pointer", borderRadius: "4px" }} readOnly />
-                    </th>
                     <th style={{ padding: "0.85rem 0.75rem", fontSize: "0.75rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", width: "45px" }}>
                       #
                     </th>
@@ -570,7 +567,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                 <tbody>
                   {filteredExams.length === 0 ? (
                     <tr>
-                      <td colSpan={8} style={{ padding: "3rem 1.5rem", textAlign: "center", color: "#64748b" }}>
+                      <td colSpan={7} style={{ padding: "3rem 1.5rem", textAlign: "center", color: "#64748b" }}>
                         <div style={{ display: "inline-flex", padding: "1rem", background: "#f1f5f9", borderRadius: "50%", color: "#94a3b8", marginBottom: "0.75rem" }}>
                           <FileText size={32} />
                         </div>
@@ -602,9 +599,6 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                           onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f8fafc")}
                           onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ffffff")}
                         >
-                          <td style={{ padding: "0.85rem 1rem", textAlign: "center" }}>
-                            <input type="checkbox" style={{ cursor: "pointer", borderRadius: "4px" }} />
-                          </td>
                           <td style={{ padding: "0.85rem 0.75rem", fontSize: "0.85rem", color: "#94a3b8", fontWeight: 600 }}>
                             {idx + 1}
                           </td>

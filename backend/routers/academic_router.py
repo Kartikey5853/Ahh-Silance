@@ -62,6 +62,10 @@ class SubjectCreateRequest(BaseModel):
     semester_or_grade: str = Field("Sem 1")
     credits: int = Field(4)
     academic_year: str = Field("2026-2027")
+    grading_system: Optional[str] = Field("")
+    theory_practical_split: Optional[str] = Field("")
+    board_or_program: Optional[str] = Field("")
+    ltp_hours: Optional[str] = Field("3-1-0")
     chapters: List[str] = Field(default_factory=list)
 
 
@@ -71,6 +75,35 @@ class StudentCreateRequest(BaseModel):
     email: Optional[str] = Field("")
     section: Optional[str] = Field("A")
     class_id: Optional[str] = Field("")
+    phone: Optional[str] = Field("")
+    parent_name: Optional[str] = Field("")
+    parent_phone: Optional[str] = Field("")
+    dob: Optional[str] = Field("")
+    blood_group: Optional[str] = Field("")
+    attendance_percentage: Optional[float] = Field(85.0)
+    cgpa_or_percentage: Optional[float] = Field(0.0)
+    admission_year: Optional[str] = Field("2024")
+    status: Optional[str] = Field("Active")
+    notes: Optional[str] = Field("")
+
+
+class StudentUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    roll_number: Optional[str] = None
+    email: Optional[str] = None
+    section: Optional[str] = None
+    class_id: Optional[str] = None
+    subject_id: Optional[str] = None
+    phone: Optional[str] = None
+    parent_name: Optional[str] = None
+    parent_phone: Optional[str] = None
+    dob: Optional[str] = None
+    blood_group: Optional[str] = None
+    attendance_percentage: Optional[float] = None
+    cgpa_or_percentage: Optional[float] = None
+    admission_year: Optional[str] = None
+    status: Optional[str] = None
+    notes: Optional[str] = None
 
 
 class ExamCreateRequest(BaseModel):
@@ -242,9 +275,67 @@ def add_student(subject_id: str, req: StudentCreateRequest):
         roll_number=req.roll_number,
         email=req.email or "",
         section=req.section or "A",
-        class_id=req.class_id or subject.get("class_id", "")
+        class_id=req.class_id or subject.get("class_id", ""),
+        phone=req.phone or "",
+        parent_name=req.parent_name or "",
+        parent_phone=req.parent_phone or "",
+        dob=req.dob or "",
+        blood_group=req.blood_group or "",
+        attendance_percentage=float(req.attendance_percentage or 85.0),
+        cgpa_or_percentage=float(req.cgpa_or_percentage or 0.0),
+        admission_year=req.admission_year or "2024",
+        status=req.status or "Active",
+        notes=req.notes or ""
     )
     return student
+
+
+@router.get("/students/{student_id}")
+def get_student_profile(student_id: str):
+    """Retrieves full student profile, past evaluations, upcoming exams, and academic performance stats."""
+    student = db.get_student(student_id)
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    subject = db.get_subject(student["subject_id"]) if student.get("subject_id") else None
+    class_item = db.get_class(student["class_id"]) if student.get("class_id") else None
+
+    # Past evaluations
+    evaluations = db.list_academic_evaluations(student_id=student_id)
+
+    # All exams for this student's subject
+    subject_exams = db.list_exams(subject_id=student.get("subject_id")) if student.get("subject_id") else []
+    evaluated_exam_ids = {e["exam_id"] for e in evaluations}
+    upcoming_exams = [ex for ex in subject_exams if ex["id"] not in evaluated_exam_ids]
+
+    # Calculate performance stats
+    total_percentage = sum(e["percentage"] for e in evaluations) if evaluations else 0.0
+    avg_percentage = round(total_percentage / len(evaluations), 1) if evaluations else 0.0
+
+    return {
+        "student": student,
+        "subject": subject,
+        "class_item": class_item,
+        "evaluations": evaluations,
+        "upcoming_exams": upcoming_exams,
+        "stats": {
+            "total_exams_taken": len(evaluations),
+            "upcoming_exams_count": len(upcoming_exams),
+            "average_percentage": avg_percentage,
+            "highest_score": max((e["total_score"] for e in evaluations), default=0.0)
+        }
+    }
+
+
+@router.put("/students/{student_id}")
+def update_student(student_id: str, req: StudentUpdateRequest):
+    """Updates student profile fields, contacts, attendance, status, or notes."""
+    student = db.get_student(student_id)
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    updates = req.model_dump(exclude_unset=True)
+    updated = db.update_student(student_id, updates)
+    return updated
 
 
 @router.delete("/students/{student_id}")

@@ -208,6 +208,39 @@ def test_strict_student_evaluation_with_rubric():
     assert "evidence_quote" in first_q
 
 
+def test_student_profile_and_update():
+    subjs = client.get("/api/v1/academic/subjects", headers=AUTH_HEADERS).json()
+    subj_id = subjs[0]["id"]
+    students = client.get(f"/api/v1/academic/subjects/{subj_id}/students", headers=AUTH_HEADERS).json()
+    assert len(students) > 0
+    student_id = students[0]["id"]
+
+    # 1. Update Student Profile
+    update_res = client.put(f"/api/v1/academic/students/{student_id}", json={
+        "phone": "+91 98765 43210",
+        "parent_name": "R. K. Sharma",
+        "parent_phone": "+91 98765 00000",
+        "attendance_percentage": 92.5,
+        "cgpa_or_percentage": 8.8,
+        "status": "Active",
+        "notes": "Consistently strong performance in coursework."
+    }, headers=AUTH_HEADERS)
+    assert update_res.status_code == 200
+    updated_student = update_res.json()
+    assert updated_student["phone"] == "+91 98765 43210"
+    assert updated_student["parent_name"] == "R. K. Sharma"
+    assert updated_student["attendance_percentage"] == 92.5
+
+    # 2. Get Student Full Profile
+    prof_res = client.get(f"/api/v1/academic/students/{student_id}", headers=AUTH_HEADERS)
+    assert prof_res.status_code == 200
+    profile_data = prof_res.json()
+    assert profile_data["student"]["id"] == student_id
+    assert len(profile_data["evaluations"]) >= 1
+    assert "stats" in profile_data
+    assert profile_data["stats"]["total_exams_taken"] >= 1
+
+
 if __name__ == "__main__":
     test_auth_and_profile()
     test_academic_institutions_hierarchy()
@@ -215,4 +248,5 @@ if __name__ == "__main__":
     test_one_by_one_student_enrollment()
     test_modify_exam_questions_and_marks()
     test_strict_student_evaluation_with_rubric()
+    test_student_profile_and_update()
     print("ALL ACADEMIC FLOW TESTS PASSED!")

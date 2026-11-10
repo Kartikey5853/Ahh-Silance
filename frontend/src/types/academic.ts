@@ -60,6 +60,10 @@ export interface Subject {
   semester_or_grade: string;
   credits: number;
   academic_year: string;
+  grading_system?: string;
+  theory_practical_split?: string;
+  board_or_program?: string;
+  ltp_hours?: string;
   chapters: string[];
   enrolled_students?: number;
   exams_count?: number;
@@ -74,7 +78,31 @@ export interface Student {
   roll_number: string;
   email?: string;
   section?: string;
+  phone?: string;
+  parent_name?: string;
+  parent_phone?: string;
+  dob?: string;
+  blood_group?: string;
+  attendance_percentage?: number;
+  cgpa_or_percentage?: number;
+  admission_year?: string;
+  status?: string;
+  notes?: string;
   created_at?: string;
+}
+
+export interface StudentFullProfile {
+  student: Student;
+  subject?: Subject | null;
+  class_item?: ClassItem | null;
+  evaluations: AcademicEvaluation[];
+  upcoming_exams: Exam[];
+  stats: {
+    total_exams_taken: number;
+    upcoming_exams_count: number;
+    average_percentage: number;
+    highest_score: number;
+  };
 }
 
 export interface QuestionItem {

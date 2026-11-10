@@ -10,7 +10,9 @@ import {
   Search,
   RefreshCw,
   X,
-  AlertCircle
+  AlertCircle,
+  ArrowLeft,
+  Calendar
 } from "lucide-react";
 
 interface StrictEvaluationProps {
@@ -208,95 +210,240 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
 
   const evaluatedCount = students.filter((s) => Boolean(evaluations[s.id])).length;
 
+  const getDeadlineStatus = (deadlineStr?: string) => {
+    if (!deadlineStr) return { text: "No deadline", isOverdue: false, isNear: false, color: "#64748b", bg: "#f1f5f9" };
+    const d = new Date(deadlineStr);
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    d.setHours(0, 0, 0, 0);
+    const diffDays = Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) {
+      return { text: `Overdue by ${Math.abs(diffDays)}d`, isOverdue: true, isNear: false, color: "#dc2626", bg: "#fef2f2" };
+    } else if (diffDays === 0) {
+      return { text: "Due Today", isOverdue: false, isNear: true, color: "#ea580c", bg: "#fff7ed" };
+    } else if (diffDays <= 3) {
+      return { text: `${diffDays} days left`, isOverdue: false, isNear: true, color: "#ea580c", bg: "#fff7ed" };
+    } else {
+      return { text: `${diffDays} days left`, isOverdue: false, isNear: false, color: "#0369a1", bg: "#e0f2fe" };
+    }
+  };
+
   return (
     <div className="strict-evaluation-page pb-24" style={{ maxWidth: "1280px", margin: "0 auto", padding: "0 1rem" }}>
-      {/* INITIAL STATE: When no exam is selected */}
+      {/* INITIAL STATE: When no exam is selected - Deadlines Overview */}
       {!selectedExamId ? (
         <div>
-          <div style={{ marginBottom: "2rem" }}>
-            <h1 style={{ fontSize: "1.75rem", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.03em", margin: 0 }}>
-              Student Evaluation
-            </h1>
-            <p style={{ color: "#64748b", fontSize: "0.88rem", marginTop: "0.25rem", margin: 0 }}>
-              Strict zero-temperature paper grading and syllabus rubric validation
-            </p>
+          {/* Header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                <h1 style={{ fontSize: "1.75rem", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.03em", margin: 0 }}>
+                  Evaluation Deadlines
+                </h1>
+                <span
+                  style={{
+                    background: "#e0f2fe",
+                    color: "#0369a1",
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    padding: "0.2rem 0.65rem",
+                    borderRadius: "9999px"
+                  }}
+                >
+                  {exams.length} {exams.length === 1 ? "exam" : "exams"}
+                </span>
+              </div>
+              <p style={{ color: "#64748b", fontSize: "0.88rem", marginTop: "0.25rem", margin: 0 }}>
+                Correction deadlines and student paper grading schedules
+              </p>
+            </div>
+
+            <button
+              onClick={() => onNavigate("exams")}
+              className="btn btn-primary"
+              style={{ display: "flex", alignItems: "center", gap: "0.45rem", padding: "0.6rem 1.1rem", fontSize: "0.88rem", borderRadius: "8px" }}
+            >
+              + Create Examination
+            </button>
           </div>
 
+          {/* Examinations Deadlines Table */}
           <div
             style={{
               background: "#ffffff",
               border: "1px solid #e2e8f0",
-              borderRadius: "16px",
-              padding: "3.5rem 2rem",
-              textAlign: "center",
-              boxShadow: "0 1px 4px rgba(0, 0, 0, 0.04)",
-              maxWidth: "600px",
-              margin: "2rem auto"
+              borderRadius: "14px",
+              overflow: "hidden",
+              boxShadow: "0 1px 4px rgba(0, 0, 0, 0.04)"
             }}
           >
-            <div
-              style={{
-                display: "inline-flex",
-                padding: "1rem",
-                background: "#e0f2fe",
-                color: "#0284c7",
-                borderRadius: "50%",
-                marginBottom: "1rem"
-              }}
-            >
-              <FileCheck2 size={36} />
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                    <th style={{ padding: "0.85rem 0.75rem", fontSize: "0.75rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", width: "45px" }}>
+                      #
+                    </th>
+                    <th style={{ padding: "0.85rem 1rem", fontSize: "0.75rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Examination
+                    </th>
+                    <th style={{ padding: "0.85rem 1rem", fontSize: "0.75rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Subject
+                    </th>
+                    <th style={{ padding: "0.85rem 1rem", fontSize: "0.75rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Exam Date
+                    </th>
+                    <th style={{ padding: "0.85rem 1rem", fontSize: "0.75rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Correction Deadline
+                    </th>
+                    <th style={{ padding: "0.85rem 1rem", fontSize: "0.75rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Max Marks
+                    </th>
+                    <th style={{ padding: "0.85rem 1rem", fontSize: "0.75rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "right" }}>
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {exams.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} style={{ padding: "3rem 1.5rem", textAlign: "center", color: "#64748b" }}>
+                        <div style={{ display: "inline-flex", padding: "1rem", background: "#f1f5f9", borderRadius: "50%", color: "#94a3b8", marginBottom: "0.75rem" }}>
+                          <FileCheck2 size={32} />
+                        </div>
+                        <div style={{ fontSize: "1rem", fontWeight: 700, color: "#0f172a", marginBottom: "0.25rem" }}>
+                          No Scheduled Examinations
+                        </div>
+                        <p style={{ fontSize: "0.85rem", color: "#64748b", margin: 0, marginBottom: "1rem" }}>
+                          Schedule an examination and set correction submission deadlines to grade papers here.
+                        </p>
+                        <button
+                          onClick={() => onNavigate("exams")}
+                          className="btn btn-primary"
+                          style={{ fontSize: "0.85rem", padding: "0.5rem 1rem" }}
+                        >
+                          + Create Examination
+                        </button>
+                      </td>
+                    </tr>
+                  ) : (
+                    exams.map((ex, idx) => {
+                      const subj = subjects.find((s) => s.id === ex.subject_id);
+                      const dInfo = getDeadlineStatus(ex.correction_deadline);
+                      return (
+                        <tr
+                          key={ex.id}
+                          style={{
+                            borderBottom: "1px solid #f1f5f9",
+                            transition: "background 0.15s ease",
+                            cursor: "pointer"
+                          }}
+                          onClick={() => setSelectedExamId(ex.id)}
+                          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f8fafc")}
+                          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ffffff")}
+                        >
+                          <td style={{ padding: "0.85rem 0.75rem", fontSize: "0.85rem", color: "#94a3b8", fontWeight: 600 }}>
+                            {idx + 1}
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem" }}>
+                            <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.9rem" }}>
+                              {ex.title}
+                            </div>
+                            <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                              {ex.exam_type || "Semester Exam"} • {ex.academic_year || "2026-2027"}
+                            </div>
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem" }}>
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.3rem",
+                                background: "#f1f5f9",
+                                color: "#1e293b",
+                                padding: "0.2rem 0.55rem",
+                                borderRadius: "6px",
+                                fontSize: "0.8rem",
+                                fontWeight: 600
+                              }}
+                            >
+                              {subj ? `${subj.name} (${subj.code})` : "General Subject"}
+                            </span>
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem", fontSize: "0.85rem", color: "#475569" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                              <Calendar size={13} style={{ color: "#94a3b8" }} />
+                              {ex.exam_date || "—"}
+                            </div>
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                              <span style={{ fontSize: "0.85rem", color: "#1e293b", fontWeight: 600 }}>
+                                {ex.correction_deadline || "—"}
+                              </span>
+                              {ex.correction_deadline && (
+                                <span
+                                  style={{
+                                    fontSize: "0.72rem",
+                                    fontWeight: 700,
+                                    padding: "0.15rem 0.45rem",
+                                    borderRadius: "4px",
+                                    background: dInfo.bg,
+                                    color: dInfo.color
+                                  }}
+                                >
+                                  {dInfo.text}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem", fontSize: "0.85rem", fontWeight: 700, color: "#0f172a" }}>
+                            {ex.max_marks || 60.0}
+                          </td>
+                          <td style={{ padding: "0.85rem 1rem", textAlign: "right" }}>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedExamId(ex.id);
+                              }}
+                              className="btn btn-primary"
+                              style={{ padding: "0.4rem 0.85rem", fontSize: "0.8rem", borderRadius: "6px" }}
+                            >
+                              Evaluate Papers →
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
-            <h2 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.5rem" }}>
-              Select an Examination to Begin Evaluation
-            </h2>
-            <p style={{ fontSize: "0.88rem", color: "#64748b", maxWidth: "420px", margin: "0 auto 1.5rem auto" }}>
-              Choose a scheduled examination from the dropdown below to review enrolled student answer sheets and run grading.
-            </p>
-
-            {exams.length === 0 ? (
-              <div>
-                <p style={{ color: "#dc2626", fontSize: "0.85rem", marginBottom: "1rem" }}>
-                  No saved examinations found. Please create or scan an exam paper first.
-                </p>
-                <button
-                  onClick={() => onNavigate("exams")}
-                  className="btn btn-primary"
-                  style={{ padding: "0.6rem 1.25rem", borderRadius: "8px", fontSize: "0.88rem" }}
-                >
-                  + Add Examination
-                </button>
-              </div>
-            ) : (
-              <div style={{ maxWidth: "400px", margin: "0 auto" }}>
-                <select
-                  value={selectedExamId}
-                  onChange={(e) => setSelectedExamId(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "0.65rem 0.9rem",
-                    borderRadius: "8px",
-                    border: "1px solid #cbd5e1",
-                    fontSize: "0.92rem",
-                    fontWeight: 600,
-                    color: "#0f172a",
-                    background: "#ffffff",
-                    cursor: "pointer"
-                  }}
-                >
-                  <option value="">Choose Examination...</option>
-                  {exams.map((ex) => (
-                    <option key={ex.id} value={ex.id}>
-                      {ex.title} ({ex.exam_type}) • {ex.max_marks} Marks
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
           </div>
         </div>
       ) : (
         /* ACTIVE EXAM STATE: Top bar with deadlines + Vantis Table of Students */
         <div>
+          <button
+            onClick={() => setSelectedExamId("")}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.4rem",
+              background: "transparent",
+              border: "none",
+              color: "#0284c7",
+              fontWeight: 700,
+              fontSize: "0.85rem",
+              cursor: "pointer",
+              padding: 0,
+              marginBottom: "1rem"
+            }}
+          >
+            <ArrowLeft size={16} />
+            Back to Evaluation Deadlines
+          </button>
+
           {/* Header Bar */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.5rem", flexWrap: "wrap", gap: "1rem" }}>
             <div>
@@ -330,7 +477,7 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
                 </span>
               </div>
               <p style={{ color: "#64748b", fontSize: "0.88rem", marginTop: "0.3rem", margin: 0 }}>
-                Subject: {activeSubject?.name || "Subject"} ({activeSubject?.code || ""}) • Exam Date: {activeExam?.exam_date || "2026-11-10"} • Correction Deadline: {activeExam?.correction_deadline || "Upcoming"}
+                Subject: {activeSubject?.name || "Subject"} ({activeSubject?.code || ""}) • Exam Date: {activeExam?.exam_date || "—"} • Correction Deadline: {activeExam?.correction_deadline || "Upcoming"}
               </p>
             </div>
 
@@ -495,9 +642,6 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
               <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
                 <thead>
                   <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-                    <th style={{ padding: "0.85rem 1rem", width: "40px", textAlign: "center" }}>
-                      <input type="checkbox" style={{ cursor: "pointer", borderRadius: "4px" }} readOnly />
-                    </th>
                     <th style={{ padding: "0.85rem 0.75rem", fontSize: "0.75rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", width: "45px" }}>
                       #
                     </th>
@@ -521,7 +665,7 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
                 <tbody>
                   {filteredStudents.length === 0 ? (
                     <tr>
-                      <td colSpan={7} style={{ padding: "3rem 1.5rem", textAlign: "center", color: "#64748b" }}>
+                      <td colSpan={6} style={{ padding: "3rem 1.5rem", textAlign: "center", color: "#64748b" }}>
                         <div style={{ fontSize: "1rem", fontWeight: 700, color: "#0f172a", marginBottom: "0.25rem" }}>
                           No Students Found for this Examination
                         </div>
@@ -542,12 +686,6 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
                       const evalRecord = evaluations[stud.id];
                       const sheet = studentSheets[stud.id];
                       const isEvaluatingThis = evaluatingStudentId === stud.id;
-                      const initials = stud.name
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")
-                        .slice(0, 2)
-                        .toUpperCase();
 
                       return (
                         <tr
@@ -559,37 +697,16 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
                           onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f8fafc")}
                           onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ffffff")}
                         >
-                          <td style={{ padding: "0.85rem 1rem", textAlign: "center" }}>
-                            <input type="checkbox" style={{ cursor: "pointer", borderRadius: "4px" }} />
-                          </td>
                           <td style={{ padding: "0.85rem 0.75rem", fontSize: "0.85rem", color: "#94a3b8", fontWeight: 600 }}>
                             {idx + 1}
                           </td>
                           <td style={{ padding: "0.85rem 1rem" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                              <div
-                                style={{
-                                  width: "36px",
-                                  height: "36px",
-                                  borderRadius: "8px",
-                                  background: "#0f172a",
-                                  color: "#ffffff",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  fontSize: "0.8rem",
-                                  fontWeight: 700
-                                }}
-                              >
-                                {initials}
+                            <div>
+                              <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.9rem" }}>
+                                {stud.name}
                               </div>
-                              <div>
-                                <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.9rem" }}>
-                                  {stud.name}
-                                </div>
-                                <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
-                                  Section {stud.section || "A"}
-                                </div>
+                              <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                                Section {stud.section || "A"} {stud.email ? `• ${stud.email}` : ""}
                               </div>
                             </div>
                           </td>
