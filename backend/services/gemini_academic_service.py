@@ -289,8 +289,8 @@ class GeminiAcademicService:
 
         header = {
             "title": "B.TECH SEMESTER END EXAMINATION",
-            "institution": "ACE College of Engineering",
-            "course": "Natural Language Processing & Machine Learning (NLP-701)",
+            "institution": "Academic Department",
+            "course": "Core Curriculum",
             "time_allowed": "3 Hours",
             "max_marks": 60.0,
             "instructions": [

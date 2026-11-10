@@ -41,9 +41,9 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
 
   // Digital Paper Header
   const [digitalHeader, setDigitalHeader] = useState<DigitalPaperHeader>({
-    title: "B.TECH SEMESTER END EXAMINATION",
-    institution: "ACE College of Engineering",
-    course: "Natural Language Processing & Machine Learning",
+    title: "EXAMINATION QUESTION PAPER",
+    institution: "Academic Department",
+    course: "Core Curriculum",
     time_allowed: "3 Hours",
     max_marks: 60.0,
     instructions: [
@@ -121,7 +121,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
 
     setDigitalHeader({
       title: exam.title.toUpperCase(),
-      institution: currentSubject?.name || "ACE College of Engineering",
+      institution: currentSubject?.name || "Academic Department",
       course: `${currentSubject?.name || "Course"} (${currentSubject?.code || "CODE"})`,
       time_allowed: "3 Hours",
       max_marks: exam.max_marks || 60.0,
@@ -169,8 +169,8 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
 
       if (res.header) {
         setDigitalHeader({
-          title: res.header.title || "B.TECH SEMESTER END EXAMINATION",
-          institution: res.header.institution || "ACE College of Engineering",
+          title: res.header.title || "EXAMINATION QUESTION PAPER",
+          institution: res.header.institution || "Academic Department",
           course: res.header.course || (currentSubject ? `${currentSubject.name} (${currentSubject.code})` : "Curriculum"),
           time_allowed: res.header.time_allowed || "3 Hours",
           max_marks: res.total_marks || 60.0,
@@ -914,7 +914,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                 }}
               >
                 <div style={{ fontSize: "1rem", fontWeight: 800, color: "#0f172a", letterSpacing: "0.05em", textTransform: "uppercase" }}>
-                  {digitalHeader.institution || "ACE College of Engineering"}
+                  {digitalHeader.institution || "Academic Department"}
                 </div>
                 <div style={{ fontSize: "1.2rem", fontWeight: 800, color: "#0f172a", marginTop: "0.25rem", letterSpacing: "-0.01em" }}>
                   {digitalHeader.title}

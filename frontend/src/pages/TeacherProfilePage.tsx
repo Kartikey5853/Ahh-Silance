@@ -4,7 +4,6 @@ import type { UserProfile } from "../types/academic";
 import {
   Key,
   Save,
-  Building2,
   GraduationCap
 } from "lucide-react";
 
@@ -14,10 +13,10 @@ interface TeacherProfilePageProps {
 
 export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({ onLogout }) => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [fullName, setFullName] = useState("Professor");
-  const [email, setEmail] = useState("professor@ace.edu");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
   const [role, setRole] = useState("Professor");
-  const [department, setDepartment] = useState("Computer Science & Engineering");
+  const [department, setDepartment] = useState("");
   const [customApiKey, setCustomApiKey] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
@@ -25,10 +24,10 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({ onLogout
   useEffect(() => {
     academicApi.getProfile().then((data) => {
       setProfile(data);
-      setFullName(data.full_name || "Professor");
-      setEmail(data.email || "professor@ace.edu");
+      setFullName(data.full_name || "");
+      setEmail(data.email || "");
       setRole(data.role || "Professor");
-      setDepartment(data.department || "Computer Science & Engineering");
+      setDepartment(data.department || "");
     });
   }, []);
 
@@ -101,14 +100,10 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({ onLogout
           </div>
           <div>
             <h2 style={{ fontSize: "1.35rem", fontWeight: 800, color: "#0f172a" }}>
-              {profile?.full_name || "Professor"}
+              {profile?.full_name || "Faculty Profile"}
             </h2>
             <div style={{ fontSize: "0.85rem", color: "#475569" }}>
-              {profile?.role || "Professor"} • {profile?.department || "Computer Science & Engineering"}
-            </div>
-            <div style={{ fontSize: "0.82rem", color: "#2563eb", marginTop: "0.2rem", display: "flex", alignItems: "center", gap: "0.35rem" }}>
-              <Building2 size={13} />
-              <span>ACE College of Engineering</span>
+              {profile?.role || "Faculty"} • {profile?.department || "Academic Department"}
             </div>
           </div>
         </div>

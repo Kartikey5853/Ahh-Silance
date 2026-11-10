@@ -108,12 +108,6 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
     }
   };
 
-  // Quick preset helper for the 3 students requested: Ram, Sham, Gyan
-  const handleQuickPreset = (presetName: string, presetRoll: string) => {
-    setStudentName(presetName);
-    setRollNumber(presetRoll);
-  };
-
   const currentSubject = subjects.find((s) => s.id === selectedSubjectId);
   const filteredStudents = students.filter(
     (s) =>
@@ -188,36 +182,6 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
             Target Course: <strong>{currentSubject?.name || "Select Subject"}</strong>
           </p>
 
-          {/* Quick preset buttons for Ram, Sham, Gyan */}
-          <div style={{ background: "#f8fafc", borderRadius: "8px", padding: "0.6rem 0.75rem", marginBottom: "1rem", border: "1px solid #e2e8f0" }}>
-            <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.35rem" }}>
-              Quick Fill:
-            </div>
-            <div style={{ display: "flex", gap: "0.4rem" }}>
-              <button
-                type="button"
-                onClick={() => handleQuickPreset("Ram", "ACE-101")}
-                style={{ padding: "0.25rem 0.6rem", background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" }}
-              >
-                Ram
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickPreset("Sham", "ACE-102")}
-                style={{ padding: "0.25rem 0.6rem", background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" }}
-              >
-                Sham
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickPreset("Gyan", "ACE-103")}
-                style={{ padding: "0.25rem 0.6rem", background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer" }}
-              >
-                Gyan
-              </button>
-            </div>
-          </div>
-
           <form onSubmit={handleAddStudent}>
             <div style={{ marginBottom: "0.85rem" }}>
               <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, marginBottom: "0.3rem" }}>
@@ -226,7 +190,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
               <input
                 type="text"
                 required
-                placeholder="e.g. Ram"
+                placeholder="Student full name"
                 value={studentName}
                 onChange={(e) => setStudentName(e.target.value)}
                 style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
@@ -240,7 +204,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
               <input
                 type="text"
                 required
-                placeholder="e.g. ACE-101"
+                placeholder="Roll / Registration number"
                 value={rollNumber}
                 onChange={(e) => setRollNumber(e.target.value)}
                 style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
@@ -332,7 +296,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                   : "No students matching your search."}
               </div>
               <p style={{ fontSize: "0.85rem", color: "#64748b", marginTop: "0.25rem" }}>
-                Use the form on the left to add <strong>Ram</strong>, <strong>Sham</strong>, and <strong>Gyan</strong>.
+                Use the form on the left to add your students.
               </p>
             </div>
           ) : (

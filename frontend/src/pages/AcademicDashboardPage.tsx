@@ -592,7 +592,7 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
                 <input
                   type="text"
                   required
-                  placeholder={orgType === "college" ? "e.g. ACE College of Engineering" : orgType === "school" ? "e.g. Delhi Public School" : "e.g. Apex JEE Academy"}
+                  placeholder="Enter organization name"
                   value={orgName}
                   onChange={(e) => setOrgName(e.target.value)}
                   style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
