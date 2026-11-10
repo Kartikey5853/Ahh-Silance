@@ -5,6 +5,13 @@ Mounts all 9 modular pipeline routers under /api/v1, configures CORS,
 and provides root health-check and metadata endpoints.
 """
 
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env files
+load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.core.config import settings
@@ -20,6 +27,7 @@ from backend.routers.s7_scoring_router import router as s7_router
 from backend.routers.s8_analytics_router import router as s8_router
 from backend.routers.s9_evaluation_router import router as s9_router
 from backend.routers.auth_router import router as auth_router
+from backend.routers.academic_router import router as academic_router
 
 
 def create_app() -> FastAPI:
@@ -53,6 +61,7 @@ def create_app() -> FastAPI:
     app.include_router(s8_router, prefix=prefix)
     app.include_router(s9_router, prefix=prefix)
     app.include_router(auth_router, prefix=prefix)
+    app.include_router(academic_router, prefix=prefix)
 
     @app.get("/health", tags=["System"])
     async def health_check() -> dict:
