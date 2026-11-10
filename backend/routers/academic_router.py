@@ -46,18 +46,18 @@ class InstitutionCreateRequest(BaseModel):
 class ClassCreateRequest(BaseModel):
     name: str = Field(...)
     code: Optional[str] = Field("")
-    institution_id: Optional[str] = Field("inst-ace")
-    department: Optional[str] = Field("Computer Science & Engineering")
+    institution_id: Optional[str] = Field("")
+    department: Optional[str] = Field("")
     academic_year: Optional[str] = Field("2026-2027")
 
 
 class SubjectCreateRequest(BaseModel):
     name: str = Field(...)
     code: str = Field(...)
-    institution_id: str = Field("inst-ace")
+    institution_id: str = Field(...)
     class_id: Optional[str] = Field("")
-    institution_type: str = Field("college") # 'college', 'school', 'competitive'
-    semester_or_grade: str = Field("Sem 6")
+    institution_type: str = Field("college")  # 'college', 'school', 'competitive'
+    semester_or_grade: str = Field("Sem 1")
     credits: int = Field(4)
     academic_year: str = Field("2026-2027")
     chapters: List[str] = Field(default_factory=list)
@@ -97,29 +97,32 @@ class AnswerKeyUpdateRequest(BaseModel):
 # 1. Profile
 @router.get("/profile")
 def get_profile(current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)):
-    """Returns the authenticated professor profile, falling back to default professor at ACE College."""
-    username = current_user.get("username") if current_user else "professor"
+    """Returns the authenticated professor profile."""
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Authentication required. Please sign in or register.")
+    username = current_user.get("username")
     user = db.get_user_by_username(username)
-    if not user:
-        user = db.get_user_by_username("test")
     if not user:
         raise HTTPException(status_code=404, detail="Profile not found")
 
-    api_key = user.get("gemini_api_key") or ""
+    api_key = user.get("gemini_api_key") or os.getenv("GEMINI_API_KEY", "")
     masked_key = f"{api_key[:4]}...{api_key[-4:]}" if len(api_key) > 8 else ("Configured" if api_key else "Not Set")
 
-    inst = db.get_institution(user.get("institution_id") or "inst-ace")
-    inst_name = inst.get("name") if inst else "ACE College of Engineering"
+    inst_id = user.get("institution_id") or ""
+    inst = db.get_institution(inst_id) if inst_id else None
+    inst_name = inst.get("name") if inst else "No Organization Linked"
+    inst_type = inst.get("type", "") if inst else ""
 
     return {
         "id": user["id"],
         "username": user["username"],
-        "full_name": user.get("full_name", "Professor"),
-        "email": user.get("email", "professor@ace.edu"),
-        "role": user.get("role", "Professor"),
-        "department": user.get("department", "Computer Science & Engineering"),
-        "institution_id": user.get("institution_id", "inst-ace"),
+        "full_name": user.get("full_name") or user["username"],
+        "email": user.get("email") or "",
+        "role": user.get("role") or "Professor",
+        "department": user.get("department") or "",
+        "institution_id": inst_id,
         "institution_name": inst_name,
+        "institution_type": inst_type,
         "has_custom_api_key": bool(api_key),
         "masked_api_key": masked_key
     }
@@ -128,8 +131,10 @@ def get_profile(current_user: Optional[Dict[str, Any]] = Depends(get_optional_cu
 @router.put("/profile")
 def update_profile(req: ProfileUpdateRequest, current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)):
     """Updates professor profile details and optional custom Gemini API Key."""
-    username = current_user.get("username") if current_user else "professor"
-    user = db.get_user_by_username(username) or db.get_user_by_username("test")
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    username = current_user.get("username")
+    user = db.get_user_by_username(username)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     updates = req.model_dump(exclude_unset=True)
@@ -145,16 +150,15 @@ def list_institutions():
 
 
 @router.post("/institutions")
-def create_institution(req: InstitutionCreateRequest):
-    """Creates a new institution / organization."""
+def create_institution(req: InstitutionCreateRequest, current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)):
+    """Creates a new institution / organization and associates it with the active user."""
     inst_id = f"inst-{uuid.uuid4().hex[:8]}"
-    cfg = req.config or {
-        "degree": "B.Tech",
-        "department": "Computer Science & Engineering",
-        "semesters": ["Sem 1", "Sem 2", "Sem 3", "Sem 4", "Sem 5", "Sem 6", "Sem 7", "Sem 8"],
-        "exam_types": ["Mid-Sem", "End-Sem", "Class Test / Quiz"]
-    }
-    return db.create_institution(inst_id, req.name, req.type, req.code or "", cfg)
+    created = db.create_institution(inst_id, req.name, req.type, req.code or "", req.config or {})
+    if current_user and current_user.get("username"):
+        u = db.get_user_by_username(current_user["username"])
+        if u:
+            db.update_user_profile(u["id"], {"institution_id": inst_id})
+    return created
 
 
 # 2.1 Classes (Organization -> Class -> Subject)
@@ -244,33 +248,33 @@ def delete_student(student_id: str):
 # 5. Question Paper Scanning & Exams
 @router.post("/exams/scan-paper")
 async def scan_question_paper(
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    gemini_api_key: Optional[str] = Form(None),
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)
 ):
     """
     Scans an uploaded Question Paper document using Gemini API.
-    Returns extracted questions, suggested marks, and evaluation rubrics.
+    Returns digital paper header, sections, questions with IDs, suggested marks, and evaluation rubrics.
     """
     file_bytes = await file.read()
     filename = file.filename or "question_paper.pdf"
 
-    # Check if user has configured custom Gemini key
-    user = db.get_user_by_username("test")
-    user_key = user.get("gemini_api_key") if user else None
+    # Prioritize: 1) Form-passed key, 2) Authenticated user key from DB, 3) Environment variable
+    user_key = gemini_api_key
+    if not user_key and current_user:
+        u = db.get_user_by_username(current_user.get("username", ""))
+        if u:
+            user_key = u.get("gemini_api_key")
+    if not user_key:
+        user_key = os.getenv("GEMINI_API_KEY", "").strip() or None
 
-    questions = await GeminiAcademicService.scan_question_paper(
+    scan_result = await GeminiAcademicService.scan_question_paper(
         file_bytes=file_bytes,
         filename=filename,
         user_api_key=user_key
     )
 
-    total_marks = sum(float(q.get("marks", 10.0)) for q in questions)
-    return {
-        "status": "success",
-        "filename": filename,
-        "questions_count": len(questions),
-        "total_marks": total_marks,
-        "questions": questions
-    }
+    return scan_result
 
 
 @router.get("/exams")
@@ -315,11 +319,13 @@ async def evaluate_student_submission(
     exam_id: str,
     student_id: str = Form(...),
     sheet_file: Optional[UploadFile] = File(None),
-    sheet_text: Optional[str] = Form(None)
+    sheet_text: Optional[str] = Form(None),
+    gemini_api_key: Optional[str] = Form(None),
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)
 ):
     """
     Performs strict evaluation of a student's answer sheet against the
-    professor's allocated question marks and master answer key.
+    professor's allocated question marks and master answer key at zero temperature.
     """
     exam = db.get_exam(exam_id)
     if not exam:
@@ -329,7 +335,6 @@ async def evaluate_student_submission(
     students = db.list_students(exam["subject_id"])
     student = next((s for s in students if s["id"] == student_id), None)
     if not student:
-        # Fallback query by ID or create temporary placeholder
         student_name = "Candidate"
         roll_number = student_id
     else:
@@ -346,8 +351,13 @@ async def evaluate_student_submission(
     else:
         raise HTTPException(status_code=400, detail="Must provide either sheet_file or sheet_text")
 
-    user = db.get_user_by_username("test")
-    user_key = user.get("gemini_api_key") if user else None
+    user_key = gemini_api_key
+    if not user_key and current_user:
+        u = db.get_user_by_username(current_user.get("username", ""))
+        if u:
+            user_key = u.get("gemini_api_key")
+    if not user_key:
+        user_key = os.getenv("GEMINI_API_KEY", "").strip() or None
 
     # Run strict evaluation
     eval_result = await GeminiAcademicService.evaluate_student_answers(

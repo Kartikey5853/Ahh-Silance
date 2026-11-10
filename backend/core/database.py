@@ -43,11 +43,11 @@ def init_sqlite_db() -> None:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        _add_column_if_not_exists(cursor, "users", "full_name", "TEXT DEFAULT 'Dr. Rajesh Sharma'")
-        _add_column_if_not_exists(cursor, "users", "email", "TEXT DEFAULT 'dr.sharma@abccollege.edu'")
-        _add_column_if_not_exists(cursor, "users", "role", "TEXT DEFAULT 'Professor & Dean'")
-        _add_column_if_not_exists(cursor, "users", "department", "TEXT DEFAULT 'Computer Science & Engineering'")
-        _add_column_if_not_exists(cursor, "users", "institution_id", "TEXT DEFAULT 'inst-college-1'")
+        _add_column_if_not_exists(cursor, "users", "full_name", "TEXT DEFAULT ''")
+        _add_column_if_not_exists(cursor, "users", "email", "TEXT DEFAULT ''")
+        _add_column_if_not_exists(cursor, "users", "role", "TEXT DEFAULT 'Professor'")
+        _add_column_if_not_exists(cursor, "users", "department", "TEXT DEFAULT ''")
+        _add_column_if_not_exists(cursor, "users", "institution_id", "TEXT DEFAULT ''")
         _add_column_if_not_exists(cursor, "users", "gemini_api_key", "TEXT DEFAULT ''")
 
         # 2. Institutions Table (College, School, Competitive)
@@ -159,65 +159,6 @@ def init_sqlite_db() -> None:
             )
         """)
 
-        # --- CLEAN PRODUCTION INITIALIZATION (NO FAKE / CLUTTER DATA) ---
-        # 1. Seed Professor user at ACE College
-        cursor.execute("SELECT id FROM users WHERE username = 'professor'")
-        if not cursor.fetchone():
-            salt = bcrypt.gensalt()
-            hashed_pwd = bcrypt.hashpw(b"ace123", salt).decode("utf-8")
-            cursor.execute("""
-                INSERT INTO users (username, password_hash, full_name, email, role, department, institution_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, ("professor", hashed_pwd, "Professor", "professor@ace.edu", "Professor", "Computer Science & Engineering", "inst-ace"))
-
-        # 2. Seed test user (for automated test suite compatibility)
-        cursor.execute("SELECT id FROM users WHERE username = 'test'")
-        test_row = cursor.fetchone()
-        if not test_row:
-            salt = bcrypt.gensalt()
-            hashed_pwd = bcrypt.hashpw(b"test123", salt).decode("utf-8")
-            cursor.execute("""
-                INSERT INTO users (username, password_hash, full_name, email, role, department, institution_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, ("test", hashed_pwd, "Professor", "professor@ace.edu", "Professor", "Computer Science & Engineering", "inst-ace"))
-        else:
-            cursor.execute("""
-                UPDATE users SET 
-                    full_name = 'Professor',
-                    email = 'professor@ace.edu',
-                    role = 'Professor',
-                    department = 'Computer Science & Engineering',
-                    institution_id = 'inst-ace'
-                WHERE username = 'test'
-            """)
-
-        # 3. Seed ACE College of Engineering as the primary institution
-        cursor.execute("""
-            INSERT OR REPLACE INTO institutions (id, name, type, code, config_json)
-            VALUES (?, ?, ?, ?, ?)
-        """, (
-            "inst-ace",
-            "ACE College of Engineering",
-            "college",
-            "ACE",
-            json.dumps({
-                "degree": "B.Tech / M.Tech",
-                "department": "Computer Science & Engineering",
-                "semesters": ["Sem 1", "Sem 2", "Sem 3", "Sem 4", "Sem 5", "Sem 6", "Sem 7", "Sem 8"],
-                "exam_types": ["Mid-Sem", "End-Sem", "Class Test / Quiz"],
-                "grading_system": "CGPA (10-point scale)",
-                "requires_credits": True
-            })
-        ))
-
-        # Clean any old placeholder mock data to ensure 100% real database state
-        cursor.execute("DELETE FROM students WHERE id LIKE 'stud-10%'")
-        cursor.execute("DELETE FROM subjects WHERE id = 'subj-nlp-101'")
-        cursor.execute("DELETE FROM exams WHERE id = 'exam-nlp-midsem-1'")
-        cursor.execute("DELETE FROM academic_evaluations WHERE id = 'eval-aarav-nlp-1'")
-
-        conn.commit()
-
         conn.commit()
 
 
@@ -284,13 +225,26 @@ class SQLiteDatabase:
             conn.commit()
             return cursor.rowcount > 0
 
-    def create_user(self, username: str, password_hash: str) -> Optional[int]:
+    def create_user(
+        self,
+        username: str,
+        password_hash: str,
+        full_name: str = "",
+        email: str = "",
+        role: str = "Professor",
+        department: str = "",
+        institution_id: str = "",
+        gemini_api_key: str = ""
+    ) -> Optional[int]:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-                    (username, password_hash)
+                    """
+                    INSERT INTO users (username, password_hash, full_name, email, role, department, institution_id, gemini_api_key)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (username, password_hash, full_name, email, role, department, institution_id, gemini_api_key)
                 )
                 conn.commit()
                 return cursor.lastrowid
@@ -377,7 +331,7 @@ class SQLiteDatabase:
                 VALUES (?, ?, ?, ?, ?, ?)
             """, (
                 class_id,
-                data.get("institution_id", "inst-ace"),
+                data.get("institution_id", ""),
                 data.get("name", "New Class"),
                 data.get("code", ""),
                 data.get("department", "Computer Science"),
@@ -455,7 +409,7 @@ class SQLiteDatabase:
             """, (
                 sub_id,
                 data.get("user_id", 1),
-                data.get("institution_id", "inst-ace"),
+                data.get("institution_id", ""),
                 data.get("class_id", ""),
                 data.get("name", "New Subject"),
                 data.get("code", "SUB-101"),

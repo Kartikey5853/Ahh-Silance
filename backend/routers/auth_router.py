@@ -5,7 +5,7 @@ Provides endpoints for logging in, fetching current user details, creating new
 accounts, and retrieving past evaluation records from the SQLite database.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from backend.core.database import db
@@ -18,8 +18,8 @@ class LoginRequest(BaseModel):
     """
     Request model for user credential submission.
     """
-    username: str = Field(..., description="User login handle", json_schema_extra={"example": "test"})
-    password: str = Field(..., description="User plaintext password", json_schema_extra={"example": "test123"})
+    username: str = Field(..., description="User login handle")
+    password: str = Field(..., description="User plaintext password")
 
 
 class RegisterRequest(BaseModel):
@@ -28,6 +28,11 @@ class RegisterRequest(BaseModel):
     """
     username: str = Field(..., min_length=3, max_length=50)
     password: str = Field(..., min_length=4)
+    full_name: Optional[str] = Field(default="")
+    email: Optional[str] = Field(default="")
+    role: Optional[str] = Field(default="Professor")
+    department: Optional[str] = Field(default="")
+    gemini_api_key: Optional[str] = Field(default="")
 
 
 class AuthResponse(BaseModel):
@@ -89,7 +94,15 @@ async def register(payload: RegisterRequest) -> AuthResponse:
         )
 
     pwd_hash = hash_password(payload.password)
-    user_id = db.create_user(payload.username, pwd_hash)
+    user_id = db.create_user(
+        username=payload.username,
+        password_hash=pwd_hash,
+        full_name=payload.full_name or payload.username,
+        email=payload.email or "",
+        role=payload.role or "Professor",
+        department=payload.department or "",
+        gemini_api_key=payload.gemini_api_key or ""
+    )
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
