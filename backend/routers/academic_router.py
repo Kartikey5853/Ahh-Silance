@@ -413,6 +413,43 @@ def update_exam_answer_key(exam_id: str, req: AnswerKeyUpdateRequest):
     return {"status": "success" if success else "failed"}
 
 
+@router.post("/exams/{exam_id}/generate-answer-key")
+async def generate_exam_answer_key(
+    exam_id: str,
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)
+):
+    """
+    Generates a comprehensive Master Answer Key with marking rubrics using Gemini API.
+    Persists the answer key into the exam record in SQLite.
+    """
+    exam = db.get_exam(exam_id)
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+
+    questions = exam.get("questions", [])
+    if not questions:
+        raise HTTPException(status_code=400, detail="Exam has no questions to generate answer key for")
+
+    user_key = None
+    if current_user:
+        u = db.get_user_by_username(current_user.get("username", ""))
+        if u:
+            user_key = u.get("gemini_api_key")
+    if not user_key:
+        user_key = os.getenv("GEMINI_API_KEY", "").strip() or None
+
+    result = await GeminiAcademicService.generate_answer_key(
+        questions=questions,
+        exam_title=exam.get("title", "Examination"),
+        user_api_key=user_key
+    )
+
+    if result.get("answer_key_text"):
+        db.update_exam_answer_key(exam_id, result["answer_key_text"])
+
+    return result
+
+
 @router.delete("/exams/{exam_id}")
 def delete_exam(exam_id: str):
     """Deletes an examination and its scorecards."""
@@ -437,6 +474,12 @@ async def evaluate_student_submission(
     exam = db.get_exam(exam_id)
     if not exam:
         raise HTTPException(status_code=404, detail="Exam not found")
+
+    if not (exam.get("answer_key_text") or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Answer key is required before evaluating answer sheets. Please generate or approve the answer key first."
+        )
 
     # Fetch student details
     students = db.list_students(exam["subject_id"])
@@ -509,6 +552,12 @@ async def evaluate_all_students(
     exam = db.get_exam(exam_id)
     if not exam:
         raise HTTPException(status_code=404, detail="Exam not found")
+
+    if not (exam.get("answer_key_text") or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Answer key is required before evaluating answer sheets. Please generate or approve the answer key first."
+        )
 
     students = db.list_students(exam["subject_id"])
     existing_evals = db.list_academic_evaluations(exam_id=exam_id)

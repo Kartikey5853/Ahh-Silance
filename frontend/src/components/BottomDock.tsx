@@ -1,14 +1,13 @@
 import React from "react";
 import {
   LayoutDashboard,
-  BookOpen,
   Users,
   FileSpreadsheet,
   CheckCircle2,
   User
 } from "lucide-react";
 
-export type NavTab = "dashboard" | "academics" | "students" | "exams" | "evaluation" | "profile";
+export type NavTab = "dashboard" | "academics" | "students" | "exams" | "evaluation" | "profile" | "subject-detail";
 
 interface BottomDockProps {
   activeTab: NavTab;
@@ -24,11 +23,6 @@ export const BottomDock: React.FC<BottomDockProps> = ({
       id: "dashboard",
       label: "Dashboard",
       icon: <LayoutDashboard size={19} />
-    },
-    {
-      id: "academics",
-      label: "Subjects",
-      icon: <BookOpen size={19} />
     },
     {
       id: "students",

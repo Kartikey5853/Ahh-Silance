@@ -198,6 +198,11 @@ export const academicApi = {
     return res.data;
   },
 
+  generateAnswerKey: async (examId: string): Promise<any> => {
+    const res = await apiClient.post(`/academic/exams/${examId}/generate-answer-key`);
+    return res.data;
+  },
+
   // Strict Evaluation
   evaluateStudent: async (
     examId: string,

@@ -20,6 +20,7 @@ import { StudentsRosterPage } from "./pages/StudentsRosterPage";
 import { ExamManagementPage } from "./pages/ExamManagementPage";
 import { StrictEvaluationPage } from "./pages/StrictEvaluationPage";
 import { TeacherProfilePage } from "./pages/TeacherProfilePage";
+import { SubjectDetailPage } from "./pages/SubjectDetailPage";
 import { authApi } from "./api/authApi";
 import { academicApi } from "./api/academicApi";
 
@@ -84,6 +85,14 @@ export const App: React.FC = () => {
       <main className="main-content" style={{ paddingBottom: "7rem" }}>
         {activeTab === "dashboard" && (
           <AcademicDashboardPage onNavigate={handleNavigate} />
+        )}
+
+        {activeTab === "subject-detail" && (
+          <SubjectDetailPage
+            subjectId={navigationParams.subjectId}
+            onNavigate={handleNavigate}
+            onBack={() => handleNavigate("dashboard")}
+          />
         )}
 
         {activeTab === "academics" && (

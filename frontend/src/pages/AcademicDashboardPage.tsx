@@ -4,7 +4,6 @@ import type { UserProfile, Subject, Institution, ClassItem, InstitutionType, Stu
 import { StudentProfileModal } from "../components/StudentProfileModal";
 import {
   BookOpen,
-  Users,
   Plus,
   FileSpreadsheet,
   Building2,
@@ -14,7 +13,8 @@ import {
   School,
   Target,
   Clock,
-  Calendar
+  Calendar,
+  X
 } from "lucide-react";
 
 interface AcademicDashboardProps {
@@ -44,7 +44,7 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
   // College-specific
   const [degreeProgram, setDegreeProgram] = useState("B.Tech / M.Tech");
   const [departmentName, setDepartmentName] = useState("Computer Science & Engineering");
-  const [creditRequired, setCreditRequired] = useState(true);
+  const [creditRequired] = useState(true);
   // School-specific
   const [schoolBoard, setSchoolBoard] = useState("CBSE");
   const [gradeRange, setGradeRange] = useState("Class 9 to 12");
@@ -69,12 +69,12 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
   const [subjCode, setSubjCode] = useState("NLP-701");
   const [subjCredits, setSubjCredits] = useState(4);
   const [subjSem, setSubjSem] = useState("Sem 6");
-  const [subjGrade, setSubjGrade] = useState("Class 12");
-  const [subjJeeTarget, setSubjJeeTarget] = useState("Physics");
-  const [subjGradingSystem, setSubjGradingSystem] = useState("10-Point CGPA Scale (O, A+, A, B+, B, C, P, F)");
-  const [subjSplit, setSubjSplit] = useState("80% Theory + 20% Internal Assessment");
-  const [subjBoardOrProgram, setSubjBoardOrProgram] = useState("B.Tech Computer Science");
-  const [subjLtpHours, setSubjLtpHours] = useState("3-1-0");
+  const [subjGrade] = useState("Class 12");
+  const [subjJeeTarget] = useState("Physics");
+  const [subjGradingSystem] = useState("10-Point CGPA Scale (O, A+, A, B+, B, C, P, F)");
+  const [subjSplit] = useState("80% Theory + 20% Internal Assessment");
+  const [subjBoardOrProgram] = useState("B.Tech Computer Science");
+  const [subjLtpHours] = useState("3-1-0");
 
   const loadHierarchy = async () => {
     try {
@@ -524,7 +524,10 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
                 justifyContent: "space-between"
               }}
             >
-              <div>
+              <div
+                onClick={() => onNavigate("subject-detail", { subjectId: s.id })}
+                style={{ cursor: "pointer" }}
+              >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
                   <span style={{ fontSize: "0.75rem", fontWeight: 700, background: "#f1f5f9", color: "#334155", padding: "0.2rem 0.5rem", borderRadius: "4px" }}>
                     {s.code}
@@ -546,20 +549,20 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
               {/* Action Buttons */}
               <div style={{ display: "flex", gap: "0.5rem", paddingTop: "1rem", borderTop: "1px solid #f1f5f9" }}>
                 <button
-                  onClick={() => onNavigate("exams", { subjectId: s.id })}
+                  onClick={() => onNavigate("subject-detail", { subjectId: s.id })}
                   className="btn btn-primary"
                   style={{ flex: 1, fontSize: "0.82rem", padding: "0.45rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.35rem" }}
                 >
-                  <FileSpreadsheet size={14} />
-                  Scanner & Tests
+                  <BookOpen size={14} />
+                  Subject Details
                 </button>
                 <button
-                  onClick={() => onNavigate("students", { subjectId: s.id })}
+                  onClick={() => onNavigate("exams", { subjectId: s.id })}
                   className="btn btn-secondary"
                   style={{ flex: 1, fontSize: "0.82rem", padding: "0.45rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.35rem" }}
                 >
-                  <Users size={14} />
-                  {s.enrolled_students || 0} Students
+                  <FileSpreadsheet size={14} />
+                  Exams
                 </button>
               </div>
             </div>
@@ -567,576 +570,473 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
         </div>
       )}
 
-      {/* MODAL 1: Create Organization (College vs School vs JEE) */}
+      {/* MODAL 1: Create Organization (College vs School vs JEE) - 16:9 Widescreen */}
       {showOrgModal && (
-        <div className="modal-backdrop" onClick={() => setShowOrgModal(false)}>
-          <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "520px" }}>
-            <h3 style={{ fontSize: "1.3rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.25rem" }}>
-              Add Academic Organization
-            </h3>
-            <p style={{ fontSize: "0.85rem", color: "#64748b", marginBottom: "1.25rem" }}>
-              Select the institution type to customize curriculum, credits, and grading schemas.
-            </p>
+        <div className="modal-overlay-16-9" onClick={() => setShowOrgModal(false)}>
+          <div className="modal-content-16-9" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "1050px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", height: "100%", minHeight: "540px" }}>
+              {/* Left Brand Panel */}
+              <div style={{ background: "#1e1b4b", color: "#ffffff", padding: "2.5rem 2rem", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ width: "48px", height: "48px", borderRadius: "12px", background: "rgba(255, 255, 255, 0.15)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "1.25rem" }}>
+                    <Building2 size={24} />
+                  </div>
+                  <h3 style={{ fontSize: "1.4rem", fontWeight: 900, letterSpacing: "-0.02em", marginBottom: "0.5rem" }}>
+                    Academic Organization
+                  </h3>
+                  <p style={{ fontSize: "0.88rem", color: "#cbd5e1", lineHeight: 1.6 }}>
+                    Configure whether this institution functions as a <strong>College</strong> (Credits & CGPA), <strong>School</strong> (CBSE / Terms), or <strong>Competitive Coaching</strong> (JEE / Negative Marking).
+                  </p>
+                </div>
 
-            <form onSubmit={handleCreateOrg}>
-              {/* Type Switcher Pills */}
-              <div style={{ marginBottom: "1.25rem" }}>
-                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#334155", marginBottom: "0.4rem" }}>
-                  Institution Type *
-                </label>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem" }}>
-                  <button
-                    type="button"
-                    onClick={() => setOrgType("college")}
-                    style={{
-                      padding: "0.6rem 0.5rem",
-                      borderRadius: "8px",
-                      border: orgType === "college" ? "2px solid #2563eb" : "1px solid #cbd5e1",
-                      background: orgType === "college" ? "#eff6ff" : "#ffffff",
-                      color: orgType === "college" ? "#2563eb" : "#475569",
-                      fontWeight: 700,
-                      fontSize: "0.82rem",
-                      cursor: "pointer",
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      gap: "0.25rem"
-                    }}
-                  >
-                    <GraduationCap size={18} />
-                    College
+                <div style={{ background: "rgba(255, 255, 255, 0.08)", padding: "1rem", borderRadius: "10px", fontSize: "0.8rem", color: "#94a3b8" }}>
+                  🏛️ System adapts question paper rubrics and grading models to your institution's configuration.
+                </div>
+              </div>
+
+              {/* Right Form Panel */}
+              <div style={{ padding: "2.5rem", display: "flex", flexDirection: "column", justifyContent: "space-between", overflowY: "auto" }}>
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
+                    <h4 style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
+                      Organization Hierarchy & Settings
+                    </h4>
+                    <button onClick={() => setShowOrgModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }}>
+                      <X size={20} />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleCreateOrg} id="add-org-form">
+                    {/* Type Switcher Pills */}
+                    <div style={{ marginBottom: "1.25rem" }}>
+                      <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#334155", marginBottom: "0.4rem" }}>
+                        Institution Type *
+                      </label>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem" }}>
+                        <button
+                          type="button"
+                          onClick={() => setOrgType("college")}
+                          style={{
+                            padding: "0.6rem 0.5rem",
+                            borderRadius: "8px",
+                            border: orgType === "college" ? "2px solid #2563eb" : "1px solid #cbd5e1",
+                            background: orgType === "college" ? "#eff6ff" : "#ffffff",
+                            color: orgType === "college" ? "#2563eb" : "#475569",
+                            fontWeight: 700,
+                            fontSize: "0.82rem",
+                            cursor: "pointer",
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            gap: "0.25rem"
+                          }}
+                        >
+                          <GraduationCap size={18} />
+                          College
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setOrgType("school")}
+                          style={{
+                            padding: "0.6rem 0.5rem",
+                            borderRadius: "8px",
+                            border: orgType === "school" ? "2px solid #2563eb" : "1px solid #cbd5e1",
+                            background: orgType === "school" ? "#eff6ff" : "#ffffff",
+                            color: orgType === "school" ? "#2563eb" : "#475569",
+                            fontWeight: 700,
+                            fontSize: "0.82rem",
+                            cursor: "pointer",
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            gap: "0.25rem"
+                          }}
+                        >
+                          <School size={18} />
+                          School (K-12)
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setOrgType("competitive")}
+                          style={{
+                            padding: "0.6rem 0.5rem",
+                            borderRadius: "8px",
+                            border: orgType === "competitive" ? "2px solid #2563eb" : "1px solid #cbd5e1",
+                            background: orgType === "competitive" ? "#eff6ff" : "#ffffff",
+                            color: orgType === "competitive" ? "#2563eb" : "#475569",
+                            fontWeight: 700,
+                            fontSize: "0.82rem",
+                            cursor: "pointer",
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            gap: "0.25rem"
+                          }}
+                        >
+                          <Target size={18} />
+                          JEE / Coaching
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                          Organization Name *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Indian Institute of Technology"
+                          value={orgName}
+                          onChange={(e) => setOrgName(e.target.value)}
+                          style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
+                        />
+                      </div>
+
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                          Code / Acronym
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. IIT-D / ACE"
+                          value={orgCode}
+                          onChange={(e) => setOrgCode(e.target.value)}
+                          style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
+                        />
+                      </div>
+                    </div>
+
+                    {orgType === "college" ? (
+                      <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                          <div>
+                            <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#475569", marginBottom: "0.2rem" }}>Degree Program</label>
+                            <input
+                              type="text"
+                              value={degreeProgram}
+                              onChange={(e) => setDegreeProgram(e.target.value)}
+                              style={{ width: "100%", padding: "0.45rem 0.6rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem" }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#475569", marginBottom: "0.2rem" }}>Department</label>
+                            <input
+                              type="text"
+                              value={departmentName}
+                              onChange={(e) => setDepartmentName(e.target.value)}
+                              style={{ width: "100%", padding: "0.45rem 0.6rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem" }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ) : orgType === "school" ? (
+                      <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                          <div>
+                            <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#475569", marginBottom: "0.2rem" }}>Affiliation Board</label>
+                            <select
+                              value={schoolBoard}
+                              onChange={(e) => setSchoolBoard(e.target.value)}
+                              style={{ width: "100%", padding: "0.45rem 0.6rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem", background: "#ffffff" }}
+                            >
+                              <option value="CBSE">CBSE Board</option>
+                              <option value="ICSE">ICSE Board</option>
+                              <option value="State Board">State Board</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#475569", marginBottom: "0.2rem" }}>Grade Classes</label>
+                            <input
+                              type="text"
+                              value={gradeRange}
+                              onChange={(e) => setGradeRange(e.target.value)}
+                              style={{ width: "100%", padding: "0.45rem 0.6rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem" }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                          <div>
+                            <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#475569", marginBottom: "0.2rem" }}>Target Exam</label>
+                            <input
+                              type="text"
+                              value={jeeTarget}
+                              onChange={(e) => setJeeTarget(e.target.value)}
+                              style={{ width: "100%", padding: "0.45rem 0.6rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem" }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#475569", marginBottom: "0.2rem" }}>Marking Pattern</label>
+                            <input
+                              type="text"
+                              value={markingPattern}
+                              onChange={(e) => setMarkingPattern(e.target.value)}
+                              style={{ width: "100%", padding: "0.45rem 0.6rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem" }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </form>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", borderTop: "1px solid #e2e8f0", paddingTop: "1.25rem" }}>
+                  <button type="button" onClick={() => setShowOrgModal(false)} className="btn btn-secondary">
+                    Cancel
                   </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setOrgType("school")}
-                    style={{
-                      padding: "0.6rem 0.5rem",
-                      borderRadius: "8px",
-                      border: orgType === "school" ? "2px solid #2563eb" : "1px solid #cbd5e1",
-                      background: orgType === "school" ? "#eff6ff" : "#ffffff",
-                      color: orgType === "school" ? "#2563eb" : "#475569",
-                      fontWeight: 700,
-                      fontSize: "0.82rem",
-                      cursor: "pointer",
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      gap: "0.25rem"
-                    }}
-                  >
-                    <School size={18} />
-                    School (K-12)
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setOrgType("competitive")}
-                    style={{
-                      padding: "0.6rem 0.5rem",
-                      borderRadius: "8px",
-                      border: orgType === "competitive" ? "2px solid #2563eb" : "1px solid #cbd5e1",
-                      background: orgType === "competitive" ? "#eff6ff" : "#ffffff",
-                      color: orgType === "competitive" ? "#2563eb" : "#475569",
-                      fontWeight: 700,
-                      fontSize: "0.82rem",
-                      cursor: "pointer",
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      gap: "0.25rem"
-                    }}
-                  >
-                    <Target size={18} />
-                    JEE / Coaching
+                  <button type="submit" form="add-org-form" className="btn btn-primary">
+                    Save Organization
                   </button>
                 </div>
               </div>
-
-              {/* General Fields */}
-              <div style={{ marginBottom: "1rem" }}>
-                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                  Organization Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Enter organization name"
-                  value={orgName}
-                  onChange={(e) => setOrgName(e.target.value)}
-                  style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
-                />
-              </div>
-
-              <div style={{ marginBottom: "1rem" }}>
-                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                  Organization Code / Acronym
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. ACE / DPS / APEX"
-                  value={orgCode}
-                  onChange={(e) => setOrgCode(e.target.value)}
-                  style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
-                />
-              </div>
-
-              {/* Dynamic Sub-Fields by Type */}
-              {orgType === "college" ? (
-                <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "8px", marginBottom: "1.25rem", border: "1px solid #e2e8f0" }}>
-                  <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#2563eb", marginBottom: "0.5rem" }}>
-                    College Specific Settings:
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#475569", marginBottom: "0.2rem" }}>Degree Program</label>
-                      <input
-                        type="text"
-                        value={degreeProgram}
-                        onChange={(e) => setDegreeProgram(e.target.value)}
-                        style={{ width: "100%", padding: "0.4rem 0.6rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem" }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#475569", marginBottom: "0.2rem" }}>Department</label>
-                      <input
-                        type="text"
-                        value={departmentName}
-                        onChange={(e) => setDepartmentName(e.target.value)}
-                        style={{ width: "100%", padding: "0.4rem 0.6rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem" }}
-                      />
-                    </div>
-                  </div>
-                  <div style={{ marginTop: "0.6rem", display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.8rem", color: "#334155" }}>
-                    <input
-                      type="checkbox"
-                      id="creditsCheck"
-                      checked={creditRequired}
-                      onChange={(e) => setCreditRequired(e.target.checked)}
-                    />
-                    <label htmlFor="creditsCheck">Require Subject Credits (e.g. 4 Credits / course)</label>
-                  </div>
-                </div>
-              ) : orgType === "school" ? (
-                <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "8px", marginBottom: "1.25rem", border: "1px solid #e2e8f0" }}>
-                  <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#2563eb", marginBottom: "0.5rem" }}>
-                    School Specific Settings:
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#475569", marginBottom: "0.2rem" }}>Affiliation Board</label>
-                      <select
-                        value={schoolBoard}
-                        onChange={(e) => setSchoolBoard(e.target.value)}
-                        style={{ width: "100%", padding: "0.4rem 0.6rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem", background: "#ffffff" }}
-                      >
-                        <option value="CBSE">CBSE Board</option>
-                        <option value="ICSE">ICSE Board</option>
-                        <option value="State Board">State Board</option>
-                        <option value="IB / Cambridge">IB / Cambridge</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#475569", marginBottom: "0.2rem" }}>Grade Classes</label>
-                      <input
-                        type="text"
-                        value={gradeRange}
-                        onChange={(e) => setGradeRange(e.target.value)}
-                        style={{ width: "100%", padding: "0.4rem 0.6rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem" }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "8px", marginBottom: "1.25rem", border: "1px solid #e2e8f0" }}>
-                  <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#2563eb", marginBottom: "0.5rem" }}>
-                    JEE / Competitive Coaching Settings:
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#475569", marginBottom: "0.2rem" }}>Target Exam</label>
-                      <input
-                        type="text"
-                        value={jeeTarget}
-                        onChange={(e) => setJeeTarget(e.target.value)}
-                        style={{ width: "100%", padding: "0.4rem 0.6rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem" }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#475569", marginBottom: "0.2rem" }}>Marking Pattern</label>
-                      <input
-                        type="text"
-                        value={markingPattern}
-                        onChange={(e) => setMarkingPattern(e.target.value)}
-                        style={{ width: "100%", padding: "0.4rem 0.6rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem" }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-                <button type="button" onClick={() => setShowOrgModal(false)} className="btn btn-secondary">
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  Save Organization
-                </button>
-              </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
 
-      {/* MODAL 2: Create Class / Cohort */}
+      {/* MODAL 2: Create Class / Cohort - 16:9 Widescreen */}
       {showClassModal && (
-        <div className="modal-backdrop" onClick={() => setShowClassModal(false)}>
-          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.35rem" }}>
-              Set Up Class / Batch
-            </h3>
-            <p style={{ fontSize: "0.85rem", color: "#64748b", marginBottom: "1.25rem" }}>
-              Create a distinct cohort under <strong>{currentOrg?.name || "Organization"}</strong>.
-            </p>
-            <form onSubmit={handleCreateClass}>
-              <div style={{ marginBottom: "1rem" }}>
-                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                  Class / Batch Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder={currentOrg?.type === "college" ? "e.g. Semester 6 - CSE" : currentOrg?.type === "school" ? "e.g. Class 12 - Section A" : "e.g. JEE 2027 Rankers Batch"}
-                  value={className}
-                  onChange={(e) => setClassName(e.target.value)}
-                  style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
-                />
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
+        <div className="modal-overlay-16-9" onClick={() => setShowClassModal(false)}>
+          <div className="modal-content-16-9" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "1050px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", height: "100%", minHeight: "520px" }}>
+              {/* Left Brand Panel */}
+              <div style={{ background: "#1e1b4b", color: "#ffffff", padding: "2.5rem 2rem", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
                 <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                    Batch / Section Code
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. CSE-SEM6"
-                    value={classCode}
-                    onChange={(e) => setClassCode(e.target.value)}
-                    style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
-                  />
+                  <div style={{ width: "48px", height: "48px", borderRadius: "12px", background: "rgba(255, 255, 255, 0.15)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "1.25rem" }}>
+                    <FolderGit2 size={24} />
+                  </div>
+                  <h3 style={{ fontSize: "1.4rem", fontWeight: 900, letterSpacing: "-0.02em", marginBottom: "0.5rem" }}>
+                    Set Up Class / Batch
+                  </h3>
+                  <p style={{ fontSize: "0.88rem", color: "#cbd5e1", lineHeight: 1.6 }}>
+                    Create a distinct cohort under <strong>{currentOrg?.name || "Organization"}</strong> with a designated 6-month semester start and end window.
+                  </p>
                 </div>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                    Academic Year
-                  </label>
-                  <input
-                    type="text"
-                    value={classYear}
-                    onChange={(e) => setClassYear(e.target.value)}
-                    style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
-                  />
+
+                <div style={{ background: "rgba(255, 255, 255, 0.08)", padding: "1rem", borderRadius: "10px", fontSize: "0.8rem", color: "#94a3b8" }}>
+                  📅 Classes keep students, subjects, and exams neatly clustered together.
                 </div>
               </div>
 
-              <div style={{ marginBottom: "1rem" }}>
-                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                  Department / Stream
-                </label>
-                <input
-                  type="text"
-                  value={classDept}
-                  onChange={(e) => setClassDept(e.target.value)}
-                  style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
-                />
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1.5rem" }}>
+              {/* Right Form Panel */}
+              <div style={{ padding: "2.5rem", display: "flex", flexDirection: "column", justifyContent: "space-between", overflowY: "auto" }}>
                 <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                    Semester Start Date
-                  </label>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                    Semester End Date (6 Months)
-                  </label>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
-                  />
-                </div>
-              </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
+                    <h4 style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
+                      Class Details & Semester Schedule
+                    </h4>
+                    <button onClick={() => setShowClassModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }}>
+                      <X size={20} />
+                    </button>
+                  </div>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-                <button type="button" onClick={() => setShowClassModal(false)} className="btn btn-secondary">
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  Save Class
-                </button>
+                  <form onSubmit={handleCreateClass} id="add-class-form">
+                    <div style={{ marginBottom: "1rem" }}>
+                      <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                        Class / Batch Name *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder={currentOrg?.type === "college" ? "e.g. Semester 6 - CSE" : "e.g. Class 12 - Science"}
+                        value={className}
+                        onChange={(e) => setClassName(e.target.value)}
+                        style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
+                      />
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                          Batch / Section Code
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. CSE-SEM6"
+                          value={classCode}
+                          onChange={(e) => setClassCode(e.target.value)}
+                          style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                          Academic Year
+                        </label>
+                        <input
+                          type="text"
+                          value={classYear}
+                          onChange={(e) => setClassYear(e.target.value)}
+                          style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: "1rem" }}>
+                      <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                        Department / Stream
+                      </label>
+                      <input
+                        type="text"
+                        value={classDept}
+                        onChange={(e) => setClassDept(e.target.value)}
+                        style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
+                      />
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1.25rem" }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                          Semester Start Date
+                        </label>
+                        <input
+                          type="date"
+                          value={startDate}
+                          onChange={(e) => setStartDate(e.target.value)}
+                          style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                          Semester End Date (6 Months)
+                        </label>
+                        <input
+                          type="date"
+                          value={endDate}
+                          onChange={(e) => setEndDate(e.target.value)}
+                          style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
+                        />
+                      </div>
+                    </div>
+                  </form>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", borderTop: "1px solid #e2e8f0", paddingTop: "1.25rem" }}>
+                  <button type="button" onClick={() => setShowClassModal(false)} className="btn btn-secondary">
+                    Cancel
+                  </button>
+                  <button type="submit" form="add-class-form" className="btn btn-primary">
+                    Save Class
+                  </button>
+                </div>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
 
-      {/* MODAL 3: Create Subject */}
+      {/* MODAL 3: Create Subject - 16:9 Widescreen */}
       {showSubjModal && (
-        <div className="modal-backdrop" onClick={() => setShowSubjModal(false)}>
-          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.35rem" }}>
-              Add Subject
-            </h3>
-            <p style={{ fontSize: "0.85rem", color: "#64748b", marginBottom: "1.25rem" }}>
-              Assign curriculum under <strong>{currentClass ? currentClass.name : currentOrg?.name || "Organization"}</strong>.
-            </p>
+        <div className="modal-overlay-16-9" onClick={() => setShowSubjModal(false)}>
+          <div className="modal-content-16-9" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "1050px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", height: "100%", minHeight: "540px" }}>
+              {/* Left Brand Panel */}
+              <div style={{ background: "#1e1b4b", color: "#ffffff", padding: "2.5rem 2rem", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ width: "48px", height: "48px", borderRadius: "12px", background: "rgba(255, 255, 255, 0.15)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "1.25rem" }}>
+                    <BookOpen size={24} />
+                  </div>
+                  <h3 style={{ fontSize: "1.4rem", fontWeight: 900, letterSpacing: "-0.02em", marginBottom: "0.5rem" }}>
+                    Add Subject
+                  </h3>
+                  <p style={{ fontSize: "0.88rem", color: "#cbd5e1", lineHeight: 1.6 }}>
+                    Configure course curriculum, syllabus chapters, credits, and grading schemas linked to your active cohort.
+                  </p>
+                </div>
 
-            <form onSubmit={handleCreateSubject}>
-              <div style={{ marginBottom: "1rem" }}>
-                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                  Subject Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Natural Language Processing"
-                  value={subjName}
-                  onChange={(e) => setSubjName(e.target.value)}
-                  style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
-                />
+                <div style={{ background: "rgba(255, 255, 255, 0.08)", padding: "1rem", borderRadius: "10px", fontSize: "0.8rem", color: "#94a3b8" }}>
+                  📚 Subjects immediately receive automated test scheduling and live Gemini evaluation rubrics.
+                </div>
               </div>
 
-              {/* Dynamic Academic Details */}
-              {currentOrg?.type === "school" ? (
-                <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "8px", border: "1px solid #e2e8f0", marginBottom: "1.25rem" }}>
-                  <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#0369a1", marginBottom: "0.6rem" }}>
-                    School Curriculum & Evaluation (No Credits)
+              {/* Right Form Panel */}
+              <div style={{ padding: "2.5rem", display: "flex", flexDirection: "column", justifyContent: "space-between", overflowY: "auto" }}>
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
+                    <h4 style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
+                      Curriculum Specifications
+                    </h4>
+                    <button onClick={() => setShowSubjModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }}>
+                      <X size={20} />
+                    </button>
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "0.75rem" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
-                        Subject Code
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. SCI-10"
-                        value={subjCode}
-                        onChange={(e) => setSubjCode(e.target.value)}
-                        style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
-                        Grade Level / Term
-                      </label>
-                      <input
-                        type="text"
-                        value={subjGrade}
-                        onChange={(e) => setSubjGrade(e.target.value)}
-                        placeholder="e.g. Class 10 - Term 1"
-                        style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
-                      />
-                    </div>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
-                        Grading Scale
-                      </label>
-                      <select
-                        value={subjGradingSystem}
-                        onChange={(e) => setSubjGradingSystem(e.target.value)}
-                        style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem", background: "#ffffff" }}
-                      >
-                        <option value="CBSE 9-Point Scale (A1 to E)">CBSE 9-Point Scale (A1 to E)</option>
-                        <option value="ICSE Percentage Scale (1-100)">ICSE Percentage Scale (1-100)</option>
-                        <option value="State Board Grading (A+, A, B, C)">State Board Grading (A+, A, B, C)</option>
-                        <option value="Cambridge Assessment (A* to G)">Cambridge Assessment (A* to G)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
-                        Theory vs Practical Split
-                      </label>
-                      <select
-                        value={subjSplit}
-                        onChange={(e) => setSubjSplit(e.target.value)}
-                        style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem", background: "#ffffff" }}
-                      >
-                        <option value="80% Theory + 20% Internal Assessment">80% Theory + 20% Internal Assessment</option>
-                        <option value="70% Theory + 30% Practical Assessment">70% Theory + 30% Practical Assessment</option>
-                        <option value="100% Theory">100% Theory Examination</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              ) : currentOrg?.type === "competitive" ? (
-                <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "8px", border: "1px solid #e2e8f0", marginBottom: "1.25rem" }}>
-                  <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#0369a1", marginBottom: "0.6rem" }}>
-                    Competitive & JEE Marking Framework (No Credits)
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "0.75rem" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
-                        Subject Code
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. JEE-PHY"
-                        value={subjCode}
-                        onChange={(e) => setSubjCode(e.target.value)}
-                        style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
-                        Discipline
-                      </label>
-                      <select
-                        value={subjJeeTarget}
-                        onChange={(e) => setSubjJeeTarget(e.target.value)}
-                        style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#ffffff" }}
-                      >
-                        <option value="Physics">Physics</option>
-                        <option value="Chemistry">Chemistry</option>
-                        <option value="Mathematics">Mathematics</option>
-                        <option value="Biology">Biology</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
-                        Target Exam
-                      </label>
-                      <select
-                        value={subjBoardOrProgram}
-                        onChange={(e) => setSubjBoardOrProgram(e.target.value)}
-                        style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem", background: "#ffffff" }}
-                      >
-                        <option value="JEE Main & Advanced">JEE Main & Advanced</option>
-                        <option value="NEET-UG">NEET-UG</option>
-                        <option value="BITSAT">BITSAT</option>
-                        <option value="Foundation & Olympiads">Foundation & Olympiads</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
-                        Marking Pattern
-                      </label>
-                      <select
-                        value={subjGradingSystem}
-                        onChange={(e) => setSubjGradingSystem(e.target.value)}
-                        style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem", background: "#ffffff" }}
-                      >
-                        <option value="+4 / -1 Negative Marking Scheme">+4 / -1 Negative Marking Scheme</option>
-                        <option value="+3 / -1 Marking Scheme">+3 / -1 Marking Scheme</option>
-                        <option value="Numerical (+4 / 0) No Negative">Numerical (+4 / 0) No Negative</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "8px", border: "1px solid #e2e8f0", marginBottom: "1.25rem" }}>
-                  <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#0369a1", marginBottom: "0.6rem" }}>
-                    College & University Framework (Credits & CGPA)
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem", marginBottom: "0.75rem" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
-                        Subject Code
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="NLP-701"
-                        value={subjCode}
-                        onChange={(e) => setSubjCode(e.target.value)}
-                        style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
-                        Semester
-                      </label>
-                      <select
-                        value={subjSem}
-                        onChange={(e) => setSubjSem(e.target.value)}
-                        style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", background: "#ffffff", fontSize: "0.85rem" }}
-                      >
-                        {["Sem 1", "Sem 2", "Sem 3", "Sem 4", "Sem 5", "Sem 6", "Sem 7", "Sem 8"].map((s) => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
-                        Credits
-                      </label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={8}
-                        value={subjCredits}
-                        onChange={(e) => setSubjCredits(Number(e.target.value))}
-                        style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
-                      />
-                    </div>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
-                        Grading Scale (CGPA)
-                      </label>
-                      <select
-                        value={subjGradingSystem}
-                        onChange={(e) => setSubjGradingSystem(e.target.value)}
-                        style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.82rem", background: "#ffffff" }}
-                      >
-                        <option value="10-Point CGPA Scale (O, A+, A, B+, B, C, P, F)">10-Point CGPA Scale (O, A+, A, B+, B, C, P, F)</option>
-                        <option value="4.0 GPA Scale">4.0 GPA Scale</option>
-                        <option value="Absolute Percentage (1-100)">Absolute Percentage (1-100)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
-                        L-T-P Hours
-                      </label>
-                      <input
-                        type="text"
-                        value={subjLtpHours}
-                        onChange={(e) => setSubjLtpHours(e.target.value)}
-                        placeholder="e.g. 3-1-0"
-                        style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-                <button type="button" onClick={() => setShowSubjModal(false)} className="btn btn-secondary">
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  Save Subject
-                </button>
+                  <form onSubmit={handleCreateSubject} id="add-subj-form">
+                    <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: "1rem", marginBottom: "1rem" }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                          Subject Name *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Natural Language Processing"
+                          value={subjName}
+                          onChange={(e) => setSubjName(e.target.value)}
+                          style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                          Subject Code *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. NLP-701"
+                          value={subjCode}
+                          onChange={(e) => setSubjCode(e.target.value)}
+                          style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem", textTransform: "uppercase" }}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                          Semester / Grade
+                        </label>
+                        <input
+                          type="text"
+                          value={subjSem}
+                          onChange={(e) => setSubjSem(e.target.value)}
+                          style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                          Credits
+                        </label>
+                        <input
+                          type="number"
+                          value={subjCredits}
+                          onChange={(e) => setSubjCredits(Number(e.target.value))}
+                          style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
+                        />
+                      </div>
+                    </div>
+                  </form>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", borderTop: "1px solid #e2e8f0", paddingTop: "1.25rem" }}>
+                  <button type="button" onClick={() => setShowSubjModal(false)} className="btn btn-secondary">
+                    Cancel
+                  </button>
+                  <button type="submit" form="add-subj-form" className="btn btn-primary">
+                    Save Subject
+                  </button>
+                </div>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
+
       {/* Student Profile Modal */}
       {selectedStudentForProfile && (
         <StudentProfileModal

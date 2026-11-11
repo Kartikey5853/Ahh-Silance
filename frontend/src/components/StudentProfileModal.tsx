@@ -153,34 +153,11 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
 
   return (
     <div
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: "rgba(15, 23, 42, 0.65)",
-        backdropFilter: "blur(6px)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1100,
-        padding: "1rem"
-      }}
+      className="modal-overlay-16-9"
       onClick={onClose}
     >
       <div
-        style={{
-          background: "#ffffff",
-          borderRadius: "18px",
-          width: "100%",
-          maxWidth: "960px",
-          maxHeight: "90vh",
-          display: "flex",
-          flexDirection: "column",
-          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
-          overflow: "hidden"
-        }}
+        className="modal-content-16-9"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
