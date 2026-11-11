@@ -113,8 +113,28 @@ export interface QuestionItem {
   marks: number;
   is_or_choice?: boolean;
   or_group?: string | null;
+  page?: number;
+  box_2d?: number[];
   rubric: string;
   ideal_answer?: string;
+}
+
+export interface RefineQuestionSuggestion {
+  title: string;
+  difficulty_level: string;
+  question_text: string;
+  marks: number;
+  rubric: string;
+  rationale: string;
+}
+
+export interface RefineQuestionResponse {
+  status: string;
+  source?: string;
+  model_used?: string;
+  topic_detected?: string;
+  suggestions: RefineQuestionSuggestion[];
+  api_error?: string;
 }
 
 export interface DigitalPaperHeader {
@@ -131,6 +151,8 @@ export interface ExamScanResponse {
   source: "gemini" | "ocr_parser";
   model_used?: string;
   filename: string;
+  paper_id?: string;
+  paper_page_count?: number;
   raw_text?: string;
   header: DigitalPaperHeader;
   sections?: { name: string; description?: string }[];
@@ -152,6 +174,8 @@ export interface Exam {
   exam_date?: string;
   correction_deadline?: string;
   question_paper_filename?: string;
+  paper_id?: string;
+  paper_page_count?: number;
   answer_key_text?: string;
   questions: QuestionItem[];
   evaluations_count?: number;

@@ -15,7 +15,8 @@ import type {
   Exam,
   AcademicEvaluation,
   QuestionItem,
-  ExamScanResponse
+  ExamScanResponse,
+  RefineQuestionResponse
 } from "../types/academic";
 
 export const academicApi = {
@@ -162,7 +163,25 @@ export const academicApi = {
       formData.append("gemini_api_key", apiKey);
     }
     const res = await apiClient.post<ExamScanResponse>("/academic/exams/scan-paper", formData, {
-      headers: { "Content-Type": "multipart/form-data" }
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 180000
+    });
+    return res.data;
+  },
+
+  refineQuestion: async (payload: {
+    question_text: string;
+    q_no?: string;
+    marks?: number;
+    subject_name?: string;
+    exam_title?: string;
+    action: "level_shift" | "auto_generate" | "rephrase" | "practical";
+    target_level?: string;
+    custom_instruction?: string;
+    gemini_api_key?: string;
+  }): Promise<RefineQuestionResponse> => {
+    const res = await apiClient.post<RefineQuestionResponse>("/academic/exams/refine-question", payload, {
+      timeout: 120000
     });
     return res.data;
   },
@@ -176,6 +195,9 @@ export const academicApi = {
     academic_year: string;
     exam_date?: string;
     correction_deadline?: string;
+    question_paper_filename?: string;
+    paper_id?: string;
+    paper_page_count?: number;
     answer_key_text?: string;
     questions: QuestionItem[];
   }): Promise<Exam> => {
@@ -183,10 +205,22 @@ export const academicApi = {
     return res.data;
   },
 
-  updateExamQuestions: async (examId: string, questions: QuestionItem[], maxMarks?: number): Promise<any> => {
+  updateExamQuestions: async (
+    examId: string,
+    questions: QuestionItem[],
+    maxMarks?: number,
+    options?: {
+      paper_id?: string;
+      paper_page_count?: number;
+      question_paper_filename?: string;
+      title?: string;
+      correction_deadline?: string;
+    }
+  ): Promise<any> => {
     const res = await apiClient.put(`/academic/exams/${examId}/questions`, {
       questions,
-      max_marks: maxMarks
+      max_marks: maxMarks,
+      ...(options || {})
     });
     return res.data;
   },
