@@ -9,25 +9,102 @@ Includes high-precision offline PyMuPDF fallback parsing.
 
 import os
 import json
+import uuid
+import asyncio
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 from dotenv import load_dotenv
 import pymupdf as fitz
 from PIL import Image
 import io
 
+try:
+    from backend.services.page_storage_service import PageStorageService
+except ImportError:
+    from services.page_storage_service import PageStorageService
+
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-# Configurable least-pricy Gemini models (gemini-3.1-flash-lite provides 500 free RPD quota & ultra-low latency)
-DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
-CANDIDATE_MODELS = [
+# Fast, active Gemini models verified for v1beta multimodal JSON workflows
+DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+CANDIDATE_MODELS = list(dict.fromkeys([
     DEFAULT_MODEL,
+    "gemini-2.5-flash",
     "gemini-flash-lite-latest",
-    "gemini-3.5-flash-lite",
     "gemini-flash-latest",
-    "gemini-3.8-flash"
-]
+]))
+
+
+def _resize_image_file_for_gemini(image_path: str, max_dim: int = 1400) -> Optional[bytes]:
+    """Loads a rasterized page image and caps its longest edge at max_dim for fast multimodal scanning."""
+    try:
+        with Image.open(image_path) as img:
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+            w, h = img.size
+            if max(w, h) > max_dim:
+                scale = max_dim / float(max(w, h))
+                img = img.resize((max(1, int(w * scale)), max(1, int(h * scale))), Image.Resampling.LANCZOS)
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=88)
+            return buf.getvalue()
+    except Exception as exc:
+        logger.warning(f"Failed resizing paper page {image_path}: {exc}")
+        return None
+
+
+def _normalize_question_boxes(questions_list: List[Dict[str, Any]], page_count: int) -> List[Dict[str, Any]]:
+    """
+    Validates per-question `page` (1..page_count) and `box_2d` [ymin, xmin, ymax, xmax] in 0..1000 space.
+    Generates clean non-overlapping vertical bands per page when coordinates are missing or invalid.
+    """
+    safe_pages = max(1, int(page_count or 1))
+    total = max(1, len(questions_list))
+
+    # First sanitize existing values and count missing boxes per page
+    page_missing_buckets: Dict[int, List[int]] = {}
+    for idx, q in enumerate(questions_list):
+        raw_page = q.get("page")
+        try:
+            page_num = int(raw_page) if raw_page is not None else 0
+        except (TypeError, ValueError):
+            page_num = 0
+        if page_num < 1 or page_num > safe_pages:
+            # Distribute evenly across available pages
+            page_num = min(safe_pages, 1 + (idx * safe_pages) // total)
+        q["page"] = page_num
+
+        raw_box = q.get("box_2d")
+        valid_box = False
+        if isinstance(raw_box, (list, tuple)) and len(raw_box) == 4:
+            try:
+                ymin, xmin, ymax, xmax = [int(round(float(v))) for v in raw_box]
+                ymin = max(0, min(980, ymin))
+                xmin = max(0, min(960, xmin))
+                ymax = max(ymin + 24, min(1000, ymax))
+                xmax = max(xmin + 40, min(1000, xmax))
+                q["box_2d"] = [ymin, xmin, ymax, xmax]
+                valid_box = True
+            except (TypeError, ValueError):
+                valid_box = False
+
+        if not valid_box:
+            page_missing_buckets.setdefault(page_num, []).append(idx)
+
+    # Assign clean stacked bands for any questions missing valid Gemini bounding boxes
+    for page_num, indices in page_missing_buckets.items():
+        n = len(indices)
+        top_margin = 95
+        bottom_limit = 930
+        usable_h = bottom_limit - top_margin
+        slot_h = max(48, usable_h // max(1, n))
+        for local_i, q_idx in enumerate(indices):
+            y1 = min(910, top_margin + local_i * slot_h)
+            y2 = min(975, y1 + max(40, slot_h - 10))
+            questions_list[q_idx]["box_2d"] = [y1, 55, y2, 945]
+
+    return questions_list
 
 
 def clean_json_response(raw_text: str) -> Dict[str, Any]:
@@ -104,12 +181,24 @@ class GeminiAcademicService:
         user_api_key: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Scans an uploaded Question Paper (PDF or Image) using Gemini API.
-        Extracts all raw text and generates a clean, structured Digital Question Paper
-        where each question has an ID for bi-directional linking.
+        Scans and rasterizes an uploaded Question Paper (PDF, Image, or Text) using
+        PageStorageService + Gemini Multimodal API.
+        Extracts structured questions formatted cleanly in Markdown along with per-page
+        spatial bounding boxes (`page`, `box_2d`) for interactive right-pane overlays.
         """
+        paper_id = f"paper-{uuid.uuid4().hex[:8]}"
+        raster_info = await asyncio.to_thread(
+            PageStorageService.save_and_rasterize_submission,
+            paper_id,
+            file_bytes,
+            filename,
+            180
+        )
+        pages_meta = raster_info.get("pages", [])
+        paper_page_count = max(1, int(raster_info.get("page_count") or len(pages_meta) or 1))
+
         client = get_gemini_client(user_api_key)
-        extracted_text = extract_text_from_file_bytes(file_bytes, filename)
+        extracted_text = extract_text_from_file_bytes(file_bytes, filename) or raster_info.get("raw_text", "")
         gemini_error: Optional[str] = None
 
         if client:
@@ -117,107 +206,116 @@ class GeminiAcademicService:
                 from google.genai import types
 
                 system_prompt = (
-                    "You are an expert Academic Examination Parser specializing in Indian university and college semester exam formats. "
-                    "Analyze this question paper document. Extract ALL text from the paper and structure it into a digital examination paper. "
-                    "Notice the structure: Part A consists of short compulsory questions (carrying 1.0 or 2.0 marks each, typically 10 marks total), "
-                    "and Part B consists of 5 Units where each unit offers an internal choice separated by 'OR' (e.g. Q2 OR Q3; Q4 OR Q5; Q6 OR Q7; Q8 OR Q9; Q10 OR Q11, carrying 10.0 marks each = 50 marks). "
-                    "Total exam max marks = 60.0. "
-                    "Extract ONLY the important academic text: clean question statements, clear marks, instructions, and syllabus sections. "
+                    "You are an expert Academic Examination Parser. Analyze ALL pages of this uploaded question paper "
+                    "and extract EVERY question accurately into a clean Digital Question Paper.\n"
+                    "Important extraction rules:\n"
+                    "1. Preserve the real marks, question numbering (`q_no`, e.g. `Q1.a`, `Q2`), sections, and internal 'OR' choices (`is_or_choice`, `or_group`). Compute `header.max_marks` accurately from the actual paper.\n"
+                    "2. Format each question `text` using clean, readable Markdown (e.g. **bold** key emphasis, bullet points `- ` for sub-clauses, inline backticks `` `S -> (L) | a` `` or fenced code blocks for grammars/code/expressions, Markdown tables if present). Never drop important mathematical symbols or grammar rules.\n"
+                    "3. For EVERY question, provide spatial coordinates matching the rasterized page images:\n"
+                    "   - `page`: 1-based page number (1 to " + str(paper_page_count) + ") where the question appears.\n"
+                    "   - `box_2d`: `[ymin, xmin, ymax, xmax]` normalized to integers in `0..1000` tightly enclosing that question block on that page.\n"
                     "Return ONLY valid JSON with this exact schema:\n"
                     "{\n"
                     '  "header": {\n'
-                    '    "title": "Formal Exam Title (e.g. B.Tech Semester End Examination)",\n'
-                    '    "institution": "Institution Name if detected or Academic Department",\n'
+                    '    "title": "Exam Title",\n'
+                    '    "institution": "Institution or Department Name",\n'
                     '    "course": "Subject / Course Name & Code",\n'
                     '    "time_allowed": "3 Hours",\n'
-                    '    "max_marks": 60.0,\n'
-                    '    "instructions": ["Part A is compulsory (10 Marks).", "Part B: Answer any one full question from each unit (50 Marks)."]\n'
+                    '    "max_marks": 50.0,\n'
+                    '    "instructions": ["Instruction 1", "Instruction 2"]\n'
                     "  },\n"
                     '  "sections": [\n'
-                    '    {"name": "Part A", "description": "Compulsory Short Questions (10 Marks)"},\n'
-                    '    {"name": "Part B", "description": "Descriptive Questions with OR Choices (50 Marks)"}\n'
+                    '    {"name": "Section A", "description": "Short description"}\n'
                     "  ],\n"
                     '  "questions": [\n'
                     "    {\n"
                     '      "id": "q-1a",\n'
                     '      "q_no": "Q1.a",\n'
-                    '      "section": "Part A",\n'
-                    '      "text": "Clean question statement...",\n'
-                    '      "marks": 1.0,\n'
+                    '      "section": "Section A",\n'
+                    '      "text": "Clean Markdown formatted question statement...",\n'
+                    '      "marks": 5.0,\n'
                     '      "is_or_choice": false,\n'
                     '      "or_group": null,\n'
-                    '      "rubric": "1.0 mark for accurate concise definition.",\n'
-                    '      "ideal_answer": "Key expected definition or formula."\n'
-                    "    },\n"
-                    "    {\n"
-                    '      "id": "q-2",\n'
-                    '      "q_no": "Q2",\n'
-                    '      "section": "Part B - Unit 1",\n'
-                    '      "text": "Detailed question statement...",\n'
-                    '      "marks": 10.0,\n'
-                    '      "is_or_choice": true,\n'
-                    '      "or_group": "unit-1",\n'
-                    '      "rubric": "Full credit (8-10M) requires minimum 3-page depth with all derivations. Brief answers capped at 5M.",\n'
-                    '      "ideal_answer": "Detailed multi-page explanation with formulations and algorithm steps."\n'
+                    '      "page": 1,\n'
+                    '      "box_2d": [120, 60, 260, 940],\n'
+                    '      "rubric": "Concise grading rubric for this question.",\n'
+                    '      "ideal_answer": "Key expected answer points."\n'
                     "    }\n"
                     "  ]\n"
                     "}"
                 )
 
-                contents = []
-                lower = filename.lower()
-                if lower.endswith((".png", ".jpg", ".jpeg", ".webp")):
-                    contents.append(types.Part.from_bytes(data=file_bytes, mime_type=f"image/{'jpeg' if 'jp' in lower else 'png'}"))
-                elif lower.endswith(".pdf"):
-                    # Pass PDF bytes directly and also pass rendered page image if text is sparse
-                    contents.append(types.Part.from_bytes(data=file_bytes, mime_type="application/pdf"))
-                    if not extracted_text:
-                        img_bytes = extract_first_page_image_bytes(file_bytes)
-                        if img_bytes:
-                            contents.append(types.Part.from_bytes(data=img_bytes, mime_type="image/png"))
+                contents: List[Any] = []
+                # Attach rasterized page images (exact same pages displayed in the frontend UI)
+                attached_images = 0
+                for page_meta in pages_meta[:12]:
+                    p_num = int(page_meta.get("page_num", 1))
+                    img_bytes = await asyncio.to_thread(_resize_image_file_for_gemini, page_meta["path"], 1400)
+                    if img_bytes:
+                        contents.append(f"--- Question Paper Page {p_num} of {paper_page_count} ---")
+                        contents.append(types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"))
+                        attached_images += 1
+
+                if attached_images == 0:
+                    lower = filename.lower()
+                    if lower.endswith((".png", ".jpg", ".jpeg", ".webp")):
+                        contents.append(types.Part.from_bytes(
+                            data=file_bytes,
+                            mime_type=f"image/{'jpeg' if 'jp' in lower else 'png'}"
+                        ))
+                    elif lower.endswith(".pdf"):
+                        contents.append(types.Part.from_bytes(data=file_bytes, mime_type="application/pdf"))
 
                 if extracted_text:
-                    contents.append(f"Extracted Document Text:\n\n{extracted_text}")
+                    contents.append(f"Extracted Document Text (auxiliary reference):\n\n{extracted_text[:18000]}")
 
                 contents.append(system_prompt)
 
-                # Try candidate models
+                # Try candidate models without blocking the FastAPI event loop
                 last_exc = None
                 for model_name in CANDIDATE_MODELS:
                     try:
-                        response = client.models.generate_content(
-                            model=model_name,
-                            contents=contents,
-                            config=types.GenerateContentConfig(
-                                response_mime_type="application/json",
-                                temperature=0.1
+                        def _call_model(m: str = model_name):
+                            return client.models.generate_content(
+                                model=m,
+                                contents=contents,
+                                config=types.GenerateContentConfig(
+                                    response_mime_type="application/json",
+                                    temperature=0.1
+                                )
                             )
-                        )
+
+                        response = await asyncio.to_thread(_call_model)
                         if response.text:
                             data = clean_json_response(response.text)
                             questions_list = data.get("questions", [])
-                            # Ensure each question has a valid id and marks
                             for idx, q in enumerate(questions_list):
                                 if "id" not in q or not q["id"]:
                                     q["id"] = f"q-{idx + 1}"
-                                if "marks" not in q:
-                                    q["marks"] = 10.0
+                                if "q_no" not in q or not q["q_no"]:
+                                    q["q_no"] = f"Q{idx + 1}"
+                                if "marks" not in q or q["marks"] is None:
+                                    q["marks"] = 5.0
+                                if "rubric" not in q:
+                                    q["rubric"] = f"Award up to {q['marks']} marks based on accuracy and completeness."
 
-                            header = data.get("header", {
-                                "title": "Examination Question Paper",
-                                "institution": "Academic Department",
-                                "course": "Course Curriculum",
-                                "time_allowed": "3 Hours",
-                                "max_marks": sum(float(q.get("marks", 10.0)) for q in questions_list),
-                                "instructions": ["Answer all questions.", "All questions carry marks as indicated."]
-                            })
-                            total_marks = sum(float(q.get("marks", 10.0)) for q in questions_list)
+                            questions_list = _normalize_question_boxes(questions_list, paper_page_count)
+                            total_marks = sum(float(q.get("marks", 5.0)) for q in questions_list)
+                            header = data.get("header") or {}
+                            header.setdefault("title", "Examination Question Paper")
+                            header.setdefault("institution", "Academic Department")
+                            header.setdefault("course", "Course Curriculum")
+                            header.setdefault("time_allowed", "3 Hours")
+                            header.setdefault("max_marks", total_marks)
+                            header.setdefault("instructions", ["Answer all questions.", "Marks are indicated against each question."])
 
                             return {
                                 "status": "success",
                                 "source": "gemini",
                                 "model_used": model_name,
                                 "filename": filename,
+                                "paper_id": paper_id,
+                                "paper_page_count": paper_page_count,
                                 "raw_text": extracted_text or "Processed via Gemini Multimodal Vision",
                                 "header": header,
                                 "sections": data.get("sections", [{"name": "Section A", "description": "Core Questions"}]),
@@ -241,51 +339,63 @@ class GeminiAcademicService:
             gemini_error = "No Gemini API Key configured in profile or environment."
 
         # Fallback heuristic parser if no API key or network/model error
-        fallback_data = cls._fallback_question_paper_parser(extracted_text, filename)
+        fallback_data = cls._fallback_question_paper_parser(
+            extracted_text,
+            filename,
+            paper_id=paper_id,
+            paper_page_count=paper_page_count,
+        )
         fallback_data["api_error"] = gemini_error
         return fallback_data
 
     @classmethod
-    def _fallback_question_paper_parser(cls, text: str, filename: str) -> Dict[str, Any]:
+    def _fallback_question_paper_parser(
+        cls,
+        text: str,
+        filename: str,
+        paper_id: str = "",
+        paper_page_count: int = 1
+    ) -> Dict[str, Any]:
         """
-        Parses raw text into a realistic structured Digital Question Paper with IDs.
+        Parses raw text into a realistic structured Digital Question Paper with IDs and normalized page boxes.
         Models standard Indian university / college semester paper structure:
         Part A (Compulsory short questions) + Part B (5 Units with OR internal choice).
         """
         # Standard high-yield 60-mark semester exam paper with OR choices
         questions = [
             # Part A - Compulsory Short Questions (10 Marks, 1M each)
-            {"id": "q-1a", "q_no": "Q1.a", "section": "Part A", "text": "Differentiate between Supervised Learning and Unsupervised Learning with suitable examples.", "marks": 1.0, "is_or_choice": False, "or_group": None, "rubric": "1.0 pt for accurate definition and distinct application examples.", "ideal_answer": "Supervised uses labeled training data; Unsupervised discovers inherent patterns in unlabeled data."},
-            {"id": "q-1b", "q_no": "Q1.b", "section": "Part A", "text": "What is meant by Inductive Bias in machine learning models?", "marks": 1.0, "is_or_choice": False, "or_group": None, "rubric": "1.0 pt for defining assumptions made by learning algorithm to predict unseen instances.", "ideal_answer": "Set of assumptions that the learner uses to predict outputs of given inputs that it has not encountered."},
-            {"id": "q-1c", "q_no": "Q1.c", "section": "Part A", "text": "State Bayes Theorem formula and define each of its components.", "marks": 1.0, "is_or_choice": False, "or_group": None, "rubric": "1.0 pt for correct formula P(h|D) = P(D|h)*P(h)/P(D) and definition of prior and posterior.", "ideal_answer": "P(h|D) = (P(D|h)*P(h)) / P(D), where P(h|D) is posterior, P(h) is prior probability."},
-            {"id": "q-1d", "q_no": "Q1.d", "section": "Part A", "text": "Define Overfitting and describe how it affects generalization to unseen test data.", "marks": 1.0, "is_or_choice": False, "or_group": None, "rubric": "1.0 pt for defining high training accuracy but low test generalization due to modeling noise.", "ideal_answer": "Overfitting occurs when a hypothesis fits the training data too well, memorizing noise and failing on unseen test data."},
-            {"id": "q-1e", "q_no": "Q1.e", "section": "Part A", "text": "What is a Single Layer Perceptron and what is its primary representational limitation?", "marks": 1.0, "is_or_choice": False, "or_group": None, "rubric": "1.0 pt for linear threshold unit and inability to solve linearly non-separable problems (XOR).", "ideal_answer": "Linear classifier using step activation; limited to linearly separable functions (cannot learn XOR)."},
-            {"id": "q-1f", "q_no": "Q1.f", "section": "Part A", "text": "Define Precision and Recall in classification performance evaluation.", "marks": 1.0, "is_or_choice": False, "or_group": None, "rubric": "1.0 pt for Precision = TP/(TP+FP) and Recall = TP/(TP+FN).", "ideal_answer": "Precision is TP / (TP + FP); Recall is TP / (TP + FN)."},
-            {"id": "q-1g", "q_no": "Q1.g", "section": "Part A", "text": "Explain the concept and advantage of k-fold Cross-Validation.", "marks": 1.0, "is_or_choice": False, "or_group": None, "rubric": "1.0 pt for partitioning into k folds, rotating validation, and reducing evaluation variance.", "ideal_answer": "Dataset split into k subsets; each fold acts as validation while remaining k-1 train, providing unbiased performance estimates."},
-            {"id": "q-1h", "q_no": "Q1.h", "section": "Part A", "text": "What is the Probably Approximately Correct (PAC) Learning framework?", "marks": 1.0, "is_or_choice": False, "or_group": None, "rubric": "1.0 pt for sample complexity bound with probability 1-delta and error epsilon.", "ideal_answer": "A framework to analyze whether a learner outputs a hypothesis with error <= epsilon with probability >= 1-delta in polynomial time."},
-            {"id": "q-1i", "q_no": "Q1.i", "section": "Part A", "text": "Explain the Kernel Trick in Support Vector Machines.", "marks": 1.0, "is_or_choice": False, "or_group": None, "rubric": "1.0 pt for mapping data to higher dimensions via inner product K(x, z) without explicit coordinate projection.", "ideal_answer": "Computes inner products in a high-dimensional feature space using kernel function K(x, y) without explicit transformation."},
-            {"id": "q-1j", "q_no": "Q1.j", "section": "Part A", "text": "Differentiate between Bagging and Boosting ensemble techniques.", "marks": 1.0, "is_or_choice": False, "or_group": None, "rubric": "1.0 pt for parallel independent bootstrap sampling vs sequential weighted error correction.", "ideal_answer": "Bagging trains base models independently in parallel to reduce variance; Boosting trains sequentially to reduce bias."},
+            {"id": "q-1a", "q_no": "Q1.a", "section": "Part A", "text": "Differentiate between **Supervised Learning** and **Unsupervised Learning** with suitable examples.", "marks": 1.0, "is_or_choice": False, "or_group": None, "rubric": "1.0 pt for accurate definition and distinct application examples.", "ideal_answer": "Supervised uses labeled training data; Unsupervised discovers inherent patterns in unlabeled data."},
+            {"id": "q-1b", "q_no": "Q1.b", "section": "Part A", "text": "What is meant by **Inductive Bias** in machine learning models?", "marks": 1.0, "is_or_choice": False, "or_group": None, "rubric": "1.0 pt for defining assumptions made by learning algorithm to predict unseen instances.", "ideal_answer": "Set of assumptions that the learner uses to predict outputs of given inputs that it has not encountered."},
+            {"id": "q-1c", "q_no": "Q1.c", "section": "Part A", "text": "State **Bayes Theorem** formula `P(h|D) = P(D|h) * P(h) / P(D)` and define each of its components.", "marks": 1.0, "is_or_choice": False, "or_group": None, "rubric": "1.0 pt for correct formula P(h|D) = P(D|h)*P(h)/P(D) and definition of prior and posterior.", "ideal_answer": "P(h|D) = (P(D|h)*P(h)) / P(D), where P(h|D) is posterior, P(h) is prior probability."},
+            {"id": "q-1d", "q_no": "Q1.d", "section": "Part A", "text": "Define **Overfitting** and describe how it affects generalization to unseen test data.", "marks": 1.0, "is_or_choice": False, "or_group": None, "rubric": "1.0 pt for defining high training accuracy but low test generalization due to modeling noise.", "ideal_answer": "Overfitting occurs when a hypothesis fits the training data too well, memorizing noise and failing on unseen test data."},
+            {"id": "q-1e", "q_no": "Q1.e", "section": "Part A", "text": "What is a **Single Layer Perceptron** and what is its primary representational limitation?", "marks": 1.0, "is_or_choice": False, "or_group": None, "rubric": "1.0 pt for linear threshold unit and inability to solve linearly non-separable problems (XOR).", "ideal_answer": "Linear classifier using step activation; limited to linearly separable functions (cannot learn XOR)."},
+            {"id": "q-1f", "q_no": "Q1.f", "section": "Part A", "text": "Define **Precision** and **Recall** in classification performance evaluation.", "marks": 1.0, "is_or_choice": False, "or_group": None, "rubric": "1.0 pt for Precision = TP/(TP+FP) and Recall = TP/(TP+FN).", "ideal_answer": "Precision is TP / (TP + FP); Recall is TP / (TP + FN)."},
+            {"id": "q-1g", "q_no": "Q1.g", "section": "Part A", "text": "Explain the concept and advantage of **k-fold Cross-Validation**.", "marks": 1.0, "is_or_choice": False, "or_group": None, "rubric": "1.0 pt for partitioning into k folds, rotating validation, and reducing evaluation variance.", "ideal_answer": "Dataset split into k subsets; each fold acts as validation while remaining k-1 train, providing unbiased performance estimates."},
+            {"id": "q-1h", "q_no": "Q1.h", "section": "Part A", "text": "What is the **Probably Approximately Correct (PAC)** Learning framework?", "marks": 1.0, "is_or_choice": False, "or_group": None, "rubric": "1.0 pt for sample complexity bound with probability 1-delta and error epsilon.", "ideal_answer": "A framework to analyze whether a learner outputs a hypothesis with error <= epsilon with probability >= 1-delta in polynomial time."},
+            {"id": "q-1i", "q_no": "Q1.i", "section": "Part A", "text": "Explain the **Kernel Trick** in Support Vector Machines.", "marks": 1.0, "is_or_choice": False, "or_group": None, "rubric": "1.0 pt for mapping data to higher dimensions via inner product K(x, z) without explicit coordinate projection.", "ideal_answer": "Computes inner products in a high-dimensional feature space using kernel function K(x, y) without explicit transformation."},
+            {"id": "q-1j", "q_no": "Q1.j", "section": "Part A", "text": "Differentiate between **Bagging** and **Boosting** ensemble techniques.", "marks": 1.0, "is_or_choice": False, "or_group": None, "rubric": "1.0 pt for parallel independent bootstrap sampling vs sequential weighted error correction.", "ideal_answer": "Bagging trains base models independently in parallel to reduce variance; Boosting trains sequentially to reduce bias."},
 
             # Part B - Unit 1 (10 Marks, Q2 OR Q3)
-            {"id": "q-2", "q_no": "Q2", "section": "Part B - Unit 1", "text": "Describe the Find-S Algorithm for Concept Learning. Illustrate its step-by-step hypothesis generalization trace on a sample training set.", "marks": 10.0, "is_or_choice": True, "or_group": "unit-1", "rubric": "Full credit (8-10M) requires minimum 3-page depth with tabular trace. Capped at 5M if brief.", "ideal_answer": "Find-S starts with most specific hypothesis and generalizes constraints upon encountering positive training instances."},
-            {"id": "q-3", "q_no": "Q3", "section": "Part B - Unit 1", "text": "Explain the Candidate Elimination Algorithm and Version Space representation. Trace the General (G) and Specific (S) boundary updates on illustrative training instances.", "marks": 10.0, "is_or_choice": True, "or_group": "unit-1", "rubric": "Full credit (8-10M) requires minimum 3-page depth (~180 words/page), tracing both G and S boundaries. Capped at 5M if brief.", "ideal_answer": "Maintains boundary sets S (most specific) and G (most general) consistent with all positive and negative training examples."},
+            {"id": "q-2", "q_no": "Q2", "section": "Part B - Unit 1", "text": "Describe the **Find-S Algorithm** for Concept Learning. Illustrate its step-by-step hypothesis generalization trace on a sample training set.", "marks": 10.0, "is_or_choice": True, "or_group": "unit-1", "rubric": "Full credit (8-10M) requires minimum 3-page depth with tabular trace. Capped at 5M if brief.", "ideal_answer": "Find-S starts with most specific hypothesis and generalizes constraints upon encountering positive training instances."},
+            {"id": "q-3", "q_no": "Q3", "section": "Part B - Unit 1", "text": "Explain the **Candidate Elimination Algorithm** and Version Space representation. Trace the General (`G`) and Specific (`S`) boundary updates on illustrative training instances.", "marks": 10.0, "is_or_choice": True, "or_group": "unit-1", "rubric": "Full credit (8-10M) requires minimum 3-page depth (~180 words/page), tracing both G and S boundaries. Capped at 5M if brief.", "ideal_answer": "Maintains boundary sets S (most specific) and G (most general) consistent with all positive and negative training examples."},
 
             # Part B - Unit 2 (10 Marks, Q4 OR Q5)
-            {"id": "q-4", "q_no": "Q4", "section": "Part B - Unit 2", "text": "Explain Decision Tree learning using the ID3 algorithm. Derive the mathematical formulas for Entropy and Information Gain with an illustrative classification example.", "marks": 10.0, "is_or_choice": True, "or_group": "unit-2", "rubric": "Full credit (8-10M) requires minimum 3-page depth (~180 words/page), mathematical entropy derivations, and splitting trace. Capped at 5M if brief.", "ideal_answer": "ID3 uses Information Gain = Entropy(S) - Sum((|Sv|/|S|)*Entropy(Sv)) as greedy heuristic to build minimal decision tree."},
-            {"id": "q-5", "q_no": "Q5", "section": "Part B - Unit 2", "text": "Discuss practical issues in Decision Tree Learning: Overfitting, Reduced Error Pruning, handling continuous attributes, and managing missing attribute values.", "marks": 10.0, "is_or_choice": True, "or_group": "unit-2", "rubric": "Full credit (8-10M) requires minimum 3-page depth with pruning algorithms. Capped at 5M if brief.", "ideal_answer": "Overfitting prevented by pre-pruning or post-pruning (Rule Post-Pruning, Reduced Error Pruning). Thresholding handles continuous variables."},
+            {"id": "q-4", "q_no": "Q4", "section": "Part B - Unit 2", "text": "Explain Decision Tree learning using the **ID3 algorithm**. Derive the mathematical formulas for **Entropy** and **Information Gain** with an illustrative classification example.", "marks": 10.0, "is_or_choice": True, "or_group": "unit-2", "rubric": "Full credit (8-10M) requires minimum 3-page depth (~180 words/page), mathematical entropy derivations, and splitting trace. Capped at 5M if brief.", "ideal_answer": "ID3 uses Information Gain = Entropy(S) - Sum((|Sv|/|S|)*Entropy(Sv)) as greedy heuristic to build minimal decision tree."},
+            {"id": "q-5", "q_no": "Q5", "section": "Part B - Unit 2", "text": "Discuss practical issues in Decision Tree Learning:\n- **Overfitting** and Reduced Error Pruning\n- Handling **continuous attributes**\n- Managing **missing attribute values**", "marks": 10.0, "is_or_choice": True, "or_group": "unit-2", "rubric": "Full credit (8-10M) requires minimum 3-page depth with pruning algorithms. Capped at 5M if brief.", "ideal_answer": "Overfitting prevented by pre-pruning or post-pruning (Rule Post-Pruning, Reduced Error Pruning). Thresholding handles continuous variables."},
 
             # Part B - Unit 3 (10 Marks, Q6 OR Q7)
-            {"id": "q-6", "q_no": "Q6", "section": "Part B - Unit 3", "text": "Derive the Gradient Descent weight update rule for Linear Units. Compare Batch Gradient Descent with Stochastic Gradient Descent.", "marks": 10.0, "is_or_choice": True, "or_group": "unit-3", "rubric": "Full credit (8-10M) requires minimum 3-page depth with full partial derivative derivations. Capped at 5M if brief.", "ideal_answer": "Minimizes sum of squared errors E = 1/2 Sum(t - o)^2 via delta_w = eta Sum(t - o) x. SGD updates weights per instance."},
-            {"id": "q-7", "q_no": "Q7", "section": "Part B - Unit 3", "text": "Formulate the Backpropagation algorithm for a Multi-Layer Feedforward Neural Network. Derive the error term (delta) and weight updates for hidden and output units.", "marks": 10.0, "is_or_choice": True, "or_group": "unit-3", "rubric": "Full credit (8-10M) requires minimum 3-page depth (~180 words/page), chain rule calculus derivation for hidden and output layer delta. Capped at 5M if brief.", "ideal_answer": "Uses chain rule to propagate errors backwards: delta_k = o_k(1-o_k)(t_k-o_k) for output, delta_j = o_j(1-o_j) Sum(w_jk * delta_k) for hidden."},
+            {"id": "q-6", "q_no": "Q6", "section": "Part B - Unit 3", "text": "Derive the **Gradient Descent** weight update rule for Linear Units. Compare **Batch Gradient Descent** with **Stochastic Gradient Descent**.", "marks": 10.0, "is_or_choice": True, "or_group": "unit-3", "rubric": "Full credit (8-10M) requires minimum 3-page depth with full partial derivative derivations. Capped at 5M if brief.", "ideal_answer": "Minimizes sum of squared errors E = 1/2 Sum(t - o)^2 via delta_w = eta Sum(t - o) x. SGD updates weights per instance."},
+            {"id": "q-7", "q_no": "Q7", "section": "Part B - Unit 3", "text": "Formulate the **Backpropagation algorithm** for a Multi-Layer Feedforward Neural Network. Derive the error term (`delta`) and weight updates for hidden and output units.", "marks": 10.0, "is_or_choice": True, "or_group": "unit-3", "rubric": "Full credit (8-10M) requires minimum 3-page depth (~180 words/page), chain rule calculus derivation for hidden and output layer delta. Capped at 5M if brief.", "ideal_answer": "Uses chain rule to propagate errors backwards: delta_k = o_k(1-o_k)(t_k-o_k) for output, delta_j = o_j(1-o_j) Sum(w_jk * delta_k) for hidden."},
 
             # Part B - Unit 4 (10 Marks, Q8 OR Q9)
-            {"id": "q-8", "q_no": "Q8", "section": "Part B - Unit 4", "text": "Explain the Naive Bayes Classifier and Maximum A Posteriori (MAP) hypothesis. Demonstrate its formulation and application for text document classification.", "marks": 10.0, "is_or_choice": True, "or_group": "unit-4", "rubric": "Full credit (8-10M) requires minimum 3-page depth (~180 words/page), conditional independence assumption, Laplace m-estimate. Capped at 5M if brief.", "ideal_answer": "Assumes attribute conditional independence given target class: v_NB = argmax P(v_j) Prod P(a_i | v_j). Used with Bag-of-Words for NLP."},
-            {"id": "q-9", "q_no": "Q9", "section": "Part B - Unit 4", "text": "Explain Bayesian Belief Networks (BBN) and conditional independence representation. Describe how probabilistic inference is carried out over Directed Acyclic Graphs.", "marks": 10.0, "is_or_choice": True, "or_group": "unit-4", "rubric": "Full credit (8-10M) requires minimum 3-page depth with DAG illustrations and CPT tables. Capped at 5M if brief.", "ideal_answer": "Represents joint probability distribution through conditional probability tables (CPTs) over DAGs where nodes are conditionally independent of non-descendants."},
+            {"id": "q-8", "q_no": "Q8", "section": "Part B - Unit 4", "text": "Explain the **Naive Bayes Classifier** and Maximum A Posteriori (MAP) hypothesis. Demonstrate its formulation and application for text document classification.", "marks": 10.0, "is_or_choice": True, "or_group": "unit-4", "rubric": "Full credit (8-10M) requires minimum 3-page depth (~180 words/page), conditional independence assumption, Laplace m-estimate. Capped at 5M if brief.", "ideal_answer": "Assumes attribute conditional independence given target class: v_NB = argmax P(v_j) Prod P(a_i | v_j). Used with Bag-of-Words for NLP."},
+            {"id": "q-9", "q_no": "Q9", "section": "Part B - Unit 4", "text": "Explain **Bayesian Belief Networks (BBN)** and conditional independence representation. Describe how probabilistic inference is carried out over Directed Acyclic Graphs.", "marks": 10.0, "is_or_choice": True, "or_group": "unit-4", "rubric": "Full credit (8-10M) requires minimum 3-page depth with DAG illustrations and CPT tables. Capped at 5M if brief.", "ideal_answer": "Represents joint probability distribution through conditional probability tables (CPTs) over DAGs where nodes are conditionally independent of non-descendants."},
 
             # Part B - Unit 5 (10 Marks, Q10 OR Q11)
-            {"id": "q-10", "q_no": "Q10", "section": "Part B - Unit 5", "text": "Describe the K-Nearest Neighbors (k-NN) algorithm. Discuss distance metrics, Distance-Weighted k-NN, and the Curse of Dimensionality.", "marks": 10.0, "is_or_choice": True, "or_group": "unit-5", "rubric": "Full credit (8-10M) requires minimum 3-page depth with geometric explanations. Capped at 5M if brief.", "ideal_answer": "Instance-based lazy learner using Euclidean/Manhattan distance. Weighted by inverse distance squared to reduce noise influence."},
-            {"id": "q-11", "q_no": "Q11", "section": "Part B - Unit 5", "text": "Explain the Expectation-Maximization (EM) algorithm and K-Means Clustering algorithm. Formulate the iterative Expectation step and Maximization step.", "marks": 10.0, "is_or_choice": True, "or_group": "unit-5", "rubric": "Full credit (8-10M) requires minimum 3-page depth (~180 words/page) with iterative EM convergence formulas. Brief 1-page answers capped at 5.0 marks.", "ideal_answer": "Iterative method for finding maximum likelihood estimates in models with latent variables. E-step computes expected log-likelihood; M-step optimizes parameters."}
+            {"id": "q-10", "q_no": "Q10", "section": "Part B - Unit 5", "text": "Describe the **K-Nearest Neighbors (k-NN)** algorithm. Discuss distance metrics, Distance-Weighted k-NN, and the **Curse of Dimensionality**.", "marks": 10.0, "is_or_choice": True, "or_group": "unit-5", "rubric": "Full credit (8-10M) requires minimum 3-page depth with geometric explanations. Capped at 5M if brief.", "ideal_answer": "Instance-based lazy learner using Euclidean/Manhattan distance. Weighted by inverse distance squared to reduce noise influence."},
+            {"id": "q-11", "q_no": "Q11", "section": "Part B - Unit 5", "text": "Explain the **Expectation-Maximization (EM)** algorithm and **K-Means Clustering** algorithm. Formulate the iterative Expectation step and Maximization step.", "marks": 10.0, "is_or_choice": True, "or_group": "unit-5", "rubric": "Full credit (8-10M) requires minimum 3-page depth (~180 words/page) with iterative EM convergence formulas. Brief 1-page answers capped at 5.0 marks.", "ideal_answer": "Iterative method for finding maximum likelihood estimates in models with latent variables. E-step computes expected log-likelihood; M-step optimizes parameters."}
         ]
+        questions = _normalize_question_boxes(questions, paper_page_count)
 
         header = {
             "title": "B.TECH SEMESTER END EXAMINATION",
@@ -306,6 +416,8 @@ class GeminiAcademicService:
             "source": "ocr_parser",
             "model_used": "offline_ocr",
             "filename": filename,
+            "paper_id": paper_id,
+            "paper_page_count": paper_page_count,
             "raw_text": text or "Document text parsed via PyMuPDF",
             "header": header,
             "sections": [
@@ -316,6 +428,210 @@ class GeminiAcademicService:
             "questions_count": len(questions),
             "total_marks": 60.0,
             "digital_paper_code": json.dumps({"header": header, "questions": questions}, indent=2)
+        }
+
+    @classmethod
+    async def refine_question(
+        cls,
+        question_text: str,
+        q_no: str = "Q1",
+        marks: float = 5.0,
+        subject_name: str = "",
+        exam_title: str = "",
+        action: str = "level_shift",
+        target_level: str = "Medium",
+        custom_instruction: str = "",
+        user_api_key: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Generates 3-4 refined or newly synthesized exam question variants keeping the SAME underlying
+        academic topic while shifting difficulty, clarity, or generating fresh parallel questions.
+        """
+        client = get_gemini_client(user_api_key)
+        gemini_error: Optional[str] = None
+
+        action_guides = {
+            "level_shift": (
+                f"Generate 3 distinct variations of the same core topic at target difficulty level '{target_level}'. "
+                "Keep the exact subject concept/topic identical, but adjust cognitive demand (recall/conceptual for Easy, applied/derivation for Medium, multi-step synthesis/edge-case proof/problem solving for Hard/Analytical)."
+            ),
+            "auto_generate": (
+                "Auto-generate 4 brand-new, high-quality alternative exam questions on the SAME underlying topic/concept "
+                "(spanning Easy, Medium, Hard, and Applied/Worked Problem levels) so the instructor can either swap the question or add extra questions."
+            ),
+            "rephrase": (
+                "Produce 3 cleaner, more unambiguous, well-structured Markdown versions of this exact question without changing its core meaning or difficulty."
+            ),
+            "practical": (
+                "Generate 3 applied, scenario/numerical/trace-based variants keeping the same core topic, with concrete sample inputs, grammar, dataset, or numbers where appropriate."
+            ),
+        }
+        mode_guidance = action_guides.get(action, action_guides["level_shift"])
+
+        if client:
+            try:
+                from google.genai import types
+
+                prompt = (
+                    "You are an expert University Professor & Assessment Designer.\n"
+                    f"Course / Subject: {subject_name or 'University Course'}\n"
+                    f"Exam: {exam_title or 'Examination'}\n"
+                    f"Original Question ({q_no}, {marks} marks):\n\"\"\"\n{question_text}\n\"\"\"\n\n"
+                    f"Task Mode: {action} | Target Level: {target_level}\n"
+                    f"Guidance: {mode_guidance}\n"
+                    + (f"Additional Instructor Request: {custom_instruction}\n" if custom_instruction.strip() else "")
+                    + "\nFormat every generated `question_text` with crisp Markdown (**bold** key directives, `- ` bullets for sub-questions, inline `` `code/grammar` `` or fenced blocks where appropriate).\n"
+                    "Return ONLY valid JSON with this exact schema:\n"
+                    "{\n"
+                    '  "topic_detected": "Short name of core topic (e.g. SLR(1) Parsing / Naive Bayes)",\n'
+                    '  "suggestions": [\n'
+                    "    {\n"
+                    '      "title": "Short card title (e.g. Conceptual Trace Variant)",\n'
+                    '      "difficulty_level": "Easy | Medium | Hard | Analytical | Practical",\n'
+                    '      "question_text": "Markdown formatted exam question text...",\n'
+                    '      "marks": 5.0,\n'
+                    '      "rubric": "Concise step-by-step marking breakdown summing to marks",\n'
+                    '      "rationale": "1-sentence explanation of how this keeps the topic while shifting depth."\n'
+                    "    }\n"
+                    "  ]\n"
+                    "}"
+                )
+
+                last_exc = None
+                for model_name in CANDIDATE_MODELS:
+                    try:
+                        def _call_refine(m: str = model_name):
+                            return client.models.generate_content(
+                                model=m,
+                                contents=[prompt],
+                                config=types.GenerateContentConfig(
+                                    response_mime_type="application/json",
+                                    temperature=0.4
+                                )
+                            )
+
+                        response = await asyncio.to_thread(_call_refine)
+                        if response.text:
+                            parsed = clean_json_response(response.text)
+                            suggestions = parsed.get("suggestions", [])
+                            if isinstance(suggestions, list) and len(suggestions) > 0:
+                                cleaned_suggestions = []
+                                for s in suggestions[:4]:
+                                    cleaned_suggestions.append({
+                                        "title": str(s.get("title") or f"{target_level} Variant"),
+                                        "difficulty_level": str(s.get("difficulty_level") or target_level),
+                                        "question_text": str(s.get("question_text") or question_text).strip(),
+                                        "marks": float(s.get("marks") if s.get("marks") is not None else marks),
+                                        "rubric": str(s.get("rubric") or f"Award up to {marks} marks."),
+                                        "rationale": str(s.get("rationale") or "Generated on the same topic."),
+                                    })
+                                return {
+                                    "status": "success",
+                                    "source": "gemini",
+                                    "model_used": model_name,
+                                    "topic_detected": str(parsed.get("topic_detected") or "Core Topic"),
+                                    "suggestions": cleaned_suggestions,
+                                }
+                    except Exception as model_err:
+                        last_exc = model_err
+                        logger.warning(f"Refine question model {model_name} failed: {model_err}")
+                        continue
+
+                if last_exc:
+                    gemini_error = str(last_exc)
+            except Exception as exc:
+                logger.error(f"Gemini refine_question error: {exc}")
+                gemini_error = str(exc)
+        else:
+            gemini_error = "No Gemini API Key configured."
+
+        fallback = cls._fallback_refine_question(
+            question_text=question_text,
+            marks=marks,
+            action=action,
+            target_level=target_level,
+            custom_instruction=custom_instruction,
+        )
+        fallback["api_error"] = gemini_error
+        return fallback
+
+    @classmethod
+    def _fallback_refine_question(
+        cls,
+        question_text: str,
+        marks: float,
+        action: str,
+        target_level: str,
+        custom_instruction: str = "",
+    ) -> Dict[str, Any]:
+        """Topic-preserving offline fallback variants when Gemini is unavailable."""
+        clean_src = question_text.strip() or "the core concept"
+        short_focus = clean_src.splitlines()[0][:95].rstrip(".")
+        extra_note = f"\n\n> Focus note: {custom_instruction.strip()}" if custom_instruction.strip() else ""
+
+        suggestions = [
+            {
+                "title": "Conceptual & Foundational (Easy)",
+                "difficulty_level": "Easy",
+                "question_text": (
+                    f"Define the fundamental principles involved in:\n\n> {short_focus}\n\n"
+                    f"- State key definitions clearly.\n- Provide **one brief illustrative example**."
+                    f"{extra_note}"
+                ),
+                "marks": max(1.0, round(marks * 0.6, 1)),
+                "rubric": "50% for accurate core definition, 50% for clear illustrative example.",
+                "rationale": "Simplifies cognitive demand to foundational understanding on the same topic.",
+            },
+            {
+                "title": f"Structured Step-by-Step ({target_level})",
+                "difficulty_level": target_level if target_level in ("Easy", "Medium", "Hard", "Analytical") else "Medium",
+                "question_text": (
+                    f"**Refined Prompt:** {clean_src}\n\n"
+                    f"Structure your answer to include:\n"
+                    f"- Core formulation / rules\n"
+                    f"- Complete intermediate steps or table\n"
+                    f"- Final verified conclusion"
+                    f"{extra_note}"
+                ),
+                "marks": float(marks),
+                "rubric": f"Full {marks} marks for complete formulation, intermediate trace, and final conclusion.",
+                "rationale": "Clarifies expectations in Markdown sub-bullets while preserving the exact topic.",
+            },
+            {
+                "title": "Critical Analysis & Edge-Case Extension (Hard)",
+                "difficulty_level": "Hard",
+                "question_text": (
+                    f"**Analytical Challenge** based on: {short_focus}\n\n"
+                    f"- Solve or construct the complete solution step-by-step.\n"
+                    f"- Identify potential **conflicts, ambiguities, or failure edge-cases**.\n"
+                    f"- Justify how an alternative approach addresses those limitations."
+                    f"{extra_note}"
+                ),
+                "marks": max(float(marks), round(marks * 1.25, 1)),
+                "rubric": "40% complete derivation/construction, 35% conflict/edge-case analysis, 25% comparative justification.",
+                "rationale": "Raises rigor to evaluation and edge-case reasoning without changing the underlying topic.",
+            },
+        ]
+
+        if action == "auto_generate":
+            suggestions.append({
+                "title": "Practical Comparative Scenario",
+                "difficulty_level": "Practical",
+                "question_text": (
+                    f"**Applied Problem:** Taking the concept from *{short_focus}*, design a small concrete input example "
+                    f"and trace the output state by state.{extra_note}"
+                ),
+                "marks": float(marks),
+                "rubric": "50% valid concrete input setup, 50% accurate step-by-step execution trace.",
+                "rationale": "Generates a fresh applied problem anchored on the exact same syllabus concept.",
+            })
+
+        return {
+            "status": "success",
+            "source": "offline_fallback",
+            "model_used": "offline_template",
+            "topic_detected": short_focus,
+            "suggestions": suggestions,
         }
 
     @classmethod

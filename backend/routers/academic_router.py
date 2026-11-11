@@ -118,6 +118,9 @@ class ExamCreateRequest(BaseModel):
     academic_year: str = "2026-2027"
     exam_date: Optional[str] = None
     correction_deadline: Optional[str] = None
+    question_paper_filename: Optional[str] = ""
+    paper_id: Optional[str] = ""
+    paper_page_count: Optional[int] = 0
     answer_key_text: Optional[str] = ""
     questions: List[Dict[str, Any]] = Field(default_factory=list)
 
@@ -125,6 +128,23 @@ class ExamCreateRequest(BaseModel):
 class QuestionsUpdateRequest(BaseModel):
     questions: List[Dict[str, Any]]
     max_marks: Optional[float] = None
+    paper_id: Optional[str] = None
+    paper_page_count: Optional[int] = None
+    question_paper_filename: Optional[str] = None
+    title: Optional[str] = None
+    correction_deadline: Optional[str] = None
+
+
+class QuestionRefineRequest(BaseModel):
+    question_text: str
+    q_no: Optional[str] = "Q1"
+    marks: Optional[float] = 5.0
+    subject_name: Optional[str] = ""
+    exam_title: Optional[str] = ""
+    action: str = "level_shift" # level_shift | auto_generate | rephrase | practical
+    target_level: str = "Medium" # Easy | Medium | Hard | Analytical | Practical
+    custom_instruction: Optional[str] = ""
+    gemini_api_key: Optional[str] = None
 
 
 class AnswerKeyUpdateRequest(BaseModel):
@@ -348,6 +368,18 @@ def delete_student(student_id: str):
     return {"status": "success" if success else "failed"}
 
 
+def _resolve_gemini_key(explicit_key: Optional[str], current_user: Optional[Dict[str, Any]]) -> Optional[str]:
+    """Resolves Gemini API key with priority: explicit override -> authenticated profile -> environment."""
+    user_key = explicit_key
+    if not user_key and current_user:
+        u = db.get_user_by_username(current_user.get("username", ""))
+        if u:
+            user_key = u.get("gemini_api_key")
+    if not user_key:
+        user_key = os.getenv("GEMINI_API_KEY", "").strip() or None
+    return user_key
+
+
 # 5. Question Paper Scanning & Exams
 @router.post("/exams/scan-paper")
 async def scan_question_paper(
@@ -356,28 +388,50 @@ async def scan_question_paper(
     current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)
 ):
     """
-    Scans an uploaded Question Paper document using Gemini API.
-    Returns digital paper header, sections, questions with IDs, suggested marks, and evaluation rubrics.
+    Scans and rasterizes an uploaded Question Paper document using Gemini API.
+    Returns paper_id, page count, digital header, sections, Markdown questions, and bounding boxes.
     """
     file_bytes = await file.read()
     filename = file.filename or "question_paper.pdf"
+    user_key = _resolve_gemini_key(gemini_api_key, current_user)
 
-    # Prioritize: 1) Form-passed key, 2) Authenticated user key from DB, 3) Environment variable
-    user_key = gemini_api_key
-    if not user_key and current_user:
-        u = db.get_user_by_username(current_user.get("username", ""))
-        if u:
-            user_key = u.get("gemini_api_key")
-    if not user_key:
-        user_key = os.getenv("GEMINI_API_KEY", "").strip() or None
-
-    scan_result = await GeminiAcademicService.scan_question_paper(
+    return await GeminiAcademicService.scan_question_paper(
         file_bytes=file_bytes,
         filename=filename,
         user_api_key=user_key
     )
 
-    return scan_result
+
+@router.get("/papers/{paper_id}/pages/{page_num}")
+def get_question_paper_page_image(paper_id: str, page_num: int):
+    """Serves the rasterized JPEG image for a specific page of a scanned question paper."""
+    safe_paper_id = os.path.basename(paper_id.strip())
+    if not safe_paper_id or safe_paper_id != paper_id.strip() or page_num < 1:
+        raise HTTPException(status_code=400, detail="Invalid paper page request")
+    img_path = PageStorageService.get_page_image_path(safe_paper_id, page_num)
+    if not img_path or not os.path.isfile(img_path):
+        raise HTTPException(status_code=404, detail="Question paper page image not found")
+    return FileResponse(img_path, media_type="image/jpeg")
+
+
+@router.post("/exams/refine-question")
+async def refine_exam_question(
+    req: QuestionRefineRequest,
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)
+):
+    """Generates same-topic level-shifted or newly synthesized question alternatives via Gemini."""
+    user_key = _resolve_gemini_key(req.gemini_api_key, current_user)
+    return await GeminiAcademicService.refine_question(
+        question_text=req.question_text,
+        q_no=req.q_no or "Q1",
+        marks=float(req.marks if req.marks is not None else 5.0),
+        subject_name=req.subject_name or "",
+        exam_title=req.exam_title or "",
+        action=req.action or "level_shift",
+        target_level=req.target_level or "Medium",
+        custom_instruction=req.custom_instruction or "",
+        user_api_key=user_key,
+    )
 
 
 @router.get("/exams")
@@ -404,8 +458,17 @@ def get_exam(exam_id: str):
 
 @router.put("/exams/{exam_id}/questions")
 def update_exam_questions(exam_id: str, req: QuestionsUpdateRequest):
-    """Updates question statements, marks allocation, and rubrics."""
-    success = db.update_exam_questions(exam_id, req.questions, req.max_marks)
+    """Updates question statements, marks allocation, paper reference, and rubrics."""
+    success = db.update_exam_questions(
+        exam_id,
+        req.questions,
+        req.max_marks,
+        paper_id=req.paper_id,
+        paper_page_count=req.paper_page_count,
+        question_paper_filename=req.question_paper_filename,
+        title=req.title,
+        correction_deadline=req.correction_deadline,
+    )
     return {"status": "success" if success else "failed", "exam": db.get_exam(exam_id)}
 
 

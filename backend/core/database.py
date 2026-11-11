@@ -144,6 +144,8 @@ def init_sqlite_db(db_path: Optional[str] = None) -> None:
             )
         """)
         _add_column_if_not_exists(cursor, "exams", "correction_deadline", "TEXT DEFAULT ''")
+        _add_column_if_not_exists(cursor, "exams", "paper_id", "TEXT DEFAULT ''")
+        _add_column_if_not_exists(cursor, "exams", "paper_page_count", "INTEGER DEFAULT 0")
 
         # 6. Academic Evaluations Table (Strict evaluated student papers)
         cursor.execute("""
@@ -602,7 +604,7 @@ class SQLiteDatabase:
     # --- Exam operations ---
 
     def list_exams(self, subject_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        query = "SELECT id, subject_id, title, exam_type, max_marks, passing_marks, academic_year, exam_date, correction_deadline, question_paper_filename, answer_key_text, questions_json, created_at FROM exams"
+        query = "SELECT id, subject_id, title, exam_type, max_marks, passing_marks, academic_year, exam_date, correction_deadline, question_paper_filename, paper_id, paper_page_count, answer_key_text, questions_json, created_at FROM exams"
         params: List[Any] = []
         if subject_id:
             query += " WHERE subject_id = ?"
@@ -627,7 +629,7 @@ class SQLiteDatabase:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT id, subject_id, title, exam_type, max_marks, passing_marks, academic_year, exam_date, correction_deadline, question_paper_filename, answer_key_text, questions_json, created_at
+                SELECT id, subject_id, title, exam_type, max_marks, passing_marks, academic_year, exam_date, correction_deadline, question_paper_filename, paper_id, paper_page_count, answer_key_text, questions_json, created_at
                 FROM exams WHERE id = ?
             """, (exam_id,))
             row = cursor.fetchone()
@@ -658,8 +660,9 @@ class SQLiteDatabase:
             cursor.execute("""
                 INSERT INTO exams (
                     id, subject_id, title, exam_type, max_marks, passing_marks,
-                    academic_year, exam_date, correction_deadline, question_paper_filename, answer_key_text, questions_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    academic_year, exam_date, correction_deadline, question_paper_filename,
+                    paper_id, paper_page_count, answer_key_text, questions_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 exam_id,
                 data.get("subject_id", "subj-nlp-101"),
@@ -671,6 +674,8 @@ class SQLiteDatabase:
                 exam_date,
                 correction_deadline,
                 data.get("question_paper_filename", ""),
+                data.get("paper_id", ""),
+                int(data.get("paper_page_count") or 0),
                 data.get("answer_key_text", ""),
                 json.dumps(questions)
             ))
@@ -685,15 +690,42 @@ class SQLiteDatabase:
             conn.commit()
             return cursor.rowcount > 0
 
-    def update_exam_questions(self, exam_id: str, questions: List[Dict[str, Any]], max_marks: Optional[float] = None) -> bool:
+    def update_exam_questions(
+        self,
+        exam_id: str,
+        questions: List[Dict[str, Any]],
+        max_marks: Optional[float] = None,
+        paper_id: Optional[str] = None,
+        paper_page_count: Optional[int] = None,
+        question_paper_filename: Optional[str] = None,
+        title: Optional[str] = None,
+        correction_deadline: Optional[str] = None,
+    ) -> bool:
+        updates = ["questions_json = ?"]
+        params: List[Any] = [json.dumps(questions)]
+        if max_marks is not None:
+            updates.append("max_marks = ?")
+            params.append(float(max_marks))
+        if paper_id is not None:
+            updates.append("paper_id = ?")
+            params.append(paper_id)
+        if paper_page_count is not None:
+            updates.append("paper_page_count = ?")
+            params.append(int(paper_page_count))
+        if question_paper_filename is not None:
+            updates.append("question_paper_filename = ?")
+            params.append(question_paper_filename)
+        if title is not None:
+            updates.append("title = ?")
+            params.append(title)
+        if correction_deadline is not None:
+            updates.append("correction_deadline = ?")
+            params.append(correction_deadline)
+
+        params.append(exam_id)
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            if max_marks is not None:
-                cursor.execute("""
-                    UPDATE exams SET questions_json = ?, max_marks = ? WHERE id = ?
-                """, (json.dumps(questions), max_marks, exam_id))
-            else:
-                cursor.execute("UPDATE exams SET questions_json = ? WHERE id = ?", (json.dumps(questions), exam_id))
+            cursor.execute(f"UPDATE exams SET {', '.join(updates)} WHERE id = ?", tuple(params))
             conn.commit()
             return cursor.rowcount > 0
 

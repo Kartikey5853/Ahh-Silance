@@ -2,7 +2,9 @@
 Unit and integration tests for the Academic Management & Strict Grading System.
 """
 
+import io
 import uuid
+import pymupdf
 from fastapi.testclient import TestClient
 from backend.main import app
 
@@ -241,6 +243,83 @@ def test_student_profile_and_update():
     assert profile_data["stats"]["total_exams_taken"] >= 1
 
 
+def test_review_paper_overlays_and_question_refine():
+    # 1. Generate a real 2-page PDF question paper and upload to scan-paper
+    doc = pymupdf.open()
+    p1 = doc.new_page(width=595, height=842)
+    p1.insert_text(
+        (50, 70),
+        "ATCD Mid-Semester Paper\n\nQ1.a (5 Marks): Construct SLR Parsing table for:\nS -> (L) | a\nL -> L,S | S\n",
+        fontsize=12,
+    )
+    p2 = doc.new_page(width=595, height=842)
+    p2.insert_text(
+        (50, 70),
+        "Q2 (10 Marks): Explain syntax-directed translation for arithmetic expressions.\n",
+        fontsize=12,
+    )
+    pdf_bytes = doc.tobytes()
+    doc.close()
+
+    scan_res = client.post(
+        "/api/v1/academic/exams/scan-paper",
+        files={"file": ("review_test.pdf", io.BytesIO(pdf_bytes), "application/pdf")},
+        headers=AUTH_HEADERS,
+    )
+    assert scan_res.status_code == 200, scan_res.text
+    scan_data = scan_res.json()
+    assert scan_data["paper_id"]
+    assert scan_data["paper_page_count"] == 2
+    assert len(scan_data["questions"]) >= 1
+    first_q = scan_data["questions"][0]
+    assert isinstance(first_q.get("page"), int)
+    assert isinstance(first_q.get("box_2d"), list) and len(first_q["box_2d"]) == 4
+
+    # 2. Verify both rasterized paper pages are served via API
+    for page_num in (1, 2):
+        img_res = client.get(f"/api/v1/academic/papers/{scan_data['paper_id']}/pages/{page_num}", headers=AUTH_HEADERS)
+        assert img_res.status_code == 200
+        assert img_res.headers["content-type"].startswith("image/jpeg")
+        assert len(img_res.content) > 1000
+
+    # 3. Verify persisting paper_id & paper_page_count on exam update
+    subjs = client.get("/api/v1/academic/subjects", headers=AUTH_HEADERS).json()
+    exams = client.get(f"/api/v1/academic/exams?subject_id={subjs[0]['id']}", headers=AUTH_HEADERS).json()
+    exam_id = exams[0]["id"]
+    upd_res = client.put(
+        f"/api/v1/academic/exams/{exam_id}/questions",
+        json={
+            "questions": scan_data["questions"],
+            "max_marks": scan_data["total_marks"],
+            "paper_id": scan_data["paper_id"],
+            "paper_page_count": scan_data["paper_page_count"],
+            "question_paper_filename": "review_test.pdf",
+        },
+        headers=AUTH_HEADERS,
+    )
+    assert upd_res.status_code == 200
+    assert upd_res.json()["exam"]["paper_id"] == scan_data["paper_id"]
+    assert upd_res.json()["exam"]["paper_page_count"] == 2
+
+    # 4. Verify interactive Refine / Auto-Generate same-topic questions endpoint
+    ref_res = client.post(
+        "/api/v1/academic/exams/refine-question",
+        json={
+            "question_text": "Construct SLR Parsing table for S -> (L) | a, L -> L,S | S",
+            "q_no": "Q1.a",
+            "marks": 5.0,
+            "subject_name": "ATCD",
+            "action": "auto_generate",
+            "target_level": "Hard",
+        },
+        headers=AUTH_HEADERS,
+    )
+    assert ref_res.status_code == 200, ref_res.text
+    ref_data = ref_res.json()
+    assert len(ref_data["suggestions"]) >= 3
+    assert all("question_text" in s and "difficulty_level" in s for s in ref_data["suggestions"])
+
+
 if __name__ == "__main__":
     test_auth_and_profile()
     test_academic_institutions_hierarchy()
@@ -249,4 +328,5 @@ if __name__ == "__main__":
     test_modify_exam_questions_and_marks()
     test_strict_student_evaluation_with_rubric()
     test_student_profile_and_update()
+    test_review_paper_overlays_and_question_refine()
     print("ALL ACADEMIC FLOW TESTS PASSED!")
