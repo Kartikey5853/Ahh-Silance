@@ -16,11 +16,14 @@ import json
 import uuid
 from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query, Depends
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from backend.core.database import db
 from backend.core.auth import get_optional_current_user
 from backend.services.gemini_academic_service import GeminiAcademicService
+from backend.services.page_storage_service import PageStorageService
+from backend.services.magic_ink_service import MagicInkService
 
 router = APIRouter(prefix="/academic", tags=["Academic Evaluation"])
 
@@ -509,21 +512,30 @@ async def evaluate_student_submission(
     if not user_key:
         user_key = os.getenv("GEMINI_API_KEY", "").strip() or None
 
-    # Run strict evaluation
-    eval_result = await GeminiAcademicService.evaluate_student_answers(
-        questions=exam["questions"],
-        answer_key=exam.get("answer_key_text") or "Standard master solution rubric.",
-        student_name=student_name,
-        roll_number=roll_number,
-        sheet_bytes=sheet_bytes,
-        sheet_filename=filename,
-        user_api_key=user_key,
-        exam_max_marks=float(exam.get("max_marks", 60.0))
+    eval_id = f"eval-{uuid.uuid4().hex[:8]}"
+
+    # Rasterize student submission pages to high-resolution JPEG files
+    raster_info = PageStorageService.save_and_rasterize_submission(
+        eval_id=eval_id,
+        file_bytes=sheet_bytes,
+        filename=filename,
+        target_dpi=200
     )
 
-    # Persist in SQLite
+    # Run MagicInk 3-Stage High-Precision Multimodal Evaluation
+    eval_result = await MagicInkService.evaluate_submission(
+        eval_id=eval_id,
+        exam=exam,
+        student_name=student_name,
+        roll_number=roll_number,
+        page_records=raster_info["pages"],
+        raw_text=raster_info.get("raw_text", ""),
+        user_api_key=user_key
+    )
+
+    # Persist in SQLite with MagicInk annotations and page metadata
     record_data = {
-        "id": f"eval-{uuid.uuid4().hex[:8]}",
+        "id": eval_id,
         "exam_id": exam_id,
         "student_id": student_id,
         "roll_number": roll_number,
@@ -534,7 +546,10 @@ async def evaluate_student_submission(
         "percentage": eval_result["percentage"],
         "grade": eval_result.get("grade", "Passed"),
         "breakdown": eval_result.get("breakdown", []),
-        "teacher_feedback": eval_result.get("teacher_feedback", "")
+        "teacher_feedback": eval_result.get("teacher_feedback", ""),
+        "page_count": raster_info["page_count"],
+        "pages_dir": raster_info["pages_dir"],
+        "magic_ink": eval_result.get("magic_ink", {})
     }
 
     saved = db.save_academic_evaluation(record_data)
@@ -576,30 +591,40 @@ async def evaluate_all_students(
         if student["id"] in evaluated_ids:
             continue
 
-        eval_result = await GeminiAcademicService.evaluate_student_answers(
-            questions=exam["questions"],
-            answer_key=exam.get("answer_key_text") or "Standard master solution rubric.",
+        stud_eval_id = f"eval-{uuid.uuid4().hex[:8]}"
+        raster_info = PageStorageService.save_and_rasterize_submission(
+            eval_id=stud_eval_id,
+            file_bytes=b"Standard student handwritten examination response.",
+            filename="student_answers.txt",
+            target_dpi=200
+        )
+
+        eval_result = await MagicInkService.evaluate_submission(
+            eval_id=stud_eval_id,
+            exam=exam,
             student_name=student["name"],
             roll_number=student["roll_number"],
-            sheet_bytes=b"Standard student handwritten examination response.",
-            sheet_filename="student_answers.pdf",
-            user_api_key=user_key,
-            exam_max_marks=float(exam.get("max_marks", 60.0))
+            page_records=raster_info["pages"],
+            raw_text=raster_info.get("raw_text", ""),
+            user_api_key=user_key
         )
 
         record_data = {
-            "id": f"eval-{uuid.uuid4().hex[:8]}",
+            "id": stud_eval_id,
             "exam_id": exam_id,
             "student_id": student["id"],
             "roll_number": student["roll_number"],
             "student_name": student["name"],
-            "answer_sheet_filename": "evaluated_sheet.pdf",
+            "answer_sheet_filename": "evaluated_sheet.jpg",
             "total_score": eval_result["total_score"],
             "max_score": eval_result["max_score"],
             "percentage": eval_result["percentage"],
             "grade": eval_result.get("grade", "Passed"),
             "breakdown": eval_result.get("breakdown", []),
-            "teacher_feedback": eval_result.get("teacher_feedback", "")
+            "teacher_feedback": eval_result.get("teacher_feedback", ""),
+            "page_count": raster_info["page_count"],
+            "pages_dir": raster_info["pages_dir"],
+            "magic_ink": eval_result.get("magic_ink", {})
         }
         saved = db.save_academic_evaluation(record_data)
         results.append(saved)
@@ -623,3 +648,36 @@ def get_evaluation(eval_id: str):
     if not result:
         raise HTTPException(status_code=404, detail="Evaluation record not found")
     return result
+
+
+@router.get("/evaluations/{eval_id}/pages/{page_num}")
+def get_evaluation_page_image(eval_id: str, page_num: int):
+    """
+    Streams a rasterized JPEG page image (200 DPI) for the in-app MagicInk viewer.
+    """
+    img_path = PageStorageService.get_page_image_path(eval_id, page_num)
+    if not img_path or not os.path.isfile(img_path):
+        raise HTTPException(status_code=404, detail=f"Page {page_num} not found for evaluation {eval_id}")
+    return FileResponse(img_path, media_type="image/jpeg")
+
+
+@router.get("/evaluations/{eval_id}/magicink")
+def get_evaluation_magic_ink(eval_id: str):
+    """
+    Retrieves the complete MagicInk spatial annotations, bounding boxes,
+    and responsive SVG overlay definitions for an evaluated answer booklet.
+    """
+    evaluation = db.get_academic_evaluation(eval_id)
+    if not evaluation:
+        raise HTTPException(status_code=404, detail="Evaluation record not found")
+    
+    magic_ink = evaluation.get("magic_ink") or {}
+    return {
+        "eval_id": eval_id,
+        "page_count": evaluation.get("page_count", 1),
+        "total_score": evaluation.get("total_score", 0.0),
+        "max_score": evaluation.get("max_score", 20.0),
+        "percentage": evaluation.get("percentage", 0.0),
+        "grade": evaluation.get("grade", "Passed"),
+        "magic_ink": magic_ink
+    }

@@ -161,6 +161,10 @@ def init_sqlite_db() -> None:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        _add_column_if_not_exists(cursor, "academic_evaluations", "page_count", "INTEGER DEFAULT 1")
+        _add_column_if_not_exists(cursor, "academic_evaluations", "magic_ink_json", "TEXT DEFAULT '{}'")
+        _add_column_if_not_exists(cursor, "academic_evaluations", "pages_dir", "TEXT DEFAULT ''")
+        _add_column_if_not_exists(cursor, "academic_evaluations", "structured_transcription_json", "TEXT DEFAULT '[]'")
 
         # 7. Legacy Scorecards Table (For backwards compatibility with JEE pipeline)
         cursor.execute("""
@@ -667,13 +671,19 @@ class SQLiteDatabase:
     def save_academic_evaluation(self, data: Dict[str, Any]) -> Dict[str, Any]:
         eval_id = data.get("id") or f"eval-{uuid.uuid4().hex[:8]}"
         breakdown = data.get("breakdown", [])
+        magic_ink = data.get("magic_ink") or data.get("magic_ink_json") or {}
+        structured_tx = data.get("structured_transcription") or []
+        page_count = int(data.get("page_count") or (len(data.get("pages", [])) if data.get("pages") else 1))
+        pages_dir = str(data.get("pages_dir") or "")
+
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT OR REPLACE INTO academic_evaluations (
                     id, exam_id, student_id, roll_number, student_name, answer_sheet_filename,
-                    total_score, max_score, percentage, grade, breakdown_json, teacher_feedback
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    total_score, max_score, percentage, grade, breakdown_json, teacher_feedback,
+                    page_count, magic_ink_json, pages_dir, structured_transcription_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 eval_id,
                 data["exam_id"],
@@ -686,7 +696,11 @@ class SQLiteDatabase:
                 float(data["percentage"]),
                 data.get("grade", "Passed"),
                 json.dumps(breakdown),
-                data.get("teacher_feedback", "")
+                data.get("teacher_feedback", ""),
+                page_count,
+                json.dumps(magic_ink) if isinstance(magic_ink, dict) else str(magic_ink),
+                pages_dir,
+                json.dumps(structured_tx)
             ))
             conn.commit()
         return self.get_academic_evaluation(eval_id) # type: ignore
@@ -696,20 +710,30 @@ class SQLiteDatabase:
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT id, exam_id, student_id, roll_number, student_name, answer_sheet_filename,
-                       total_score, max_score, percentage, grade, breakdown_json, teacher_feedback, created_at
+                       total_score, max_score, percentage, grade, breakdown_json, teacher_feedback,
+                       page_count, magic_ink_json, pages_dir, structured_transcription_json, created_at
                 FROM academic_evaluations WHERE id = ?
             """, (eval_id,))
             row = cursor.fetchone()
             if row:
                 d = dict(row)
                 d["breakdown"] = json.loads(d.get("breakdown_json") or "[]")
+                try:
+                    d["magic_ink"] = json.loads(d.get("magic_ink_json") or "{}")
+                except Exception:
+                    d["magic_ink"] = {}
+                try:
+                    d["structured_transcription"] = json.loads(d.get("structured_transcription_json") or "[]")
+                except Exception:
+                    d["structured_transcription"] = []
                 return d
         return None
 
     def list_academic_evaluations(self, exam_id: Optional[str] = None, student_id: Optional[str] = None) -> List[Dict[str, Any]]:
         query = """
             SELECT id, exam_id, student_id, roll_number, student_name, answer_sheet_filename,
-                   total_score, max_score, percentage, grade, breakdown_json, teacher_feedback, created_at
+                   total_score, max_score, percentage, grade, breakdown_json, teacher_feedback,
+                   page_count, magic_ink_json, pages_dir, structured_transcription_json, created_at
             FROM academic_evaluations
         """
         params: List[Any] = []
@@ -731,6 +755,14 @@ class SQLiteDatabase:
             for r in cursor.fetchall():
                 d = dict(r)
                 d["breakdown"] = json.loads(d.get("breakdown_json") or "[]")
+                try:
+                    d["magic_ink"] = json.loads(d.get("magic_ink_json") or "{}")
+                except Exception:
+                    d["magic_ink"] = {}
+                try:
+                    d["structured_transcription"] = json.loads(d.get("structured_transcription_json") or "[]")
+                except Exception:
+                    d["structured_transcription"] = []
                 results.append(d)
             return results
 
