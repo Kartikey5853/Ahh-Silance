@@ -533,6 +533,13 @@ async def evaluate_student_submission(
         user_api_key=user_key
     )
 
+    # Normalize svg_overlays string keys for JSON persistence consistently
+    magic_ink_payload = dict(eval_result.get("magic_ink") or {})
+    if isinstance(magic_ink_payload.get("svg_overlays"), dict):
+        magic_ink_payload["svg_overlays"] = {
+            str(k): v for k, v in magic_ink_payload["svg_overlays"].items()
+        }
+
     # Persist in SQLite with MagicInk annotations and page metadata
     record_data = {
         "id": eval_id,
@@ -549,7 +556,8 @@ async def evaluate_student_submission(
         "teacher_feedback": eval_result.get("teacher_feedback", ""),
         "page_count": raster_info["page_count"],
         "pages_dir": raster_info["pages_dir"],
-        "magic_ink": eval_result.get("magic_ink", {})
+        "magic_ink": magic_ink_payload,
+        "structured_transcription": eval_result.get("structured_transcription", [])
     }
 
     saved = db.save_academic_evaluation(record_data)
@@ -609,6 +617,12 @@ async def evaluate_all_students(
             user_api_key=user_key
         )
 
+        magic_ink_payload = dict(eval_result.get("magic_ink") or {})
+        if isinstance(magic_ink_payload.get("svg_overlays"), dict):
+            magic_ink_payload["svg_overlays"] = {
+                str(k): v for k, v in magic_ink_payload["svg_overlays"].items()
+            }
+
         record_data = {
             "id": stud_eval_id,
             "exam_id": exam_id,
@@ -624,7 +638,8 @@ async def evaluate_all_students(
             "teacher_feedback": eval_result.get("teacher_feedback", ""),
             "page_count": raster_info["page_count"],
             "pages_dir": raster_info["pages_dir"],
-            "magic_ink": eval_result.get("magic_ink", {})
+            "magic_ink": magic_ink_payload,
+            "structured_transcription": eval_result.get("structured_transcription", [])
         }
         saved = db.save_academic_evaluation(record_data)
         results.append(saved)

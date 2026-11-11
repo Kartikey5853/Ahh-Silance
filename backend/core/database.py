@@ -16,7 +16,7 @@ import uuid
 from typing import Dict, Optional, List, Any
 import bcrypt
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "evaluation.db")
+DB_PATH = os.environ.get("EVALUATION_DB_PATH") or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "evaluation.db")
 
 
 def _add_column_if_not_exists(cursor: sqlite3.Cursor, table: str, column_name: str, column_def: str) -> None:
@@ -27,12 +27,13 @@ def _add_column_if_not_exists(cursor: sqlite3.Cursor, table: str, column_name: s
         cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column_name} {column_def}")
 
 
-def init_sqlite_db() -> None:
+def init_sqlite_db(db_path: Optional[str] = None) -> None:
     """
     Initializes SQLite tables for users, institutions, subjects, students,
     exams, scorecards, and evaluations. Seeds default professor profile and demo course.
     """
-    with sqlite3.connect(DB_PATH) as conn:
+    target_path = db_path or os.environ.get("EVALUATION_DB_PATH") or DB_PATH
+    with sqlite3.connect(target_path) as conn:
         cursor = conn.cursor()
 
         # 1. Users Table
@@ -194,8 +195,8 @@ class SQLiteDatabase:
     Persistent SQLite storage and memory-backed cache for evaluation state,
     institutions, subjects, students, exams, and strict grading.
     """
-    def __init__(self, db_path: str = DB_PATH):
-        self.db_path = db_path
+    def __init__(self, db_path: Optional[str] = None):
+        self.db_path = db_path or os.environ.get("EVALUATION_DB_PATH") or DB_PATH
         self.master_keys: Dict[str, Dict[str, Any]] = {}
         self.documents: Dict[str, Dict[str, Any]] = {}
         self.evaluation_results: Dict[str, Dict[str, Any]] = {}

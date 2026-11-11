@@ -29,9 +29,21 @@ class PageStorageService:
     """
 
     @classmethod
+    def _get_base_uploads_dir(cls) -> str:
+        return os.environ.get("EVALUATION_UPLOADS_DIR") or BASE_UPLOADS_DIR
+
+    @classmethod
+    def _safe_rel_dir(cls, eval_dir: str) -> str:
+        try:
+            backend_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            return os.path.relpath(eval_dir, backend_root)
+        except ValueError:
+            return eval_dir
+
+    @classmethod
     def get_evaluation_dir(cls, eval_id: str) -> str:
         """Returns the absolute filesystem directory for an evaluation's rasterized pages."""
-        target_dir = os.path.join(BASE_UPLOADS_DIR, eval_id)
+        target_dir = os.path.join(cls._get_base_uploads_dir(), eval_id)
         os.makedirs(target_dir, exist_ok=True)
         return target_dir
 
@@ -140,7 +152,7 @@ class PageStorageService:
         if not pages_meta:
             return cls._create_blank_fallback_page(eval_dir, eval_id, "Empty Submission")
 
-        rel_dir = os.path.relpath(eval_dir, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        rel_dir = cls._safe_rel_dir(eval_dir)
 
         return {
             "eval_id": eval_id,
@@ -153,7 +165,7 @@ class PageStorageService:
     @classmethod
     def get_page_image_path(cls, eval_id: str, page_num: int) -> Optional[str]:
         """Returns the absolute filepath for a specific evaluation page image."""
-        eval_dir = os.path.join(BASE_UPLOADS_DIR, eval_id)
+        eval_dir = os.path.join(cls._get_base_uploads_dir(), eval_id)
         if not os.path.isdir(eval_dir):
             return None
         
@@ -177,7 +189,7 @@ class PageStorageService:
         out_path = os.path.join(eval_dir, out_fname)
         img.save(out_path, format="JPEG", quality=90)
         
-        rel_dir = os.path.relpath(eval_dir, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        rel_dir = cls._safe_rel_dir(eval_dir)
         return {
             "eval_id": eval_id,
             "pages_dir": rel_dir,
