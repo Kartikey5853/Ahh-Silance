@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { academicApi } from "../api/academicApi";
+import { resolveApiUrl } from "../api/client";
 import type { Exam, Student, AcademicEvaluation, Subject, ClassItem } from "../types/academic";
 import {
   Sparkles,
@@ -57,6 +58,8 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
   const [sheetZoom, setSheetZoom] = useState(105);
   const [magicInk, setMagicInk] = useState(true);
   const [currentSheetPage, setCurrentSheetPage] = useState(1);
+  const [sheetImageMissing, setSheetImageMissing] = useState(false);
+  const [isReEvaluating, setIsReEvaluating] = useState(false);
   const [activeQuestionTabs, setActiveQuestionTabs] = useState<Record<number, "ocr" | "rubric" | "feedback">>({});
 
   // Evaluating states
@@ -76,19 +79,34 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
   const [studentStatusFilter, setStudentStatusFilter] = useState<"all" | "evaluated" | "pending">("all");
 
   useEffect(() => {
+    setSheetImageMissing(false);
+  }, [activeScorecard?.id, currentSheetPage]);
+
+  useEffect(() => {
     Promise.all([
       academicApi.listExams(),
       academicApi.listSubjects(),
       academicApi.listClasses()
-    ]).then(([exList, subjList, clsList]) => {
+    ]).then(async ([exList, subjList, clsList]) => {
       setExams(exList);
       setSubjects(subjList);
       setClasses(clsList);
       if (initialExamId && exList.some((e) => e.id === initialExamId)) {
         setSelectedExamId(initialExamId);
+      } else if (initialEvalId) {
+        try {
+          const ev = await academicApi.getEvaluation(initialEvalId);
+          if (ev) {
+            setSelectedExamId(ev.exam_id);
+            setActiveScorecard(ev);
+            setCurrentSheetPage(1);
+          }
+        } catch (err) {
+          console.error("Failed to load initial evaluation:", err);
+        }
       }
     });
-  }, [initialExamId]);
+  }, [initialExamId, initialEvalId]);
 
   // When selected exam changes, load enrolled students and existing evaluations
   useEffect(() => {
@@ -108,8 +126,11 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
     ]).then(([studList, evalList]) => {
       setStudents(studList);
       const evalMap: Record<string, AcademicEvaluation> = {};
+      // listEvaluations is ordered newest-first; keep only latest per student
       evalList.forEach((ev) => {
-        evalMap[ev.student_id] = ev;
+        if (!evalMap[ev.student_id]) {
+          evalMap[ev.student_id] = ev;
+        }
       });
       setEvaluations(evalMap);
 
@@ -203,10 +224,39 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
       }));
       setActiveScorecard(scorecard);
       setCurrentSheetPage(1);
+      setSheetImageMissing(false);
     } catch (err: any) {
       alert("Evaluation failed: " + (err?.response?.data?.detail || "Please check connection."));
     } finally {
       setEvaluatingStudentId(null);
+      setEvalProgressMessage(null);
+    }
+  };
+
+  const handleReEvaluateScorecardFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeScorecard) return;
+    e.target.value = "";
+
+    setIsReEvaluating(true);
+    setEvalProgressMessage(`Running 3-stage MagicInk evaluation on ${file.name}...`);
+    try {
+      const updated = await academicApi.evaluateStudent(
+        activeScorecard.exam_id,
+        activeScorecard.student_id,
+        file
+      );
+      setEvaluations((prev) => ({
+        ...prev,
+        [updated.student_id]: updated
+      }));
+      setActiveScorecard(updated);
+      setCurrentSheetPage(1);
+      setSheetImageMissing(false);
+    } catch (err: any) {
+      alert("Re-evaluation failed: " + (err?.response?.data?.detail || err.message || "Please check connection."));
+    } finally {
+      setIsReEvaluating(false);
       setEvalProgressMessage(null);
     }
   };
@@ -303,7 +353,9 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
     const incorrectCount = breakdown.filter((b) => b.awarded_marks === 0).length;
 
     const totalPages = Math.max(1, activeScorecard.page_count || 1);
-    const svgOverlayMarkup = activeScorecard.magic_ink?.svg_overlays?.[currentSheetPage] || "";
+    const overlaysMap = (activeScorecard.magic_ink?.svg_overlays || {}) as Record<string, string>;
+    const svgOverlayMarkup = overlaysMap[String(currentSheetPage)] || (overlaysMap as any)[currentSheetPage] || "";
+    const hasRasterPages = Boolean(activeScorecard.pages_dir) && !sheetImageMissing;
 
     return (
       <div
@@ -365,7 +417,32 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
             </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+            <label
+              style={{
+                background: isReEvaluating ? "#f1f5f9" : "#eff6ff",
+                border: "1px solid #bfdbfe",
+                color: "#1d4ed8",
+                padding: "0.5rem 0.95rem",
+                borderRadius: "8px",
+                fontSize: "0.82rem",
+                fontWeight: 700,
+                cursor: isReEvaluating ? "wait" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.35rem"
+              }}
+            >
+              <UploadCloud size={14} />
+              {isReEvaluating ? "Re-Evaluating..." : "Upload & Re-Evaluate"}
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                disabled={isReEvaluating}
+                onChange={handleReEvaluateScorecardFile}
+                style={{ display: "none" }}
+              />
+            </label>
             <button
               onClick={() => setHideAnswerSheet(!hideAnswerSheet)}
               style={{
@@ -528,8 +605,9 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
                       onClick={() => scrollToQuestion(qIdx)}
                       title={`Jump to Question ${q.q_no || qIdx + 1} (${q.awarded_marks}/${q.max_marks} marks)`}
                       style={{
-                        width: "38px",
+                        minWidth: "40px",
                         height: "38px",
+                        padding: "0 0.45rem",
                         borderRadius: "8px",
                         background: bgColor,
                         border: `2px solid ${borderColor}`,
@@ -569,27 +647,33 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
             </div>
 
             {/* SCOPE OF IMPROVEMENT */}
-            <div style={{ background: "#fffbeb", border: "1px solid #fed7aa", borderRadius: "14px", padding: "1.25rem", boxShadow: "0 1px 3px rgba(0, 0, 0, 0.02)" }}>
-              <div style={{ fontSize: "0.82rem", fontWeight: 800, color: "#9a3412", marginBottom: "0.75rem", textTransform: "uppercase", display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                <AlertCircle size={15} /> Scope of Improvement
-              </div>
+            {(() => {
+              const focusImprovement =
+                breakdown.find((b: any) => b.awarded_marks < (b.max_marks || 0) && b.improvement_tip) || breakdown[0];
+              return (
+                <div style={{ background: "#fffbeb", border: "1px solid #fed7aa", borderRadius: "14px", padding: "1.25rem", boxShadow: "0 1px 3px rgba(0, 0, 0, 0.02)" }}>
+                  <div style={{ fontSize: "0.82rem", fontWeight: 800, color: "#9a3412", marginBottom: "0.75rem", textTransform: "uppercase", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                    <AlertCircle size={15} /> Scope of Improvement
+                  </div>
 
-              <div style={{ background: "#ffffff", border: "1px solid #fde68a", borderRadius: "10px", padding: "1rem" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.35rem" }}>
-                  <span style={{ width: "22px", height: "22px", borderRadius: "4px", background: "#f59e0b", color: "#ffffff", fontSize: "0.75rem", fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    1
-                  </span>
-                  <span style={{ fontSize: "0.88rem", fontWeight: 800, color: "#0f172a" }}>
-                    {breakdown[0]?.improvement_title || "SLR Parsing Table Action Placement"}
-                  </span>
+                  <div style={{ background: "#ffffff", border: "1px solid #fde68a", borderRadius: "10px", padding: "1rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.35rem" }}>
+                      <span style={{ width: "22px", height: "22px", borderRadius: "4px", background: "#f59e0b", color: "#ffffff", fontSize: "0.75rem", fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        {focusImprovement?.q_no || "1"}
+                      </span>
+                      <span style={{ fontSize: "0.88rem", fontWeight: 800, color: "#0f172a" }}>
+                        {focusImprovement?.improvement_title || "Evaluation Focus & Rubric Feedback"}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: "0.82rem", color: "#334155", margin: 0, lineHeight: 1.6 }}>
+                      {focusImprovement?.improvement_tip ||
+                        activeScorecard.teacher_feedback ||
+                        "Review rubric deductions across questions below for step-by-step improvement insights."}
+                    </p>
+                  </div>
                 </div>
-                <p style={{ fontSize: "0.82rem", color: "#334155", margin: 0, lineHeight: 1.6 }}>
-                  {breakdown[0]?.improvement_tip ||
-                    activeScorecard.teacher_feedback ||
-                    "In SLR parsing table construction (Q1.a), ensure that reduce entries are systematically added to the ACTION table under every symbol in the FOLLOW set of the LHS non-terminal, including the endmarker '$'."}
-                </p>
-              </div>
-            </div>
+              );
+            })()}
 
             {/* ============================================================== */}
             {/* ALL QUESTIONS EVALUATED & SCROLLABLE (With OCR & Rubric Tabs) */}
@@ -813,8 +897,12 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
                             }}
                           >
                             {q.ocr_extracted_text ||
+                              activeScorecard.structured_transcription?.find(
+                                (tx: any) => String(tx.q_no).toLowerCase() === String(q.q_no).toLowerCase()
+                              )?.structured_text ||
                               q.evidence_quote ||
-                              "Student wrote full mathematical derivation and state table transitions matching examination question."}
+                              q.feedback ||
+                              "No verbatim OCR text recorded on this legacy evaluation. Click 'Upload & Re-Evaluate' above to generate full handwritten OCR."}
                           </pre>
                         </div>
                       )}
@@ -824,8 +912,12 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
                         <div style={{ padding: "1.25rem" }}>
                           <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
                             {(q.rubric_checks && q.rubric_checks.length > 0 ? q.rubric_checks : [
-                              { criterion: "Core definition and problem formulation", awarded: 2.5, max: 2.5, status: "MET" },
-                              { criterion: "Intermediate steps and mathematical reasoning", awarded: 2.0, max: 2.5, status: "PARTIAL" }
+                              {
+                                criterion: q.feedback || "Overall question rubric evaluation",
+                                awarded: q.awarded_marks,
+                                max: q.max_marks || 5.0,
+                                status: q.awarded_marks >= (q.max_marks || 5.0) ? "MET" : q.awarded_marks > 0 ? "PARTIAL" : "MISSED"
+                              }
                             ]).map((rc: any, rcIdx: number) => {
                               const isMet = rc.status === "MET" || rc.awarded === rc.max;
                               return (
@@ -1065,64 +1157,106 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
                   position: "relative"
                 }}
               >
-                <div
-                  style={{
-                    width: `${sheetZoom * 4.6}px`,
-                    transition: "width 0.15s ease",
-                    position: "relative",
-                    borderRadius: "8px",
-                    overflow: "hidden",
-                    boxShadow: "0 4px 18px rgba(0,0,0,0.08)"
-                  }}
-                >
-                  {/* Real page image streaming with fallback */}
-                  <img
-                    src={`/api/v1/academic/evaluations/${activeScorecard.id}/pages/${currentSheetPage}`}
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = "/sample-evaluated-sheet.png";
+                {!hasRasterPages ? (
+                  <div
+                    style={{
+                      width: "100%",
+                      maxWidth: "460px",
+                      background: "#ffffff",
+                      border: "1px dashed #cbd5e1",
+                      borderRadius: "14px",
+                      padding: "2rem 1.5rem",
+                      textAlign: "center",
+                      margin: "1.5rem auto",
+                      boxShadow: "0 2px 10px rgba(0, 0, 0, 0.03)"
                     }}
-                    alt={`Answer Booklet Page ${currentSheetPage}`}
-                    style={{ width: "100%", height: "auto", display: "block" }}
-                  />
-
-                  {/* Real MagicInk Vector SVG Overlay */}
-                  {magicInk && svgOverlayMarkup ? (
-                    <div
-                      style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none" }}
-                      dangerouslySetInnerHTML={{ __html: svgOverlayMarkup }}
+                  >
+                    <div style={{ fontSize: "0.98rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.5rem" }}>
+                      Answer Booklet Pages Not Rasterized Yet
+                    </div>
+                    <p style={{ fontSize: "0.82rem", color: "#64748b", lineHeight: 1.6, marginBottom: "1.25rem" }}>
+                      This record was created before 200 DPI MagicInk rasterization. Upload the student&apos;s answer PDF or scan below to generate page overlays, verbatim OCR, and margin stamps.
+                    </p>
+                    <label
+                      className="btn btn-primary"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.45rem",
+                        padding: "0.6rem 1.1rem",
+                        fontSize: "0.84rem",
+                        cursor: isReEvaluating ? "wait" : "pointer"
+                      }}
+                    >
+                      <UploadCloud size={15} />
+                      {isReEvaluating ? "Generating MagicInk Overlays..." : "Upload Answer Sheet & Generate MagicInk"}
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        disabled={isReEvaluating}
+                        onChange={handleReEvaluateScorecardFile}
+                        style={{ display: "none" }}
+                      />
+                    </label>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      width: `${sheetZoom * 4.6}px`,
+                      transition: "width 0.15s ease",
+                      position: "relative",
+                      borderRadius: "8px",
+                      overflow: "hidden",
+                      boxShadow: "0 4px 18px rgba(0,0,0,0.08)"
+                    }}
+                  >
+                    {/* Real 200 DPI page image streaming from backend */}
+                    <img
+                      src={resolveApiUrl(`/academic/evaluations/${activeScorecard.id}/pages/${currentSheetPage}`)}
+                      onError={() => setSheetImageMissing(true)}
+                      alt={`Answer Booklet Page ${currentSheetPage}`}
+                      style={{ width: "100%", height: "auto", display: "block" }}
                     />
-                  ) : magicInk ? (
-                    /* Fallback Red Organic Score Stamp on Page 1 */
-                    currentSheetPage === 1 && (
+
+                    {/* Real MagicInk Vector SVG Overlay */}
+                    {magicInk && svgOverlayMarkup ? (
                       <div
-                        style={{
-                          position: "absolute",
-                          top: "20px",
-                          right: "20px",
-                          width: "68px",
-                          height: "68px",
-                          borderRadius: "50%",
-                          border: "3.2px solid #dc2626",
-                          color: "#dc2626",
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontWeight: 900,
-                          fontSize: "1.05rem",
-                          transform: "rotate(-8deg)",
-                          background: "rgba(254, 242, 242, 0.75)",
-                          boxShadow: "0 2px 8px rgba(220, 38, 38, 0.15)"
-                        }}
-                      >
-                        <span>{totalScore}</span>
-                        <span style={{ fontSize: "0.68rem", borderTop: "1.5px solid #dc2626", width: "70%", textAlign: "center" }}>
-                          {maxScore}
-                        </span>
-                      </div>
-                    )
-                  ) : null}
-                </div>
+                        style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none" }}
+                        dangerouslySetInnerHTML={{ __html: svgOverlayMarkup }}
+                      />
+                    ) : magicInk ? (
+                      /* Fallback Red Organic Score Stamp on Page 1 */
+                      currentSheetPage === 1 && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            top: "20px",
+                            right: "20px",
+                            width: "68px",
+                            height: "68px",
+                            borderRadius: "50%",
+                            border: "3.2px solid #dc2626",
+                            color: "#dc2626",
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontWeight: 900,
+                            fontSize: "1.05rem",
+                            transform: "rotate(-8deg)",
+                            background: "rgba(254, 242, 242, 0.75)",
+                            boxShadow: "0 2px 8px rgba(220, 38, 38, 0.15)"
+                          }}
+                        >
+                          <span>{totalScore}</span>
+                          <span style={{ fontSize: "0.68rem", borderTop: "1.5px solid #dc2626", width: "70%", textAlign: "center" }}>
+                            {maxScore}
+                          </span>
+                        </div>
+                      )
+                    ) : null}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1592,16 +1726,27 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
                         <td style={{ padding: "0.85rem 1.25rem", textAlign: "right" }}>
                           <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
                             {evalRecord ? (
-                              <button
-                                onClick={() => {
-                                  setActiveScorecard(evalRecord);
-                                  setCurrentSheetPage(1);
-                                }}
-                                className="btn btn-primary"
-                                style={{ fontSize: "0.78rem", padding: "0.4rem 0.85rem", display: "flex", alignItems: "center", gap: "0.35rem" }}
-                              >
-                                <Eye size={13} /> View Report
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setActiveScorecard(evalRecord);
+                                    setCurrentSheetPage(1);
+                                  }}
+                                  className="btn btn-primary"
+                                  style={{ fontSize: "0.78rem", padding: "0.4rem 0.85rem", display: "flex", alignItems: "center", gap: "0.35rem" }}
+                                >
+                                  <Eye size={13} /> View Report
+                                </button>
+                                <button
+                                  onClick={() => handleEvaluateSingle(stud)}
+                                  disabled={isEvaluating || !hasAnswerKey}
+                                  className="btn btn-secondary"
+                                  style={{ fontSize: "0.75rem", padding: "0.4rem 0.7rem", display: "flex", alignItems: "center", gap: "0.3rem" }}
+                                  title={sheetData?.file ? `Re-evaluate with ${sheetData.filename}` : "Re-run evaluation"}
+                                >
+                                  <Sparkles size={12} /> {isEvaluating ? "Grading..." : "Re-Evaluate"}
+                                </button>
+                              </>
                             ) : (
                               <button
                                 onClick={() => handleEvaluateSingle(stud)}

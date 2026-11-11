@@ -199,7 +199,9 @@ export const academicApi = {
   },
 
   generateAnswerKey: async (examId: string): Promise<any> => {
-    const res = await apiClient.post(`/academic/exams/${examId}/generate-answer-key`);
+    const res = await apiClient.post(`/academic/exams/${examId}/generate-answer-key`, undefined, {
+      timeout: 180000
+    });
     return res.data;
   },
 
@@ -223,13 +225,16 @@ export const academicApi = {
       formData.append("gemini_api_key", apiKey);
     }
     const res = await apiClient.post<AcademicEvaluation>(`/academic/exams/${examId}/evaluate`, formData, {
-      headers: { "Content-Type": "multipart/form-data" }
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 180000
     });
     return res.data;
   },
 
   evaluateAll: async (examId: string): Promise<{ status: string; evaluated_count: number; evaluations: AcademicEvaluation[] }> => {
-    const res = await apiClient.post(`/academic/exams/${examId}/evaluate-all`);
+    const res = await apiClient.post(`/academic/exams/${examId}/evaluate-all`, undefined, {
+      timeout: 300000
+    });
     return res.data;
   },
 

@@ -24,7 +24,7 @@ export const resolveApiUrl = (path?: string | null): string => {
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 45000, // 45 seconds to accommodate large image/PDF OCR analysis
+  timeout: 180000, // 3 minutes to accommodate multi-page PDF 3-stage multimodal evaluation
 });
 
 /**

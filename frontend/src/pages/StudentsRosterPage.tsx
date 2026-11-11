@@ -10,7 +10,9 @@ import {
   RefreshCw,
   X,
   Filter,
-  FolderGit2
+  FolderGit2,
+  ArrowLeft,
+  ChevronRight
 } from "lucide-react";
 
 interface StudentsRosterProps {
@@ -263,7 +265,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                 fontWeight: 500
               }}
             >
-              <option value="">Class: All Cohorts</option>
+              <option value="">Class: All Boxes Menu</option>
               {classes.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -318,257 +320,320 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
         </button>
       </div>
 
-      {/* Class Selector Boxes Grid */}
-      {classes.length > 0 && (
-        <div style={{ marginBottom: "1.75rem" }}>
-          <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.75rem" }}>
-            Select Class Cohort
+      {/* STATE A: CLASS BOX MENU ONLY (Click any tile to open its student list) */}
+      {!loading && !selectedClassId && (
+        classes.length === 0 && unassignedStudents.length === 0 ? (
+          <div style={{ background: "#ffffff", border: "2px dashed #cbd5e1", borderRadius: "16px", padding: "4rem 2rem", textAlign: "center" }}>
+            <Users size={48} style={{ color: "#94a3b8", margin: "0 auto 1rem" }} />
+            <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.4rem" }}>
+              No Classes or Students Found
+            </h3>
+            <p style={{ color: "#64748b", fontSize: "0.9rem", maxWidth: "460px", margin: "0 auto 1.5rem" }}>
+              Create your first academic class or batch in Dashboard, then enroll students to track evaluations.
+            </p>
+            <button onClick={() => onNavigate("dashboard")} className="btn btn-primary">
+              Go to Dashboard
+            </button>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "1rem" }}>
-            {/* "All Classes" Card */}
-            <div
-              onClick={() => setSelectedClassId("")}
-              style={{
-                background: selectedClassId === "" ? "#eff6ff" : "#ffffff",
-                border: selectedClassId === "" ? "2px solid #2563eb" : "1px solid #e2e8f0",
-                borderRadius: "14px",
-                padding: "1rem 1.25rem",
-                cursor: "pointer",
-                transition: "all 0.15s ease",
-                boxShadow: selectedClassId === "" ? "0 4px 12px rgba(37, 99, 235, 0.12)" : "0 1px 3px rgba(0, 0, 0, 0.03)"
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.35rem" }}>
-                <span style={{ fontSize: "0.95rem", fontWeight: 800, color: selectedClassId === "" ? "#1d4ed8" : "#0f172a" }}>
-                  All Classes & Cohorts
-                </span>
-                <span style={{ fontSize: "0.75rem", fontWeight: 700, background: selectedClassId === "" ? "#dbeafe" : "#f1f5f9", color: selectedClassId === "" ? "#1e40af" : "#475569", padding: "0.15rem 0.5rem", borderRadius: "9999px" }}>
-                  {filteredStudents.length}
-                </span>
-              </div>
-              <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
-                Overview across all batches
-              </div>
+        ) : (
+          <div style={{ marginBottom: "1.75rem" }}>
+            <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.85rem" }}>
+              Class Boxes — Select a class tile to open students
             </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1.1rem" }}>
+              {classes.map((cls) => {
+                const count = (classMap.get(cls.id) || []).length;
+                return (
+                  <div
+                    key={cls.id}
+                    onClick={() => setSelectedClassId(cls.id)}
+                    style={{
+                      background: "#ffffff",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "16px",
+                      padding: "1.25rem 1.35rem",
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                      boxShadow: "0 2px 8px rgba(0, 0, 0, 0.03)",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                      gap: "1rem"
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = "#2563eb";
+                      e.currentTarget.style.boxShadow = "0 6px 18px rgba(37, 99, 235, 0.12)";
+                      e.currentTarget.style.transform = "translateY(-2px)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = "#e2e8f0";
+                      e.currentTarget.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.03)";
+                      e.currentTarget.style.transform = "translateY(0)";
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.75rem" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                        <div style={{ padding: "0.6rem", background: "#eff6ff", color: "#2563eb", borderRadius: "10px", flexShrink: 0 }}>
+                          <FolderGit2 size={20} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: "1.02rem", fontWeight: 800, color: "#0f172a" }}>
+                            {cls.name}
+                          </div>
+                          <div style={{ fontSize: "0.78rem", fontWeight: 600, color: "#64748b", marginTop: "0.15rem" }}>
+                            {cls.department || "General"} • {cls.code || "Cohort"}
+                          </div>
+                        </div>
+                      </div>
+                      <span style={{ fontSize: "0.76rem", fontWeight: 700, background: "#f1f5f9", color: "#334155", padding: "0.2rem 0.6rem", borderRadius: "9999px", whiteSpace: "nowrap" }}>
+                        {count} {count === 1 ? "Student" : "Students"}
+                      </span>
+                    </div>
 
-            {/* Individual Class Cards */}
-            {classes.map((cls) => {
-              const count = (classMap.get(cls.id) || []).length;
-              const isSelected = selectedClassId === cls.id;
-              return (
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #f1f5f9", paddingTop: "0.75rem", fontSize: "0.78rem" }}>
+                      <span style={{ color: "#94a3b8", fontWeight: 600 }}>
+                        {cls.academic_year || "2026-2027"}
+                      </span>
+                      <span style={{ color: "#2563eb", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "0.2rem" }}>
+                        Open Class <ChevronRight size={14} />
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {unassignedStudents.length > 0 && (
                 <div
-                  key={cls.id}
-                  onClick={() => setSelectedClassId(isSelected ? "" : cls.id)}
+                  onClick={() => setSelectedClassId("__unassigned__")}
                   style={{
-                    background: isSelected ? "#eff6ff" : "#ffffff",
-                    border: isSelected ? "2px solid #2563eb" : "1px solid #e2e8f0",
-                    borderRadius: "14px",
-                    padding: "1rem 1.25rem",
+                    background: "#ffffff",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "16px",
+                    padding: "1.25rem 1.35rem",
                     cursor: "pointer",
                     transition: "all 0.15s ease",
-                    boxShadow: isSelected ? "0 4px 12px rgba(37, 99, 235, 0.12)" : "0 1px 3px rgba(0, 0, 0, 0.03)"
+                    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.03)",
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-between",
+                    gap: "1rem"
                   }}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.35rem" }}>
-                    <div>
-                      <div style={{ fontSize: "0.95rem", fontWeight: 800, color: isSelected ? "#1d4ed8" : "#0f172a" }}>
-                        {cls.name}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                      <div style={{ padding: "0.6rem", background: "#f1f5f9", color: "#475569", borderRadius: "10px" }}>
+                        <Users size={20} />
                       </div>
-                      <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "#64748b" }}>
-                        {cls.department || "General"} • {cls.code || "Cohort"}
+                      <div>
+                        <div style={{ fontSize: "1.02rem", fontWeight: 800, color: "#0f172a" }}>
+                          Unassigned Students
+                        </div>
+                        <div style={{ fontSize: "0.78rem", fontWeight: 600, color: "#64748b", marginTop: "0.15rem" }}>
+                          Not linked to a class cohort
+                        </div>
                       </div>
                     </div>
-                    <span style={{ fontSize: "0.75rem", fontWeight: 700, background: isSelected ? "#dbeafe" : "#f1f5f9", color: isSelected ? "#1e40af" : "#475569", padding: "0.15rem 0.5rem", borderRadius: "9999px" }}>
-                      {count} {count === 1 ? "Student" : "Students"}
+                    <span style={{ fontSize: "0.76rem", fontWeight: 700, background: "#f1f5f9", color: "#334155", padding: "0.2rem 0.6rem", borderRadius: "9999px" }}>
+                      {unassignedStudents.length} {unassignedStudents.length === 1 ? "Student" : "Students"}
                     </span>
                   </div>
-                  <div style={{ fontSize: "0.72rem", color: "#94a3b8", marginTop: "0.4rem" }}>
-                    {cls.academic_year || "2026-2027"}
+                  <div style={{ display: "flex", justifyContent: "flex-end", borderTop: "1px solid #f1f5f9", paddingTop: "0.75rem", fontSize: "0.78rem", color: "#2563eb", fontWeight: 700 }}>
+                    Open List <ChevronRight size={14} />
                   </div>
                 </div>
-              );
-            })}
+              )}
+            </div>
           </div>
-        </div>
+        )
       )}
 
-      {/* CLUSTERED BY CLASS BOXES */}
-      {loading ? (
+      {/* Loading Indicator */}
+      {loading && (
         <div style={{ textAlign: "center", padding: "4rem", color: "#64748b" }}>
           Loading student rosters...
         </div>
-      ) : classes.length === 0 && unassignedStudents.length === 0 ? (
-        <div style={{ background: "#ffffff", border: "2px dashed #cbd5e1", borderRadius: "16px", padding: "4rem 2rem", textAlign: "center" }}>
-          <Users size={48} style={{ color: "#94a3b8", margin: "0 auto 1rem" }} />
-          <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.4rem" }}>
-            No Classes or Students Found
-          </h3>
-          <p style={{ color: "#64748b", fontSize: "0.9rem", maxWidth: "460px", margin: "0 auto 1.5rem" }}>
-            Create your first academic class or batch in Dashboard, then enroll students to track evaluations.
-          </p>
-          <button onClick={() => onNavigate("dashboard")} className="btn btn-primary">
-            Go to Dashboard
-          </button>
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
-          {/* Loop over each Class and render its container box */}
-          {classes.map((cls) => {
-            const classStudents = classMap.get(cls.id) || [];
-            // If class filter is applied and does not match, skip
-            if (selectedClassId && selectedClassId !== cls.id) return null;
+      )}
 
-            return (
-              <div
-                key={cls.id}
-                style={{
-                  background: "#ffffff",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "16px",
-                  overflow: "hidden",
-                  boxShadow: "0 1px 4px rgba(0, 0, 0, 0.04)"
-                }}
-              >
-                {/* Class Box Header */}
-                <div
-                  style={{
-                    padding: "1.1rem 1.5rem",
-                    background: "#f8fafc",
-                    borderBottom: "1px solid #e2e8f0",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                    gap: "0.75rem"
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                    <div style={{ padding: "0.5rem", background: "#1e1b4b", color: "#ffffff", borderRadius: "10px" }}>
-                      <FolderGit2 size={18} />
-                    </div>
-                    <div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                        <h2 style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
-                          {cls.name}
-                        </h2>
-                        {cls.code && (
-                          <span style={{ fontSize: "0.75rem", fontWeight: 700, background: "#e2e8f0", color: "#334155", padding: "0.15rem 0.5rem", borderRadius: "4px" }}>
-                            {cls.code}
-                          </span>
-                        )}
-                        <span style={{ fontSize: "0.75rem", fontWeight: 700, background: "#e0f2fe", color: "#0369a1", padding: "0.15rem 0.55rem", borderRadius: "9999px" }}>
-                          {classStudents.length} {classStudents.length === 1 ? "Student" : "Students"}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: "0.8rem", color: "#64748b", marginTop: "0.2rem" }}>
-                        Department: {cls.department || "General"} • Academic Year: {cls.academic_year || "2026-2027"}
-                        {cls.start_date ? ` • Sem: ${cls.start_date} to ${cls.end_date || "Upcoming"}` : ""}
-                      </div>
-                    </div>
-                  </div>
+      {/* STATE B: OPENED CLASS BOX WITH CLICKABLE STUDENT LIST (NO ATTENDANCE) */}
+      {!loading && selectedClassId && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+          <div>
+            <button
+              onClick={() => setSelectedClassId("")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.45rem",
+                background: "#ffffff",
+                border: "1px solid #cbd5e1",
+                borderRadius: "8px",
+                padding: "0.45rem 0.9rem",
+                fontSize: "0.84rem",
+                fontWeight: 700,
+                color: "#1e293b",
+                cursor: "pointer"
+              }}
+            >
+              <ArrowLeft size={15} /> Back to All Class Boxes
+            </button>
+          </div>
 
-                  <button
-                    onClick={() => handleOpenAddModal(cls.id)}
-                    className="btn btn-secondary"
-                    style={{ fontSize: "0.82rem", display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem" }}
+          {selectedClassId !== "__unassigned__" ? (
+            classes
+              .filter((cls) => cls.id === selectedClassId)
+              .map((cls) => {
+                const classStudents = classMap.get(cls.id) || [];
+                return (
+                  <div
+                    key={cls.id}
+                    style={{
+                      background: "#ffffff",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "16px",
+                      overflow: "hidden",
+                      boxShadow: "0 1px 4px rgba(0, 0, 0, 0.04)"
+                    }}
                   >
-                    <UserPlus size={14} /> Add Student to this Class
-                  </button>
-                </div>
+                    {/* Class Box Header */}
+                    <div
+                      style={{
+                        padding: "1.1rem 1.5rem",
+                        background: "#f8fafc",
+                        borderBottom: "1px solid #e2e8f0",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        gap: "0.75rem"
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                        <div style={{ padding: "0.5rem", background: "#1e1b4b", color: "#ffffff", borderRadius: "10px" }}>
+                          <FolderGit2 size={18} />
+                        </div>
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <h2 style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
+                              {cls.name}
+                            </h2>
+                            {cls.code && (
+                              <span style={{ fontSize: "0.75rem", fontWeight: 700, background: "#e2e8f0", color: "#334155", padding: "0.15rem 0.5rem", borderRadius: "4px" }}>
+                                {cls.code}
+                              </span>
+                            )}
+                            <span style={{ fontSize: "0.75rem", fontWeight: 700, background: "#e0f2fe", color: "#0369a1", padding: "0.15rem 0.55rem", borderRadius: "9999px" }}>
+                              {classStudents.length} {classStudents.length === 1 ? "Student" : "Students"}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: "0.8rem", color: "#64748b", marginTop: "0.2rem" }}>
+                            Department: {cls.department || "General"} • Academic Year: {cls.academic_year || "2026-2027"}
+                            {cls.start_date ? ` • Sem: ${cls.start_date} to ${cls.end_date || "Upcoming"}` : ""}
+                          </div>
+                        </div>
+                      </div>
 
-                {/* Students List in this Class */}
-                {classStudents.length === 0 ? (
-                  <div style={{ padding: "2.5rem 1.5rem", textAlign: "center", color: "#64748b", fontSize: "0.88rem" }}>
-                    No students enrolled in <strong>{cls.name}</strong> yet.
-                  </div>
-                ) : (
-                  <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-                      <thead>
-                        <tr style={{ background: "#ffffff", borderBottom: "1px solid #e2e8f0" }}>
-                          <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", width: "50px" }}>#</th>
-                          <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Student Name</th>
-                          <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Roll Number</th>
-                          <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Section</th>
-                          <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Subject</th>
-                          <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", textAlign: "right" }}>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {classStudents.map((stud, idx) => {
-                          const subj = subjects.find((s) => s.id === stud.subject_id);
-                          return (
-                            <tr
-                              key={stud.id}
-                              style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s ease" }}
-                              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f8fafc")}
-                              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ffffff")}
-                            >
-                              <td style={{ padding: "0.85rem 1.25rem", fontSize: "0.82rem", color: "#94a3b8", fontWeight: 600 }}>
-                                {idx + 1}
-                              </td>
-                              <td style={{ padding: "0.85rem 1.25rem" }}>
-                                <div
-                                  onClick={() => setSelectedStudentForProfile(stud)}
-                                  style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.92rem", cursor: "pointer" }}
-                                  onMouseEnter={(e) => ((e.target as HTMLElement).style.textDecoration = "underline")}
-                                  onMouseLeave={(e) => ((e.target as HTMLElement).style.textDecoration = "none")}
-                                >
-                                  {stud.name}
-                                </div>
-                                <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
-                                  {stud.email || "No email on record"}
-                                </div>
-                              </td>
-                              <td style={{ padding: "0.85rem 1.25rem" }}>
-                                <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#1e293b", fontSize: "0.85rem", background: "#f1f5f9", padding: "0.2rem 0.55rem", borderRadius: "6px" }}>
-                                  {stud.roll_number}
-                                </span>
-                              </td>
-                              <td style={{ padding: "0.85rem 1.25rem" }}>
-                                <span style={{ background: "#e2e8f0", color: "#334155", padding: "0.15rem 0.5rem", borderRadius: "4px", fontSize: "0.75rem", fontWeight: 600 }}>
-                                  Section {stud.section || "A"}
-                                </span>
-                              </td>
-                              <td style={{ padding: "0.85rem 1.25rem" }}>
-                                <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#1e293b" }}>
-                                  {subj?.name || "Subject"}
-                                </div>
-                                <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
-                                  {subj?.code || ""}
-                                </div>
-                              </td>
-                              <td style={{ padding: "0.85rem 1.25rem", textAlign: "right" }}>
-                                <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
-                                  <button
-                                    onClick={() => setSelectedStudentForProfile(stud)}
-                                    className="btn btn-secondary"
-                                    style={{ fontSize: "0.78rem", padding: "0.35rem 0.75rem" }}
-                                  >
-                                    View Profile
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(stud.id, stud.name)}
-                                    title="Delete Student"
-                                    style={{ padding: "0.35rem", background: "none", border: "none", color: "#ef4444", cursor: "pointer" }}
-                                  >
-                                    <Trash2 size={15} />
-                                  </button>
-                                </div>
-                              </td>
+                      <button
+                        onClick={() => handleOpenAddModal(cls.id)}
+                        className="btn btn-secondary"
+                        style={{ fontSize: "0.82rem", display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem" }}
+                      >
+                        <UserPlus size={14} /> Add Student to this Class
+                      </button>
+                    </div>
+
+                    {/* Students List in this Class (Click any row for details) */}
+                    {classStudents.length === 0 ? (
+                      <div style={{ padding: "2.5rem 1.5rem", textAlign: "center", color: "#64748b", fontSize: "0.88rem" }}>
+                        No students enrolled in <strong>{cls.name}</strong> yet.
+                      </div>
+                    ) : (
+                      <div style={{ overflowX: "auto" }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+                          <thead>
+                            <tr style={{ background: "#ffffff", borderBottom: "1px solid #e2e8f0" }}>
+                              <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", width: "50px" }}>#</th>
+                              <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Student Name</th>
+                              <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Roll Number</th>
+                              <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Section</th>
+                              <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Subject</th>
+                              <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", textAlign: "right" }}>Actions</th>
                             </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                          </thead>
+                          <tbody>
+                            {classStudents.map((stud, idx) => {
+                              const subj = subjects.find((s) => s.id === stud.subject_id);
+                              return (
+                                <tr
+                                  key={stud.id}
+                                  onClick={() => setSelectedStudentForProfile(stud)}
+                                  style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s ease", cursor: "pointer" }}
+                                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f8fafc")}
+                                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ffffff")}
+                                >
+                                  <td style={{ padding: "0.85rem 1.25rem", fontSize: "0.82rem", color: "#94a3b8", fontWeight: 600 }}>
+                                    {idx + 1}
+                                  </td>
+                                  <td style={{ padding: "0.85rem 1.25rem" }}>
+                                    <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.92rem" }}>
+                                      {stud.name}
+                                    </div>
+                                    <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                                      {stud.email || "Click row for full profile"}
+                                    </div>
+                                  </td>
+                                  <td style={{ padding: "0.85rem 1.25rem" }}>
+                                    <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#1e293b", fontSize: "0.85rem", background: "#f1f5f9", padding: "0.2rem 0.55rem", borderRadius: "6px" }}>
+                                      {stud.roll_number}
+                                    </span>
+                                  </td>
+                                  <td style={{ padding: "0.85rem 1.25rem" }}>
+                                    <span style={{ background: "#e2e8f0", color: "#334155", padding: "0.15rem 0.5rem", borderRadius: "4px", fontSize: "0.75rem", fontWeight: 600 }}>
+                                      Section {stud.section || "A"}
+                                    </span>
+                                  </td>
+                                  <td style={{ padding: "0.85rem 1.25rem" }}>
+                                    <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#1e293b" }}>
+                                      {subj?.name || "Subject"}
+                                    </div>
+                                    <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                                      {subj?.code || ""}
+                                    </div>
+                                  </td>
+                                  <td style={{ padding: "0.85rem 1.25rem", textAlign: "right" }}>
+                                    <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedStudentForProfile(stud);
+                                        }}
+                                        className="btn btn-secondary"
+                                        style={{ fontSize: "0.78rem", padding: "0.35rem 0.75rem" }}
+                                      >
+                                        View Details
+                                      </button>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDelete(stud.id, stud.name);
+                                        }}
+                                        title="Delete Student"
+                                        style={{ padding: "0.35rem", background: "none", border: "none", color: "#ef4444", cursor: "pointer" }}
+                                      >
+                                        <Trash2 size={15} />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            );
-          })}
-
-          {/* Unassigned Students Box (if any) */}
-          {unassignedStudents.length > 0 && !selectedClassId && (
+                );
+              })
+          ) : (
             <div
               style={{
                 background: "#ffffff",
@@ -581,7 +646,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
               <div style={{ padding: "1.1rem 1.5rem", background: "#f8fafc", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <h2 style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
-                    Other Enrolled Students
+                    Unassigned Enrolled Students
                   </h2>
                   <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
                     Students not linked to an explicit cohort
@@ -608,10 +673,14 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                     {unassignedStudents.map((stud, idx) => {
                       const subj = subjects.find((s) => s.id === stud.subject_id);
                       return (
-                        <tr key={stud.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                        <tr
+                          key={stud.id}
+                          onClick={() => setSelectedStudentForProfile(stud)}
+                          style={{ borderBottom: "1px solid #f1f5f9", cursor: "pointer" }}
+                        >
                           <td style={{ padding: "0.85rem 1.25rem", fontSize: "0.82rem", color: "#94a3b8", fontWeight: 600 }}>{idx + 1}</td>
                           <td style={{ padding: "0.85rem 1.25rem" }}>
-                            <div onClick={() => setSelectedStudentForProfile(stud)} style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.92rem", cursor: "pointer" }}>
+                            <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.92rem" }}>
                               {stud.name}
                             </div>
                           </td>
@@ -623,8 +692,15 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                           <td style={{ padding: "0.85rem 1.25rem" }}>Section {stud.section || "A"}</td>
                           <td style={{ padding: "0.85rem 1.25rem" }}>{subj?.name || "Subject"}</td>
                           <td style={{ padding: "0.85rem 1.25rem", textAlign: "right" }}>
-                            <button onClick={() => setSelectedStudentForProfile(stud)} className="btn btn-secondary" style={{ fontSize: "0.78rem" }}>
-                              View Profile
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedStudentForProfile(stud);
+                              }}
+                              className="btn btn-secondary"
+                              style={{ fontSize: "0.78rem" }}
+                            >
+                              View Details
                             </button>
                           </td>
                         </tr>
