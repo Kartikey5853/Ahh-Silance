@@ -93,12 +93,13 @@ def test_page_storage_rasterization():
     assert os.path.abspath(retrieved_path) == os.path.abspath(page_1["path"])
 
 
-def test_magicink_evaluation_and_svg_generation(sample_exam):
+def test_magicink_evaluation_and_svg_generation(sample_exam, monkeypatch):
     """
     Verifies that MagicInk evaluation produces exact partial score (19.5/20),
     SLR table improvement advice, normalized 0-1000 bounding boxes, and SVG overlay markup.
     """
     import asyncio
+    monkeypatch.setattr(MagicInkService, "get_gemini_client", classmethod(lambda cls, key=None: None))
     eval_id = "test_eval_magicink_02"
     img_bytes = create_dummy_sheet_image_bytes()
     
@@ -195,12 +196,13 @@ def test_database_persistence_with_magicink(sample_exam):
     assert retrieved["magic_ink"]["total_stamp"]["box_2d"] == [48, 865, 142, 976]
 
 
-def test_magicink_router_endpoints(sample_exam):
+def test_magicink_router_endpoints(sample_exam, monkeypatch):
     """Verifies FastAPI evaluation, page streaming, and magicink endpoints."""
     import uuid
     from fastapi.testclient import TestClient
     from backend.main import app
 
+    monkeypatch.setattr(MagicInkService, "get_gemini_client", classmethod(lambda cls, key=None: None))
     client = TestClient(app)
     unique_exam_id = f"exam_{uuid.uuid4().hex[:8]}"
 

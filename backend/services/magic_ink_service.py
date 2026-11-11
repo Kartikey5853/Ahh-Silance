@@ -203,7 +203,7 @@ class MagicInkService:
 
         contents.append(prompt)
 
-        for model_name in ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-flash-latest"]:
+        for model_name in ["gemini-2.5-flash", "gemini-flash-latest"]:
             try:
                 resp = client.models.generate_content(
                     model=model_name,
@@ -294,7 +294,7 @@ class MagicInkService:
 
         contents.append(prompt)
 
-        for model_name in ["gemini-3.8-flash", "gemini-4-argon", "gemini-flash-latest"]:
+        for model_name in ["gemini-2.5-pro", "gemini-pro-latest", "gemini-2.5-flash"]:
             try:
                 resp = client.models.generate_content(
                     model=model_name,
@@ -382,7 +382,7 @@ class MagicInkService:
 
         try:
             resp = client.models.generate_content(
-                model="gemini-3.8-flash",
+                model="gemini-2.5-flash",
                 contents=contents,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json"
