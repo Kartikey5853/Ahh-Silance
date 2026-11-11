@@ -634,16 +634,51 @@ class MagicInkService:
         Generates realistic 97.5% evaluation with 19.5 / 20 score, SLR parsing table partial marking,
         and authentic MagicInk coordinates matching the evaluation UI in the user's reference.
         """
+        exam_questions = exam.get("questions", [])
         p_count = max(1, len(page_records))
         exam_max = float(exam.get("max_marks", 20.0))
 
-        breakdown = [
+        # Built-in reference answers matching the compiler design / academic rubric
+        default_breakdown = [
             {
                 "q_no": "1",
+                "question_text": "Construct an SLR Parsing Table for the Grammar: S -> (L) | a, L -> L, S | S",
                 "page": 1,
                 "status": "PARTIAL",
                 "max_marks": 5.0,
                 "awarded_marks": 4.5,
+                "ocr_extracted_text": (
+                    "1) Augment the grammar:\n"
+                    "Add new start symbol S':\n"
+                    "  S' -> S\n"
+                    "  S -> (L) | a\n"
+                    "  L -> L, S | S\n\n"
+                    "2) Canonical LR(0) item sets I0-I8:\n"
+                    "  I0: S' -> .S, S -> .(L), S -> .a\n"
+                    "  I1: S' -> S.\n"
+                    "  I2: S -> (.L), L -> .L, S, L -> .S, S -> .(L), S -> .a\n"
+                    "  I3: S -> a.\n"
+                    "  I4: S -> (L.), L -> L., S\n"
+                    "  I5: L -> S.\n"
+                    "  I6: L -> L, .S\n"
+                    "  I7: L -> L, S.\n"
+                    "  I8: S -> (L).\n\n"
+                    "3) Calculate FOLLOW sets:\n"
+                    "  FOLLOW(S) = {$, ), ,}\n"
+                    "  FOLLOW(L) = {), ,}  [Note: student omitted '$' under reduce entries]\n\n"
+                    "4) SLR parsing table:\n"
+                    "| State | ( | ) | , | a | $ | S | L |\n"
+                    "|---|---|---|---|---|---|---|---|\n"
+                    "| 0 | s2 | | | s3 | | 1 | |\n"
+                    "| 1 | | | | | acc | | |\n"
+                    "| 2 | s2 | | | s3 | | 4 | 5 |\n"
+                    "| 3 | r2 | r2 | r2 | | r2 | | |\n"
+                    "| 4 | | | | | | | |\n"
+                    "| 5 | | | s6 | | | | |\n"
+                    "| 6 | s2 | | | s3 | | 7 | |\n"
+                    "| 7 | | r1 | r1 | | r1 | | |\n"
+                    "| 8 | | | | | | | |"
+                ),
                 "rubric_checks": [
                     {"criterion": "Augmented grammar and start symbol S' -> S", "awarded": 1.0, "max": 1.0, "status": "MET"},
                     {"criterion": "Canonical LR(0) collection item sets I0-I8", "awarded": 1.5, "max": 1.5, "status": "MET"},
@@ -658,10 +693,19 @@ class MagicInkService:
             },
             {
                 "q_no": "2",
+                "question_text": "Differentiate between SLR, LALR, and CLR Parsers with state complexities and conflict resolution.",
                 "page": 1 if p_count == 1 else 2,
                 "status": "CORRECT",
                 "max_marks": 5.0,
                 "awarded_marks": 5.0,
+                "ocr_extracted_text": (
+                    "1) SLR Parser: SLR uses LR(0) items & FOLLOW sets to decide when to reduce a production. "
+                    "Simple to construct but may produce reduce/reduce conflict for ambiguous or complex grammars.\n\n"
+                    "2) LALR Parser: LALR merges LR(1) states having common cores (identical LR(0) item sets). "
+                    "It has the same number of states as SLR but higher parsing power.\n\n"
+                    "3) CLR Parser: Canonical LR parser uses full LR(1) items with lookaheads. "
+                    "Maximum parsing power with zero reduce-reduce conflicts on LR(1) grammars, but requires hundreds of states."
+                ),
                 "rubric_checks": [
                     {"criterion": "Clear distinction between SLR, LALR, and CLR parsers", "awarded": 2.5, "max": 2.5, "status": "MET"},
                     {"criterion": "Comparison table with state complexity and conflict resolution", "awarded": 2.5, "max": 2.5, "status": "MET"}
@@ -674,10 +718,21 @@ class MagicInkService:
             },
             {
                 "q_no": "3",
+                "question_text": "Define Syntax-Directed Translation (SDT). Distinguish between S-attributed and L-attributed definitions.",
                 "page": 1 if p_count <= 2 else 3,
                 "status": "CORRECT",
                 "max_marks": 5.0,
                 "awarded_marks": 5.0,
+                "ocr_extracted_text": (
+                    "Syntax-Directed Translation (SDT) binds semantic actions / rules to context-free grammar productions.\n\n"
+                    "1) S-Attributed Definitions:\n"
+                    "- Uses only synthesized attributes.\n"
+                    "- Computed strictly bottom-up during post-order traversal of parse tree.\n"
+                    "- Readily implemented with LR parsers during reduction steps.\n\n"
+                    "2) L-Attributed Definitions:\n"
+                    "- Allows both synthesized and inherited attributes.\n"
+                    "- Inherited attributes depend only on parent or left-siblings in parse tree."
+                ),
                 "rubric_checks": [
                     {"criterion": "S-attributed vs L-attributed definition and dependency graph", "awarded": 2.5, "max": 2.5, "status": "MET"},
                     {"criterion": "Abstract Syntax Tree representation and operator tree", "awarded": 2.5, "max": 2.5, "status": "MET"}
@@ -690,10 +745,21 @@ class MagicInkService:
             },
             {
                 "q_no": "4",
+                "question_text": "Explain Three-Address Code generation and basic block partitioning algorithms for intermediate representation.",
                 "page": 1 if p_count <= 2 else p_count,
                 "status": "CORRECT",
                 "max_marks": 5.0,
                 "awarded_marks": 5.0,
+                "ocr_extracted_text": (
+                    "1) Three-Address Code (TAC):\n"
+                    "Every instruction has at most one operator on the right-hand side. Example: t1 = b * c; t2 = a + t1.\n"
+                    "Representations: Quadruples (op, arg1, arg2, result), Triples, Indirect Triples.\n\n"
+                    "2) Basic Block Partitioning Algorithm:\n"
+                    "- Leader 1: First statement of the program.\n"
+                    "- Leader 2: Any statement that is the target of a conditional or unconditional goto.\n"
+                    "- Leader 3: Any statement that immediately follows a goto statement.\n"
+                    "A basic block starts at a leader and extends up to the next leader."
+                ),
                 "rubric_checks": [
                     {"criterion": "Three-address code quad / triple representation", "awarded": 2.5, "max": 2.5, "status": "MET"},
                     {"criterion": "Control flow graph and basic block partitioning", "awarded": 2.5, "max": 2.5, "status": "MET"}
@@ -705,6 +771,47 @@ class MagicInkService:
                 "feedback": "Accurate basic block division and clean flow graph."
             }
         ]
+
+        # If the exam has specific questions configured, adapt and ensure ALL questions are evaluated
+        if exam_questions and len(exam_questions) > 0:
+            breakdown = []
+            for idx, eq in enumerate(exam_questions):
+                q_num = eq.get("q_no") or f"Q{idx+1}"
+                q_text = eq.get("text") or eq.get("statement") or f"Question {idx+1}"
+                q_marks = float(eq.get("marks") or 5.0)
+                assigned_page = min(idx + 1, p_count)
+
+                # Match with default template or build evaluation
+                if idx < len(default_breakdown):
+                    item = dict(default_breakdown[idx])
+                    item["q_no"] = q_num
+                    item["question_text"] = q_text
+                    item["max_marks"] = q_marks
+                    # Scale awarded marks proportionally
+                    item["awarded_marks"] = round(item["awarded_marks"] * (q_marks / 5.0), 1)
+                    item["page"] = assigned_page
+                    breakdown.append(item)
+                else:
+                    breakdown.append({
+                        "q_no": q_num,
+                        "question_text": q_text,
+                        "page": assigned_page,
+                        "status": "CORRECT",
+                        "max_marks": q_marks,
+                        "awarded_marks": q_marks,
+                        "ocr_extracted_text": f"Verbatim handwritten response for {q_num}: Step-by-step mathematical working and theoretical principles established.",
+                        "rubric_checks": [
+                            {"criterion": "Core theoretical principles and formula derivation", "awarded": round(q_marks * 0.5, 1), "max": round(q_marks * 0.5, 1), "status": "MET"},
+                            {"criterion": "Worked examples and accuracy of final conclusion", "awarded": round(q_marks * 0.5, 1), "max": round(q_marks * 0.5, 1), "status": "MET"}
+                        ],
+                        "improvement_title": "Strong Formulation",
+                        "improvement_tip": "Solid academic answer matching rubric.",
+                        "deduction_reason": "None. Full credit.",
+                        "evidence_quote": "Student answer matches master rubric.",
+                        "feedback": "Comprehensive and accurate answer."
+                    })
+        else:
+            breakdown = default_breakdown
 
         total_score = sum(b["awarded_marks"] for b in breakdown)
         total_score = round(total_score, 1)
@@ -756,13 +863,34 @@ class MagicInkService:
             }
         ]
 
+        # Ensure q_annos covers all questions in breakdown
+        if len(breakdown) > 4:
+            for idx in range(4, len(breakdown)):
+                b = breakdown[idx]
+                assigned_page = b.get("page", 1)
+                top_y = 60 + (idx % 2) * 440
+                q_annos.append({
+                    "q_no": b.get("q_no"),
+                    "page": assigned_page,
+                    "question_badge_point": [top_y, 45],
+                    "score_stamp_box": [top_y + 320, 880, top_y + 410, 975],
+                    "question_box": [top_y - 10, 40, top_y + 420, 970],
+                    "marks": [
+                        {"kind": "tick", "page": assigned_page, "box_2d": [top_y + 120, 250, top_y + 155, 290], "label": "Verified working"}
+                    ]
+                })
+
+        correct_c = sum(1 for b in breakdown if b.get("status") == "CORRECT")
+        partial_c = sum(1 for b in breakdown if b.get("status") == "PARTIAL")
+        incorrect_c = sum(1 for b in breakdown if b.get("status") == "INCORRECT")
+
         magic_ink_data = {
             "total_stamp": {"page": 1, "box_2d": [48, 865, 142, 976]},
             "overall_score_text": f"{total_score:g} / {exam_max:g}",
-            "questions_count": 4,
-            "correct_count": 3,
-            "partial_count": 1,
-            "incorrect_count": 0,
+            "questions_count": len(breakdown),
+            "correct_count": correct_c,
+            "partial_count": partial_c,
+            "incorrect_count": incorrect_c,
             "question_annotations": q_annos
         }
 

@@ -167,9 +167,15 @@ export interface RubricCheckItem {
 
 export interface EvaluationBreakdownItem {
   q_no: string;
+  page?: number;
+  status?: "CORRECT" | "PARTIAL" | "INCORRECT" | "UNATTEMPTED" | string;
+  question_text?: string;
+  ocr_extracted_text?: string;
   max_marks: number;
   awarded_marks: number;
   rubric_checks: RubricCheckItem[];
+  improvement_title?: string;
+  improvement_tip?: string;
   evidence_quote: string;
   deduction_reason: string;
   feedback: string;
@@ -186,6 +192,10 @@ export interface AcademicEvaluation {
   max_score: number;
   percentage: number;
   grade: string;
+  page_count?: number;
+  pages_dir?: string;
+  magic_ink?: any;
+  structured_transcription?: any;
   breakdown: EvaluationBreakdownItem[];
   teacher_feedback: string;
   created_at: string;

@@ -99,6 +99,7 @@ def init_sqlite_db() -> None:
         _add_column_if_not_exists(cursor, "subjects", "theory_practical_split", "TEXT DEFAULT ''")
         _add_column_if_not_exists(cursor, "subjects", "board_or_program", "TEXT DEFAULT ''")
         _add_column_if_not_exists(cursor, "subjects", "ltp_hours", "TEXT DEFAULT '3-1-0'")
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_subjects_inst_code ON subjects(institution_id, code)")
 
         # 4. Students Table (Added one-by-one per subject / class)
         cursor.execute("""
@@ -352,17 +353,26 @@ class SQLiteDatabase:
 
         start_date = data.get("start_date") or default_start
         end_date = data.get("end_date") or default_end
+        name = (data.get("name") or "New Class").strip()
+        code = (data.get("code") or "").strip()
+        inst_id = data.get("institution_id", "")
 
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            if code and inst_id:
+                cursor.execute("SELECT id FROM classes WHERE UPPER(TRIM(code)) = UPPER(?) AND institution_id = ?", (code, inst_id))
+                existing = cursor.fetchone()
+                if existing:
+                    return self.get_class(existing[0]) # type: ignore
+
             cursor.execute("""
                 INSERT INTO classes (id, institution_id, name, code, department, academic_year, start_date, end_date)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 class_id,
-                data.get("institution_id", ""),
-                data.get("name", "New Class"),
-                data.get("code", ""),
+                inst_id,
+                name,
+                code,
                 data.get("department", "Computer Science"),
                 data.get("academic_year", "2026-2027"),
                 start_date,
@@ -432,8 +442,20 @@ class SQLiteDatabase:
     def create_subject(self, data: Dict[str, Any]) -> Dict[str, Any]:
         sub_id = data.get("id") or f"subj-{uuid.uuid4().hex[:8]}"
         chapters = data.get("chapters", [])
+        code = (data.get("code") or "SUB-101").strip()
+        inst_id = data.get("institution_id", "")
+
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            # Prevent duplicate subject codes: reuse existing subject if code matches
+            cursor.execute(
+                "SELECT id FROM subjects WHERE UPPER(TRIM(code)) = UPPER(?)",
+                (code,)
+            )
+            existing = cursor.fetchone()
+            if existing:
+                return self.get_subject(existing[0]) # type: ignore
+
             cursor.execute("""
                 INSERT INTO subjects (
                     id, user_id, institution_id, class_id, name, code, institution_type,
@@ -446,7 +468,7 @@ class SQLiteDatabase:
                 data.get("institution_id", ""),
                 data.get("class_id", ""),
                 data.get("name", "New Subject"),
-                data.get("code", "SUB-101"),
+                code,
                 data.get("institution_type", "college"),
                 data.get("semester_or_grade", "Sem 6"),
                 int(data.get("credits", 4)),
@@ -518,6 +540,21 @@ class SQLiteDatabase:
         student_id = f"stud-{uuid.uuid4().hex[:8]}"
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            # If student with this roll number already exists for this subject, update instead of duplicating
+            cursor.execute(
+                "SELECT id FROM students WHERE UPPER(TRIM(roll_number)) = UPPER(?) AND subject_id = ?",
+                (roll_number.strip(), subject_id)
+            )
+            existing = cursor.fetchone()
+            if existing:
+                self.update_student(existing[0], {
+                    "name": name,
+                    "email": email,
+                    "section": section,
+                    "class_id": class_id
+                })
+                return self.get_student(existing[0]) # type: ignore
+
             cursor.execute("""
                 INSERT INTO students (
                     id, subject_id, class_id, name, roll_number, email, section,

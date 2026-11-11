@@ -318,6 +318,80 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
         </button>
       </div>
 
+      {/* Class Selector Boxes Grid */}
+      {classes.length > 0 && (
+        <div style={{ marginBottom: "1.75rem" }}>
+          <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.75rem" }}>
+            Select Class Cohort
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "1rem" }}>
+            {/* "All Classes" Card */}
+            <div
+              onClick={() => setSelectedClassId("")}
+              style={{
+                background: selectedClassId === "" ? "#eff6ff" : "#ffffff",
+                border: selectedClassId === "" ? "2px solid #2563eb" : "1px solid #e2e8f0",
+                borderRadius: "14px",
+                padding: "1rem 1.25rem",
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+                boxShadow: selectedClassId === "" ? "0 4px 12px rgba(37, 99, 235, 0.12)" : "0 1px 3px rgba(0, 0, 0, 0.03)"
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.35rem" }}>
+                <span style={{ fontSize: "0.95rem", fontWeight: 800, color: selectedClassId === "" ? "#1d4ed8" : "#0f172a" }}>
+                  All Classes & Cohorts
+                </span>
+                <span style={{ fontSize: "0.75rem", fontWeight: 700, background: selectedClassId === "" ? "#dbeafe" : "#f1f5f9", color: selectedClassId === "" ? "#1e40af" : "#475569", padding: "0.15rem 0.5rem", borderRadius: "9999px" }}>
+                  {filteredStudents.length}
+                </span>
+              </div>
+              <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
+                Overview across all batches
+              </div>
+            </div>
+
+            {/* Individual Class Cards */}
+            {classes.map((cls) => {
+              const count = (classMap.get(cls.id) || []).length;
+              const isSelected = selectedClassId === cls.id;
+              return (
+                <div
+                  key={cls.id}
+                  onClick={() => setSelectedClassId(isSelected ? "" : cls.id)}
+                  style={{
+                    background: isSelected ? "#eff6ff" : "#ffffff",
+                    border: isSelected ? "2px solid #2563eb" : "1px solid #e2e8f0",
+                    borderRadius: "14px",
+                    padding: "1rem 1.25rem",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                    boxShadow: isSelected ? "0 4px 12px rgba(37, 99, 235, 0.12)" : "0 1px 3px rgba(0, 0, 0, 0.03)"
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.35rem" }}>
+                    <div>
+                      <div style={{ fontSize: "0.95rem", fontWeight: 800, color: isSelected ? "#1d4ed8" : "#0f172a" }}>
+                        {cls.name}
+                      </div>
+                      <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "#64748b" }}>
+                        {cls.department || "General"} • {cls.code || "Cohort"}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 700, background: isSelected ? "#dbeafe" : "#f1f5f9", color: isSelected ? "#1e40af" : "#475569", padding: "0.15rem 0.5rem", borderRadius: "9999px" }}>
+                      {count} {count === 1 ? "Student" : "Students"}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: "0.72rem", color: "#94a3b8", marginTop: "0.4rem" }}>
+                    {cls.academic_year || "2026-2027"}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* CLUSTERED BY CLASS BOXES */}
       {loading ? (
         <div style={{ textAlign: "center", padding: "4rem", color: "#64748b" }}>
@@ -417,7 +491,6 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                           <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Roll Number</th>
                           <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Section</th>
                           <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Subject</th>
-                          <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Attendance</th>
                           <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", textAlign: "right" }}>Actions</th>
                         </tr>
                       </thead>
@@ -464,11 +537,6 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                                 <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
                                   {subj?.code || ""}
                                 </div>
-                              </td>
-                              <td style={{ padding: "0.85rem 1.25rem" }}>
-                                <span style={{ color: "#16a34a", fontWeight: 700, fontSize: "0.85rem" }}>
-                                  {stud.attendance_percentage ?? 85}%
-                                </span>
                               </td>
                               <td style={{ padding: "0.85rem 1.25rem", textAlign: "right" }}>
                                 <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
