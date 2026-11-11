@@ -12,11 +12,15 @@ import type {
   Institution,
   Subject,
   Student,
+  StudentFullProfile,
   Exam,
+  ExamDetailsResponse,
+  AnswerKeyStructuredItem,
   AcademicEvaluation,
   QuestionItem,
   ExamScanResponse,
-  RefineQuestionResponse
+  RefineQuestionResponse,
+  BackgroundJobStatus
 } from "../types/academic";
 
 export const academicApi = {
@@ -120,8 +124,8 @@ export const academicApi = {
     return res.data;
   },
 
-  getStudentProfile: async (studentId: string): Promise<any> => {
-    const res = await apiClient.get<any>(`/academic/students/${studentId}`);
+  getStudentProfile: async (studentId: string): Promise<StudentFullProfile> => {
+    const res = await apiClient.get<StudentFullProfile>(`/academic/students/${studentId}`);
     return res.data;
   },
 
@@ -149,6 +153,29 @@ export const academicApi = {
 
   getExam: async (examId: string): Promise<Exam> => {
     const res = await apiClient.get<Exam>(`/academic/exams/${examId}`);
+    return res.data;
+  },
+
+  getExamDetails: async (examId: string): Promise<ExamDetailsResponse> => {
+    const res = await apiClient.get<ExamDetailsResponse>(`/academic/exams/${examId}/details`);
+    return res.data;
+  },
+
+  updateExamMeta: async (
+    examId: string,
+    data: Partial<{
+      title: string;
+      exam_type: string;
+      max_marks: number;
+      passing_marks: number;
+      academic_year: string;
+      target_section: string;
+      exam_date: string;
+      correction_deadline: string;
+      answer_key_text: string;
+    }>
+  ): Promise<{ status: string; exam: Exam }> => {
+    const res = await apiClient.put<{ status: string; exam: Exam }>(`/academic/exams/${examId}`, data);
     return res.data;
   },
 
@@ -193,12 +220,14 @@ export const academicApi = {
     max_marks: number;
     passing_marks: number;
     academic_year: string;
+    target_section?: string;
     exam_date?: string;
     correction_deadline?: string;
     question_paper_filename?: string;
     paper_id?: string;
     paper_page_count?: number;
     answer_key_text?: string;
+    answer_key_structured?: AnswerKeyStructuredItem[];
     questions: QuestionItem[];
   }): Promise<Exam> => {
     const res = await apiClient.post<Exam>("/academic/exams", data);
@@ -214,6 +243,7 @@ export const academicApi = {
       paper_page_count?: number;
       question_paper_filename?: string;
       title?: string;
+      target_section?: string;
       correction_deadline?: string;
     }
   ): Promise<any> => {
@@ -225,9 +255,14 @@ export const academicApi = {
     return res.data;
   },
 
-  updateExamAnswerKey: async (examId: string, answerKeyText: string): Promise<any> => {
+  updateExamAnswerKey: async (
+    examId: string,
+    answerKeyText: string,
+    answerKeyStructured?: AnswerKeyStructuredItem[]
+  ): Promise<any> => {
     const res = await apiClient.put(`/academic/exams/${examId}/answer-key`, {
-      answer_key_text: answerKeyText
+      answer_key_text: answerKeyText,
+      ...(answerKeyStructured !== undefined ? { answer_key_structured: answerKeyStructured } : {})
     });
     return res.data;
   },
@@ -236,6 +271,20 @@ export const academicApi = {
     const res = await apiClient.post(`/academic/exams/${examId}/generate-answer-key`, undefined, {
       timeout: 180000
     });
+    return res.data;
+  },
+
+  generateAnswerKeyAsync: async (examId: string): Promise<{ status: string; job_id: string; exam_id: string }> => {
+    const res = await apiClient.post<{ status: string; job_id: string; exam_id: string }>(
+      `/academic/exams/${examId}/generate-answer-key`,
+      undefined,
+      { params: { background: true } }
+    );
+    return res.data;
+  },
+
+  getJobStatus: async (jobId: string): Promise<BackgroundJobStatus> => {
+    const res = await apiClient.get<BackgroundJobStatus>(`/academic/jobs/${jobId}`);
     return res.data;
   },
 

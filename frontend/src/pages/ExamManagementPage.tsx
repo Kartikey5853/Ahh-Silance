@@ -2,9 +2,13 @@ import React, { useState, useEffect, useRef } from "react";
 import { academicApi } from "../api/academicApi";
 import { resolveApiUrl } from "../api/client";
 import { MarkdownQuestionView } from "../components/MarkdownQuestionView";
+import { ExamDetailWorkspace } from "../components/ExamDetailWorkspace";
+import { AnswerKeyFullscreenWorkspace } from "../components/AnswerKeyFullscreenWorkspace";
 import type {
   Subject,
   Exam,
+  ExamDetailsResponse,
+  AnswerKeyStructuredItem,
   QuestionItem,
   ClassItem,
   DigitalPaperHeader,
@@ -37,7 +41,9 @@ import {
   MoreVertical,
   Edit3,
   Wand2,
-  X
+  X,
+  Minimize2,
+  Maximize2
 } from "lucide-react";
 
 interface ExamManagementProps {
@@ -49,8 +55,8 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
   initialSubjectId,
   onNavigate
 }) => {
-  // View mode: "list" | "create" (3-step editor / review) | "answer-key-review"
-  const [viewMode, setViewMode] = useState<"list" | "create" | "answer-key-review">("list");
+  // View mode: "list" | "detail" | "create" (3-step editor / review) | "answer-key-review"
+  const [viewMode, setViewMode] = useState<"list" | "detail" | "create" | "answer-key-review">("list");
   // Modular Flow Steps: 1 = Upload PDF, 2 = Confirm Meta & Structure, 3 = Split Review & Edit
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
@@ -60,20 +66,25 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>(initialSubjectId || "");
   const [exams, setExams] = useState<Exam[]>([]);
   const [activeExam, setActiveExam] = useState<Exam | null>(null);
+  const [examDetails, setExamDetails] = useState<ExamDetailsResponse | null>(null);
+  const [loadingDetails, setLoadingDetails] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Zoom control for question paper preview (55% default as in screenshots)
+  // Zoom control for question paper preview
   const [paperZoom, setPaperZoom] = useState<number>(75);
 
-  // Accordion toggles in Exam Review & Edit (Image 1 & 2)
+  // Accordion & Collapse toggles in Exam Review & Edit
   const [openInfoAccordion, setOpenInfoAccordion] = useState(true);
   const [openInstructionsAccordion, setOpenInstructionsAccordion] = useState(true);
   const [openQuestionsAccordion, setOpenQuestionsAccordion] = useState(true);
+  const [collapsedQuestionKeys, setCollapsedQuestionKeys] = useState<Record<string, boolean>>({});
+  const [allQuestionsCollapsed, setAllQuestionsCollapsed] = useState<boolean>(false);
 
   // Exam Details Form
   const [examTitle, setExamTitle] = useState("B.Tech Semester End Examination");
   const [examType, setExamType] = useState("Semester Exam");
+  const [targetSection, setTargetSection] = useState("");
   const [passingMarks, setPassingMarks] = useState(24.0);
   const [academicYear, setAcademicYear] = useState("2026-2027");
   const [examDate, setExamDate] = useState(() => new Date().toISOString().split("T")[0]);
@@ -83,19 +94,27 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
     return d.toISOString().split("T")[0];
   });
   const [answerKeyText, setAnswerKeyText] = useState("");
+  const [structuredAnswersList, setStructuredAnswersList] = useState<AnswerKeyStructuredItem[]>([]);
 
-  // Answer Sheets Upload Modal State (Image 3)
+  // Non-blocking background Gemini job state keyed by exam_id
+  const [bgAnswerKeyJobs, setBgAnswerKeyJobs] = useState<
+    Record<
+      string,
+      {
+        jobId: string;
+        status: "idle" | "running" | "completed" | "failed";
+        error?: string | null;
+        warning?: string | null;
+      }
+    >
+  >({});
+  const [answerKeyReturnView, setAnswerKeyReturnView] = useState<"list" | "detail">("list");
+
+  // Answer Sheets Upload Modal State
   const [showAnswerSheetModal, setShowAnswerSheetModal] = useState(false);
   const [sheetModalExam, setSheetModalExam] = useState<Exam | null>(null);
   const [uploadedAnswerFiles, setUploadedAnswerFiles] = useState<File[]>([]);
   const [uploadActiveTab, setUploadActiveTab] = useState<"upload" | "students">("upload");
-
-  // Answer Key Generation & Review State (Images 4, 5, 6)
-  const [isGeneratingKey, setIsGeneratingKey] = useState(false);
-  const [structuredKeyData, setStructuredKeyData] = useState<any>(null);
-  const [activeKeyQuestionIdx, setActiveKeyQuestionIdx] = useState<number>(0);
-  const [editKeyOff, setEditKeyOff] = useState(true);
-  const [expandAllKey, setExpandAllKey] = useState(true);
 
   // Digital Paper Header
   const [digitalHeader, setDigitalHeader] = useState<DigitalPaperHeader>({
@@ -182,6 +201,57 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
     loadExams();
   }, [selectedSubjectId]);
 
+  // Non-blocking background job poller so Gemini synthesis never stalls UI or navigation
+  useEffect(() => {
+    const runningEntries = Object.entries(bgAnswerKeyJobs).filter(
+      ([, info]) => info.status === "running" && info.jobId
+    );
+    if (runningEntries.length === 0) return;
+
+    const timer = window.setInterval(async () => {
+      for (const [examId, info] of runningEntries) {
+        try {
+          const job = await academicApi.getJobStatus(info.jobId);
+          if (job.status === "completed") {
+            const res = job.result || {};
+            setBgAnswerKeyJobs((prev) => ({
+              ...prev,
+              [examId]: {
+                jobId: info.jobId,
+                status: "completed",
+                warning: res.api_warning || null,
+                error: null
+              }
+            }));
+            if (activeExam?.id === examId) {
+              if (res.answer_key_text) setAnswerKeyText(res.answer_key_text);
+              if (Array.isArray(res.answers)) setStructuredAnswersList(res.answers);
+            }
+            if (examDetails?.exam?.id === examId) {
+              const refreshed = await academicApi.getExamDetails(examId);
+              setExamDetails(refreshed);
+              setActiveExam(refreshed.exam);
+            }
+            await loadExams();
+          } else if (job.status === "failed") {
+            setBgAnswerKeyJobs((prev) => ({
+              ...prev,
+              [examId]: {
+                jobId: info.jobId,
+                status: "failed",
+                error: job.error || "Background synthesis failed."
+              }
+            }));
+          }
+        } catch {
+          // Transient poll failure; keep retrying on next tick
+        }
+      }
+    }, 2500);
+
+    return () => window.clearInterval(timer);
+  }, [bgAnswerKeyJobs, activeExam?.id, examDetails?.exam?.id]);
+
   const selectAndSyncQuestion = (q: QuestionItem) => {
     const qid = q.id || null;
     setActiveQuestionId(qid);
@@ -252,7 +322,8 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
     setRefineCustomInstruction("");
     setRefineSuggestions([]);
     setRefineTopic("");
-    void runRefineRequest(idx, "auto_generate", "Mixed", "");
+    setRefineError(null);
+    // Lazy generation: waits for user to click a preset button or enter an instruction
   };
 
   const handleApplyReplaceQuestion = (suggestion: RefineQuestionSuggestion) => {
@@ -299,6 +370,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
     setActiveExam(exam);
     setExamTitle(exam.title);
     setExamType(exam.exam_type);
+    setTargetSection(exam.target_section || "");
     setPassingMarks(exam.passing_marks);
     setAcademicYear(exam.academic_year || "2026-2027");
     setExamDate(exam.exam_date || new Date().toISOString().split("T")[0]);
@@ -318,6 +390,9 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
     setPaperImageError(false);
     setCurrentPaperPage(1);
     setEditingQuestionIdx(null);
+    setRefineModalIdx(null);
+    setCollapsedQuestionKeys({});
+    setAllQuestionsCollapsed(false);
 
     const qs = (exam.questions || []).map((q, idx) => ({
       ...q,
@@ -350,7 +425,11 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
     setActiveExam(null);
     setExamTitle("B.Tech Semester End Examination");
     setExamType("Semester Exam");
+    setTargetSection("");
     setPassingMarks(24.0);
+    setCollapsedQuestionKeys({});
+    setAllQuestionsCollapsed(false);
+    setRefineModalIdx(null);
     setExamDate(new Date().toISOString().split("T")[0]);
     const d = new Date();
     d.setDate(d.getDate() + 10);
@@ -432,6 +511,12 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
     setQuestions(updated);
   };
 
+  const handleQNoChange = (index: number, newQNo: string) => {
+    const updated = [...questions];
+    updated[index] = { ...updated[index], q_no: newQNo };
+    setQuestions(updated);
+  };
+
   const handleTextChange = (index: number, newText: string) => {
     const updated = [...questions];
     updated[index] = { ...updated[index], text: newText };
@@ -439,18 +524,116 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
   };
 
   const handleAddQuestion = () => {
+    const newId = `q-${Date.now().toString().slice(-5)}`;
     const newQ: QuestionItem = {
-      id: `q-${questions.length + 1}`,
+      id: newId,
       q_no: `Q${questions.length + 1}`,
+      section: questions[questions.length - 1]?.section || "Section A",
       text: "New examination question statement.",
       marks: 10.0,
+      is_or_choice: false,
+      or_group: null,
       page: currentPaperPage || 1,
       rubric: "Technical formulation, step-by-step mathematical working, and university length requirement."
     };
     const nextIdx = questions.length;
     setQuestions([...questions, newQ]);
-    setActiveQuestionId(newQ.id || null);
+    setActiveQuestionId(newId);
     setEditingQuestionIdx(nextIdx);
+  };
+
+  const handleInsertQuestionBelow = (index: number) => {
+    const baseQ = questions[index];
+    const newId = `q-${Date.now().toString().slice(-5)}`;
+    const newQ: QuestionItem = {
+      id: newId,
+      q_no: `Q${questions.length + 1}`,
+      section: baseQ?.section || "Section A",
+      text: "New question statement.",
+      marks: Number(baseQ?.marks) || 5.0,
+      is_or_choice: false,
+      or_group: null,
+      page: baseQ?.page || currentPaperPage || 1,
+      rubric: baseQ?.rubric || "Award marks for conceptual accuracy and complete working."
+    };
+    const updated = [...questions.slice(0, index + 1), newQ, ...questions.slice(index + 1)];
+    setQuestions(updated);
+    setActiveQuestionId(newId);
+    setEditingQuestionIdx(index + 1);
+  };
+
+  const handleAddOrChoiceBelow = (index: number) => {
+    const baseQ = questions[index];
+    if (!baseQ) return;
+    const groupKey = baseQ.or_group || `or-grp-${Date.now().toString().slice(-5)}`;
+    const newId = `q-or-${Date.now().toString().slice(-5)}`;
+    const updatedBase: QuestionItem = { ...baseQ, is_or_choice: true, or_group: groupKey };
+    const newOrQ: QuestionItem = {
+      id: newId,
+      q_no: `${baseQ.q_no} (OR)`,
+      section: baseQ.section || "Section A",
+      text: "Alternative OR question on equivalent syllabus weightage.",
+      marks: Number(baseQ.marks) || 5.0,
+      is_or_choice: true,
+      or_group: groupKey,
+      page: baseQ.page || currentPaperPage || 1,
+      rubric: baseQ.rubric || "Award marks for accurate conceptual explanation and working."
+    };
+    const updated = [...questions];
+    updated[index] = updatedBase;
+    updated.splice(index + 1, 0, newOrQ);
+    setQuestions(updated);
+    setActiveQuestionId(newId);
+    setEditingQuestionIdx(index + 1);
+  };
+
+  const handleToggleOrMiddle = (index: number) => {
+    if (index < 0 || index >= questions.length - 1) return;
+    const curr = questions[index];
+    const next = questions[index + 1];
+    const updated = [...questions];
+
+    const alreadyPaired = Boolean(
+      curr.is_or_choice &&
+      next.is_or_choice &&
+      curr.or_group &&
+      next.or_group &&
+      curr.or_group === next.or_group
+    );
+
+    if (alreadyPaired) {
+      const targetGroup = curr.or_group;
+      // Clear OR link on these adjacent questions if no third question depends on them
+      updated[index] = { ...curr, is_or_choice: false, or_group: null };
+      const stillUsedAfter = updated.slice(index + 2).some((q) => q.or_group === targetGroup);
+      if (!stillUsedAfter) {
+        updated[index + 1] = { ...next, is_or_choice: false, or_group: null };
+      }
+    } else {
+      const groupKey = curr.or_group || next.or_group || `or-mid-${Date.now().toString().slice(-5)}`;
+      updated[index] = { ...curr, is_or_choice: true, or_group: groupKey };
+      updated[index + 1] = { ...next, is_or_choice: true, or_group: groupKey };
+    }
+    setQuestions(updated);
+  };
+
+  const toggleAllQuestionsCollapse = () => {
+    const nextState = !allQuestionsCollapsed;
+    setAllQuestionsCollapsed(nextState);
+    const map: Record<string, boolean> = {};
+    if (nextState) {
+      questions.forEach((q, idx) => {
+        map[q.id || `q-${idx + 1}`] = true;
+      });
+    }
+    setCollapsedQuestionKeys(map);
+  };
+
+  const toggleSingleQuestionCollapse = (qKey: string) => {
+    setCollapsedQuestionKeys((prev) => ({
+      ...prev,
+      [qKey]: !prev[qKey]
+    }));
   };
 
   const handleDeleteQuestion = (index: number) => {
@@ -476,7 +659,21 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
     });
   };
 
-  const totalAllocatedMarks = questions.reduce((sum, q) => sum + (Number(q.marks) || 0), 0);
+  // Sum non-OR questions individually, and count each unique `or_group` once by max option marks
+  const totalAllocatedMarks = (() => {
+    const orGroupMax: Record<string, number> = {};
+    let total = 0;
+    questions.forEach((q) => {
+      const m = Number(q.marks) || 0;
+      const og = (q.or_group || "").trim();
+      if (q.is_or_choice && og) {
+        orGroupMax[og] = Math.max(orGroupMax[og] || 0, m);
+      } else {
+        total += m;
+      }
+    });
+    return Math.round((total + Object.values(orGroupMax).reduce((a, b) => a + b, 0)) * 10) / 10;
+  })();
 
   const handleSaveExam = async () => {
     if (!selectedSubjectId && subjects.length > 0) {
@@ -498,6 +695,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
           paper_page_count: paperPageCount || undefined,
           question_paper_filename: paperFilename || undefined,
           title: examTitle.trim() || undefined,
+          target_section: targetSection,
           correction_deadline: correctionDeadline || undefined
         });
         if (res?.exam) {
@@ -514,6 +712,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
           max_marks: totalAllocatedMarks || 60.0,
           passing_marks: passingMarks,
           academic_year: academicYear,
+          target_section: targetSection,
           exam_date: examDate,
           correction_deadline: correctionDeadline,
           question_paper_filename: paperFilename,
@@ -534,34 +733,125 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
     }
   };
 
-  // Open Answer Key Review modal/split view (Images 4, 5, 6)
-  const handleOpenAnswerKeyReview = async (exam: Exam) => {
+  // Open Dedicated Exam Details Workspace (People Writing, Target Section, Answer Key, Questions)
+  const handleOpenExamDetails = async (exam: Exam) => {
     setActiveExam(exam);
-    setViewMode("answer-key-review");
-    setIsGeneratingKey(true);
+    setAnswerKeyText(exam.answer_key_text || "");
+    setStructuredAnswersList(Array.isArray(exam.answer_key_structured) ? exam.answer_key_structured : []);
+    setViewMode("detail");
+    setLoadingDetails(true);
     try {
-      const result = await academicApi.generateAnswerKey(exam.id);
-      setStructuredKeyData(result);
-      if (result.answer_key_text) {
-        setAnswerKeyText(result.answer_key_text);
+      const det = await academicApi.getExamDetails(exam.id);
+      setExamDetails(det);
+      setActiveExam(det.exam);
+      if (det.exam.answer_key_text) setAnswerKeyText(det.exam.answer_key_text);
+      if (Array.isArray(det.exam.answer_key_structured)) {
+        setStructuredAnswersList(det.exam.answer_key_structured);
       }
     } catch (err) {
-      console.error("Error generating answer key:", err);
+      console.error("Failed loading exam details:", err);
     } finally {
-      setIsGeneratingKey(false);
+      setLoadingDetails(false);
     }
   };
 
-  const handleApproveAnswerKey = async () => {
+  const handleSelectTargetSectionInDetails = async (sec: string) => {
     if (!activeExam) return;
+    await academicApi.updateExamMeta(activeExam.id, { target_section: sec });
+    const det = await academicApi.getExamDetails(activeExam.id);
+    setExamDetails(det);
+    setActiveExam(det.exam);
+    await loadExams();
+  };
+
+  const handleSaveManualKeyInDetails = async (examId: string, text: string) => {
+    setIsSaving(true);
     try {
-      const text = structuredKeyData?.answer_key_text || answerKeyText || "Master answer key approved.";
-      await academicApi.updateExamAnswerKey(activeExam.id, text);
-      alert("Answer key approved! Grading is now unlocked for this examination.");
+      const res = await academicApi.updateExamAnswerKey(examId, text);
+      setAnswerKeyText(text);
+      if (res?.exam) setActiveExam(res.exam);
+      const det = await academicApi.getExamDetails(examId);
+      setExamDetails(det);
       await loadExams();
-      setViewMode("list");
-    } catch (err) {
-      alert("Failed to approve answer key.");
+    } catch (err: any) {
+      alert("Failed to save answer key: " + (err?.response?.data?.detail || err.message));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleStartBackgroundAnswerKey = async (examId: string) => {
+    try {
+      setBgAnswerKeyJobs((prev) => ({
+        ...prev,
+        [examId]: { jobId: "", status: "running", error: null, warning: null }
+      }));
+      const res = await academicApi.generateAnswerKeyAsync(examId);
+      setBgAnswerKeyJobs((prev) => ({
+        ...prev,
+        [examId]: { jobId: res.job_id, status: "running", error: null, warning: null }
+      }));
+    } catch (err: any) {
+      setBgAnswerKeyJobs((prev) => ({
+        ...prev,
+        [examId]: {
+          jobId: "",
+          status: "failed",
+          error: err?.response?.data?.detail || err?.message || "Failed to start background task."
+        }
+      }));
+    }
+  };
+
+  // Open Fullscreen Pure-White Answer Key Workspace (non-blocking — never stalls on mount)
+  const handleOpenAnswerKeyReview = async (exam: Exam, fromView: "list" | "detail" = "list") => {
+    setAnswerKeyReturnView(fromView);
+    setActiveExam(exam);
+    setPaperId(exam.paper_id || "");
+    setPaperPageCount(exam.paper_page_count || 0);
+    setAnswerKeyText(exam.answer_key_text || "");
+    setStructuredAnswersList(Array.isArray(exam.answer_key_structured) ? exam.answer_key_structured : []);
+    setViewMode("answer-key-review");
+    try {
+      const fresh = await academicApi.getExam(exam.id);
+      setActiveExam(fresh);
+      if (fresh.answer_key_text) setAnswerKeyText(fresh.answer_key_text);
+      if (Array.isArray(fresh.answer_key_structured)) {
+        setStructuredAnswersList(fresh.answer_key_structured);
+      }
+    } catch {
+      // Non-fatal
+    }
+  };
+
+  const handleSaveFullscreenAnswerKey = async (approveAndExit = false) => {
+    if (!activeExam) return;
+    setIsSaving(true);
+    try {
+      let textToSave = answerKeyText.trim();
+      if (!textToSave && structuredAnswersList.length > 0) {
+        textToSave = structuredAnswersList
+          .map((it) => `[${it.q_no}] (${it.marks} Marks)\nModel Answer:\n${it.model_answer || ""}`)
+          .join("\n\n");
+      }
+      if (!textToSave) {
+        textToSave = "Master answer key saved.";
+      }
+      const res = await academicApi.updateExamAnswerKey(activeExam.id, textToSave, structuredAnswersList);
+      if (res?.exam) setActiveExam(res.exam);
+      setAnswerKeyText(textToSave);
+      await loadExams();
+      if (answerKeyReturnView === "detail") {
+        const det = await academicApi.getExamDetails(activeExam.id);
+        setExamDetails(det);
+      }
+      if (approveAndExit) {
+        setViewMode(answerKeyReturnView);
+      }
+    } catch (err: any) {
+      alert("Failed to save answer key: " + (err?.response?.data?.detail || err.message));
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -767,6 +1057,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                         return (
                           <div
                             key={exam.id}
+                            onClick={() => handleOpenExamDetails(exam)}
                             style={{
                               background: "#ffffff",
                               border: "1px solid #e2e8f0",
@@ -775,18 +1066,32 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                               display: "flex",
                               flexDirection: "column",
                               justifyContent: "space-between",
-                              boxShadow: "0 1px 3px rgba(0,0,0,0.03)"
+                              boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                              cursor: "pointer"
                             }}
                           >
                             <div>
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
-                                <span style={{ fontSize: "0.75rem", fontWeight: 700, background: "#f1f5f9", color: "#334155", padding: "0.2rem 0.5rem", borderRadius: "4px" }}>
-                                  {subj?.code || "SUBJ"} • {subj?.name || "Subject"}
-                                </span>
-                                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: hasAnswerKey ? "#16a34a" : "#d97706", display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                                  {hasAnswerKey ? <CheckCircle2 size={13} /> : <Sparkles size={13} />}
-                                  {hasAnswerKey ? "Answer Key Approved" : "Needs Answer Key"}
-                                </span>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.4rem", marginBottom: "0.5rem", flexWrap: "wrap" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap" }}>
+                                  <span style={{ fontSize: "0.75rem", fontWeight: 700, background: "#f1f5f9", color: "#334155", padding: "0.2rem 0.5rem", borderRadius: "4px" }}>
+                                    {subj?.code || "SUBJ"} • {subj?.name || "Subject"}
+                                  </span>
+                                  {exam.target_section && (
+                                    <span style={{ fontSize: "0.72rem", fontWeight: 700, background: "#eff6ff", color: "#1d4ed8", padding: "0.18rem 0.45rem", borderRadius: "4px" }}>
+                                      Section {exam.target_section}
+                                    </span>
+                                  )}
+                                </div>
+                                {bgAnswerKeyJobs[exam.id]?.status === "running" ? (
+                                  <span style={{ fontSize: "0.73rem", fontWeight: 700, color: "#1d4ed8", display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                                    <RefreshCw size={12} className="spin" /> Generating Key...
+                                  </span>
+                                ) : (
+                                  <span style={{ fontSize: "0.75rem", fontWeight: 700, color: hasAnswerKey ? "#16a34a" : "#d97706", display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                                    {hasAnswerKey ? <CheckCircle2 size={13} /> : <Sparkles size={13} />}
+                                    {hasAnswerKey ? "Answer Key Approved" : "Needs Answer Key"}
+                                  </span>
+                                )}
                               </div>
 
                               <h3 style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.4rem" }}>
@@ -808,7 +1113,10 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                             </div>
 
                             {/* Action Buttons Row */}
-                            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", borderTop: "1px solid #f1f5f9", paddingTop: "0.85rem" }}>
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ display: "flex", flexDirection: "column", gap: "0.5rem", borderTop: "1px solid #f1f5f9", paddingTop: "0.85rem" }}
+                            >
                               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
                                 <button
                                   onClick={() => loadExamIntoEditor(exam)}
@@ -828,7 +1136,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
 
                               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
                                 <button
-                                  onClick={() => handleOpenAnswerKeyReview(exam)}
+                                  onClick={() => handleOpenAnswerKeyReview(exam, "list")}
                                   style={{
                                     fontSize: "0.8rem",
                                     padding: "0.45rem",
@@ -1114,312 +1422,55 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
   }
 
   // ==========================================
-  // VIEW 2: REVIEW ANSWER KEY (BETA) SPLIT VIEW (Images 4, 5, 6)
+  // VIEW 1B: DEDICATED EXAM OVERVIEW & PARTICIPANTS
   // ==========================================
-  if (viewMode === "answer-key-review") {
-    const answersList = structuredKeyData?.answers || [
-      {
-        q_no: "Q1",
-        section: "Part A",
-        marks: 2.5,
-        question_text: "Construct SLR Parsing table for the grammar S -> (L) | a, L -> L,S | S",
-        model_answer: "Augmented grammar: S' -> S. Canonical collection I0..I8. ACTION/GOTO parsing table with shift on terminals, reduce on FOLLOW sets.",
-        marks_distribution: [
-          { label: "LR(0) Collection and FOLLOW Set Computation", marks: 1.0, color: "#2563eb" },
-          { label: "SLR Parsing Table Construction", marks: 1.5, color: "#16a34a" }
-        ],
-        rubric_items: [
-          {
-            title: "LR(0) Collection and FOLLOW Set Computation",
-            marks: 1.0,
-            criteria: [
-              "Award 1 mark for correctly constructing all 9 canonical LR(0) item sets (I0 through I8) and finding correct FOLLOW sets: FOLLOW(S) = {')', ',', '$'}.",
-              "Award 0.5 marks if there are minor errors in state transitions or incomplete item closures.",
-              "Award 0 marks for completely incorrect item sets or missing FOLLOW sets."
-            ]
-          },
-          {
-            title: "SLR Parsing Table Construction",
-            marks: 1.5,
-            criteria: [
-              "Award 1.5 marks for correctly constructing the full SLR parsing table showing ACTION (shift, reduce, accept) and GOTO entries across all 9 states without missing/incorrect actions.",
-              "Award 1 mark if the ACTION and GOTO tables are mostly correct with 1-2 incorrect or omitted cell entries.",
-              "Award 0.5 marks if only ACTION or GOTO entries are partially given.",
-              "Award 0 marks for an unattempted or entirely incorrect parsing table."
-            ]
-          }
-        ],
-        marking_notes: "Verify that reduce actions only appear under valid FOLLOW set symbols.",
-        bloom_level: "Analyze / Evaluate"
-      }
-    ];
-
+  if (viewMode === "detail") {
+    const activeJob = activeExam ? bgAnswerKeyJobs[activeExam.id] : undefined;
     return (
-      <div className="answer-key-review-page pb-16" style={{ background: "#0b132b", minHeight: "100vh", color: "#ffffff", margin: "-1.5rem", padding: "1.5rem" }}>
-        {/* Top Header Bar */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #1e293b", paddingBottom: "1rem", marginBottom: "1.25rem", flexWrap: "wrap", gap: "1rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <button
-              onClick={() => setViewMode("list")}
-              style={{ background: "#1e293b", border: "1px solid #334155", color: "#ffffff", padding: "0.45rem", borderRadius: "8px", cursor: "pointer" }}
-            >
-              <ArrowLeft size={16} />
-            </button>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <h2 style={{ fontSize: "1.25rem", fontWeight: 800, margin: 0, color: "#ffffff" }}>
-                  Review answer key
-                </h2>
-                <span style={{ fontSize: "0.68rem", fontWeight: 800, background: "#1d4ed8", color: "#ffffff", padding: "0.15rem 0.45rem", borderRadius: "4px" }}>
-                  BETA
-                </span>
-              </div>
-              <div style={{ fontSize: "0.78rem", color: "#94a3b8" }}>
-                {activeExam?.title || "Examination Paper"}
-              </div>
-            </div>
-          </div>
+      <ExamDetailWorkspace
+        details={examDetails}
+        loading={loadingDetails}
+        onBack={() => {
+          setViewMode("list");
+          void loadExams();
+        }}
+        onSelectTargetSection={handleSelectTargetSectionInDetails}
+        onEditPaperQuestions={(ex) => loadExamIntoEditor(ex)}
+        onOpenFullscreenAnswerKey={(ex) => handleOpenAnswerKeyReview(ex, "detail")}
+        onOpenUploadSheets={(ex) => handleOpenAnswerSheetsModal(ex)}
+        onSaveManualAnswerKey={handleSaveManualKeyInDetails}
+        onStartBackgroundAnswerKey={(id) => handleStartBackgroundAnswerKey(id)}
+        bgJobStatus={activeJob?.status || "idle"}
+        bgJobError={activeJob?.error || null}
+        onNavigateEvaluation={(examId, evalId) =>
+          onNavigate("evaluation", evalId ? { examId, evalId } : { examId })
+        }
+      />
+    );
+  }
 
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <button
-              onClick={() => setEditKeyOff(!editKeyOff)}
-              style={{ background: "#1e293b", border: "1px solid #334155", color: "#e2e8f0", padding: "0.4rem 0.75rem", borderRadius: "6px", fontSize: "0.8rem", cursor: "pointer" }}
-            >
-              Edit {editKeyOff ? "off" : "on"}
-            </button>
-            <button
-              onClick={() => setExpandAllKey(true)}
-              style={{ background: "#1e293b", border: "1px solid #334155", color: "#e2e8f0", padding: "0.4rem 0.75rem", borderRadius: "6px", fontSize: "0.8rem", cursor: "pointer" }}
-            >
-              Expand all
-            </button>
-            <button
-              onClick={() => setExpandAllKey(false)}
-              style={{ background: "#1e293b", border: "1px solid #334155", color: "#e2e8f0", padding: "0.4rem 0.75rem", borderRadius: "6px", fontSize: "0.8rem", cursor: "pointer" }}
-            >
-              Collapse all
-            </button>
-            <button
-              onClick={() => alert("Downloading master answer key...")}
-              style={{ background: "#1d4ed8", border: "none", color: "#ffffff", padding: "0.4rem 0.85rem", borderRadius: "6px", fontSize: "0.8rem", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: "0.35rem" }}
-            >
-              <Download size={14} /> Download answer key
-            </button>
-          </div>
-        </div>
-
-        {/* Split Screen Workspace */}
-        <div style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: "1.25rem", minHeight: "75vh" }}>
-          {/* LEFT HALF: Key & Rubrics */}
-          <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "14px", padding: "1.5rem", overflowY: "auto", maxHeight: "78vh" }}>
-            {isGeneratingKey ? (
-              <div style={{ textAlign: "center", padding: "4rem 2rem" }}>
-                <div style={{ width: "80px", height: "80px", borderRadius: "50%", background: "radial-gradient(circle, #818cf8 0%, #3b82f6 50%, #1e1b4b 100%)", margin: "0 auto 1.5rem", boxShadow: "0 0 40px rgba(99, 102, 241, 0.6)", animation: "pulse 2s infinite" }} />
-                <h3 style={{ fontSize: "1.4rem", fontWeight: 900, marginBottom: "0.4rem" }}>
-                  Creating your answer key
-                </h3>
-                <p style={{ color: "#94a3b8", fontSize: "0.88rem", marginBottom: "2rem" }}>
-                  Preparing answers and marking criteria using zero-temperature Gemini synthesis
-                </p>
-
-                <div style={{ background: "#1e293b", borderRadius: "12px", padding: "1.25rem", maxWidth: "420px", margin: "0 auto", textAlign: "left" }}>
-                  <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#60a5fa", textTransform: "uppercase", marginBottom: "0.35rem" }}>While you wait</div>
-                  <div style={{ fontSize: "0.92rem", fontWeight: 800, color: "#ffffff", marginBottom: "0.25rem" }}>Credit for the method</div>
-                  <div style={{ fontSize: "0.82rem", color: "#cbd5e1", lineHeight: 1.5 }}>
-                    Marking criteria show what earns credit, including partial marks and multi-step derivations where appropriate.
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div>
-                {/* Generation Status Pill */}
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.82rem", color: "#93c5fd", background: "rgba(30, 58, 138, 0.3)", padding: "0.6rem 0.9rem", borderRadius: "8px", border: "1px solid #1d4ed8", marginBottom: "1.5rem" }}>
-                  <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#60a5fa" }} />
-                  <span><strong>{answersList.length} answers prepared:</strong> Read answers as they arrive. Editing and approval unlock when the complete draft is checked.</span>
-                </div>
-
-                {/* Question Answers & Rubrics */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-                  {answersList.map((item: any, idx: number) => (
-                    <div
-                      key={idx}
-                      onClick={() => setActiveKeyQuestionIdx(idx)}
-                      style={{
-                        background: "#1e293b",
-                        border: activeKeyQuestionIdx === idx ? "2px solid #3b82f6" : "1px solid #334155",
-                        borderRadius: "12px",
-                        padding: "1.25rem",
-                        cursor: "pointer"
-                      }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-                        <span style={{ fontSize: "0.95rem", fontWeight: 800, color: "#ffffff" }}>
-                          {item.q_no} • {item.section || "Part A"}
-                        </span>
-                        <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#60a5fa" }}>
-                          {item.marks} marks
-                        </span>
-                      </div>
-
-                      <div style={{ fontSize: "0.85rem", color: "#e2e8f0", marginBottom: "1rem", lineHeight: 1.5 }}>
-                        {item.question_text}
-                      </div>
-
-                      {/* Marks Distribution Split Bar */}
-                      {item.marks_distribution && item.marks_distribution.length > 0 && (
-                        <div style={{ marginBottom: "1.25rem" }}>
-                          <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.4rem" }}>
-                            Marks Distribution
-                          </div>
-                          <div style={{ display: "flex", height: "32px", borderRadius: "6px", overflow: "hidden", border: "1px solid #334155" }}>
-                            {item.marks_distribution.map((seg: any, sIdx: number) => (
-                              <div
-                                key={sIdx}
-                                style={{
-                                  flex: seg.marks || 1,
-                                  background: seg.color || "#2563eb",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  color: "#ffffff",
-                                  fontSize: "0.8rem",
-                                  fontWeight: 800
-                                }}
-                              >
-                                {seg.marks}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Rubric Checklist Items */}
-                      {item.rubric_items && item.rubric_items.length > 0 && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-                          {item.rubric_items.map((rub: any, rIdx: number) => (
-                            <div key={rIdx} style={{ background: "rgba(15, 23, 42, 0.6)", padding: "0.85rem", borderRadius: "8px", border: "1px solid #334155" }}>
-                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.4rem" }}>
-                                <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", fontWeight: 700, color: "#ffffff" }}>
-                                  <input type="checkbox" defaultChecked />
-                                  {rub.title}
-                                </label>
-                                <span style={{ fontSize: "0.8rem", color: "#94a3b8", fontWeight: 700 }}>
-                                  {rub.marks} m
-                                </span>
-                              </div>
-                              <div style={{ paddingLeft: "1.5rem", display: "flex", flexDirection: "column", gap: "0.3rem" }}>
-                                {(rub.criteria || []).map((crit: string, cIdx: number) => (
-                                  <div key={cIdx} style={{ fontSize: "0.78rem", color: "#cbd5e1", lineHeight: 1.4 }}>
-                                    • {crit}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Expandable Accordions */}
-                      <div style={{ marginTop: "1rem", borderTop: "1px solid #334155", paddingTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.5rem", fontSize: "0.78rem", color: "#94a3b8" }}>
-                        <details open={expandAllKey}>
-                          <summary style={{ cursor: "pointer", fontWeight: 700, color: "#cbd5e1" }}>Marking notes</summary>
-                          <div style={{ padding: "0.4rem 0", color: "#94a3b8" }}>
-                            {item.marking_notes || "Verify that derivations follow formal notation and bounds."}
-                          </div>
-                        </details>
-                        <details open={expandAllKey}>
-                          <summary style={{ cursor: "pointer", fontWeight: 700, color: "#cbd5e1" }}>Curriculum & Bloom level</summary>
-                          <div style={{ padding: "0.4rem 0", color: "#94a3b8" }}>
-                            {item.bloom_level || "Apply / Analyze"}
-                          </div>
-                        </details>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* RIGHT HALF: Live Question Paper Preview with Zoom & Highlight Overlay */}
-          <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: "14px", padding: "1.25rem", display: "flex", flexDirection: "column" }}>
-            {/* Top Toolbar */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem", borderBottom: "1px solid #1e293b", paddingBottom: "0.75rem" }}>
-              <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#94a3b8" }}>
-                Active Question Reference
-              </span>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                <span style={{ fontSize: "0.75rem", color: "#94a3b8" }}>{paperZoom}%</span>
-                <input
-                  type="range"
-                  min="40"
-                  max="150"
-                  value={paperZoom}
-                  onChange={(e) => setPaperZoom(Number(e.target.value))}
-                  style={{ width: "90px" }}
-                />
-              </div>
-            </div>
-
-            {/* Paper Preview Canvas Container */}
-            <div style={{ flex: 1, overflow: "auto", background: "#ffffff", borderRadius: "10px", padding: "1.5rem", display: "flex", justifyContent: "center", alignItems: "flex-start", position: "relative" }}>
-              <div style={{ width: `${paperZoom * 6.5}px`, transition: "width 0.15s ease", position: "relative" }}>
-                <img
-                  src="/sample-question-paper.png"
-                  alt="Examination Question Paper Scan"
-                  style={{ width: "100%", height: "auto", display: "block", borderRadius: "6px", boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}
-                />
-                {/* Visual active bounding box overlay */}
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "35%",
-                    left: "2%",
-                    width: "96%",
-                    height: "30%",
-                    border: "2px solid #2563eb",
-                    background: "rgba(37, 99, 235, 0.1)",
-                    borderRadius: "4px",
-                    pointerEvents: "none"
-                  }}
-                >
-                  <span style={{ position: "absolute", top: "-18px", left: "0", background: "#2563eb", color: "#ffffff", fontSize: "0.65rem", fontWeight: 800, padding: "0.1rem 0.4rem", borderRadius: "2px" }}>
-                    A - Question 3
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom Bar */}
-        <div style={{ marginTop: "1.25rem", display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #1e293b", paddingTop: "1rem" }}>
-          <span style={{ fontSize: "0.78rem", color: "#64748b" }}>Draft saved automatically</span>
-          <div style={{ display: "flex", gap: "0.75rem" }}>
-            <button
-              onClick={() => handleOpenAnswerKeyReview(activeExam!)}
-              style={{ background: "#1e293b", border: "1px solid #334155", color: "#e2e8f0", padding: "0.55rem 1rem", borderRadius: "8px", fontSize: "0.85rem", cursor: "pointer" }}
-            >
-              Generate another draft
-            </button>
-            <button
-              onClick={() => {
-                alert("Answer key draft saved!");
-                setViewMode("list");
-              }}
-              style={{ background: "#1e293b", border: "1px solid #334155", color: "#e2e8f0", padding: "0.55rem 1rem", borderRadius: "8px", fontSize: "0.85rem", cursor: "pointer" }}
-            >
-              Save draft
-            </button>
-            <button
-              onClick={handleApproveAnswerKey}
-              style={{ background: "#2563eb", border: "none", color: "#ffffff", padding: "0.55rem 1.4rem", borderRadius: "8px", fontSize: "0.85rem", fontWeight: 800, cursor: "pointer" }}
-            >
-              Approve & use for grading
-            </button>
-          </div>
-        </div>
-      </div>
+  // ==========================================
+  // VIEW 2: FULLSCREEN PURE-WHITE ANSWER KEY WORKSPACE
+  // ==========================================
+  if (viewMode === "answer-key-review" && activeExam) {
+    const subj = subjects.find((s) => s.id === activeExam.subject_id);
+    const activeJob = bgAnswerKeyJobs[activeExam.id];
+    return (
+      <AnswerKeyFullscreenWorkspace
+        exam={activeExam}
+        subject={subj}
+        answerKeyText={answerKeyText}
+        onChangeAnswerKeyText={setAnswerKeyText}
+        structuredAnswers={structuredAnswersList}
+        onChangeStructuredAnswers={setStructuredAnswersList}
+        bgJobStatus={activeJob?.status || "idle"}
+        bgJobError={activeJob?.error || null}
+        bgWarning={activeJob?.warning || null}
+        onStartBackgroundGeneration={() => handleStartBackgroundAnswerKey(activeExam.id)}
+        onSaveAnswerKey={handleSaveFullscreenAnswerKey}
+        isSaving={isSaving}
+        onClose={() => setViewMode(answerKeyReturnView)}
+      />
     );
   }
 
@@ -1857,7 +1908,30 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                       </div>
                     </div>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem" }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.74rem", fontWeight: 700, color: "#475569", marginBottom: "0.25rem" }}>
+                          Target Section
+                        </label>
+                        <select
+                          value={targetSection}
+                          onChange={(e) => setTargetSection(e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "0.48rem 0.65rem",
+                            borderRadius: "8px",
+                            background: "#ffffff",
+                            border: "1px solid #cbd5e1",
+                            color: "#0f172a",
+                            fontSize: "0.83rem"
+                          }}
+                        >
+                          <option value="">All Sections</option>
+                          <option value="A">Section A</option>
+                          <option value="B">Section B</option>
+                          <option value="C">Section C</option>
+                        </select>
+                      </div>
                       <div>
                         <label style={{ display: "block", fontSize: "0.74rem", fontWeight: 700, color: "#475569", marginBottom: "0.25rem" }}>
                           Last Date to Submit
@@ -2022,13 +2096,15 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                 </div>
 
                 {openQuestionsAccordion && (
-                  <div style={{ padding: "1.15rem", display: "flex", flexDirection: "column", gap: "0.95rem", background: "#ffffff" }}>
-                    {/* Summary Bar */}
+                  <div style={{ padding: "1.15rem", display: "flex", flexDirection: "column", gap: "0.85rem", background: "#ffffff" }}>
+                    {/* Summary Bar with Collapse All / Expand All List Mode */}
                     <div
                       style={{
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
+                        flexWrap: "wrap",
+                        gap: "0.5rem",
                         background: "#f8fafc",
                         padding: "0.65rem 0.9rem",
                         borderRadius: "10px",
@@ -2037,6 +2113,26 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                     >
                       <span style={{ fontSize: "0.86rem", fontWeight: 800, color: "#0f172a" }}>All Extracted Questions</span>
                       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <button
+                          type="button"
+                          onClick={toggleAllQuestionsCollapse}
+                          style={{
+                            background: "#ffffff",
+                            border: "1px solid #cbd5e1",
+                            color: "#334155",
+                            padding: "0.24rem 0.65rem",
+                            borderRadius: "6px",
+                            fontSize: "0.75rem",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.3rem"
+                          }}
+                        >
+                          {allQuestionsCollapsed ? <Maximize2 size={12} /> : <Minimize2 size={12} />}
+                          {allQuestionsCollapsed ? "Expand All" : "Collapse All"}
+                        </button>
                         <span style={{ fontSize: "0.78rem", color: "#64748b", fontWeight: 600 }}>
                           {questions.length} questions
                         </span>
@@ -2055,238 +2151,358 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                       </div>
                     </div>
 
-                    {/* Question Cards */}
+                    {/* Question Cards + Middle OR Divider Controls */}
                     {questions.map((q, idx) => {
                       const qKey = q.id || `q-${idx + 1}`;
                       const isActive = activeQuestionId === q.id;
                       const isEditing = editingQuestionIdx === idx;
+                      const isCollapsed = Boolean(collapsedQuestionKeys[qKey]);
+                      const nextQ = questions[idx + 1];
+                      const sharesOrWithNext = Boolean(
+                        nextQ &&
+                        q.is_or_choice &&
+                        nextQ.is_or_choice &&
+                        q.or_group &&
+                        nextQ.or_group &&
+                        q.or_group === nextQ.or_group
+                      );
 
                       return (
-                        <div
-                          key={qKey}
-                          ref={(el) => {
-                            if (q.id) questionCardRefs.current[q.id] = el;
-                          }}
-                          onClick={() => selectAndSyncQuestion(q)}
-                          style={{
-                            background: isActive ? "#f8faff" : "#ffffff",
-                            border: isActive ? "2px solid #2563eb" : "1px solid #e2e8f0",
-                            borderRadius: "12px",
-                            padding: "1rem",
-                            boxShadow: isActive
-                              ? "0 4px 14px rgba(37, 99, 235, 0.08)"
-                              : "0 1px 2px rgba(15, 23, 42, 0.03)",
-                            transition: "border-color 0.15s ease, box-shadow 0.15s ease"
-                          }}
-                        >
-                          {/* Question Header */}
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.65rem", gap: "0.5rem" }}>
-                            <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.45rem" }}>
-                              <span style={{ fontWeight: 800, fontSize: "0.95rem", color: "#0f172a" }}>{q.q_no}</span>
-                              {q.section && (
-                                <span
-                                  style={{
-                                    fontSize: "0.72rem",
-                                    background: "#f1f5f9",
-                                    color: "#475569",
-                                    padding: "0.15rem 0.45rem",
-                                    borderRadius: "5px",
-                                    fontWeight: 600
-                                  }}
-                                >
-                                  {q.section}
-                                </span>
-                              )}
-                              <span
-                                style={{
-                                  fontSize: "0.72rem",
-                                  background: "#eff6ff",
-                                  color: "#1d4ed8",
-                                  padding: "0.15rem 0.48rem",
-                                  borderRadius: "5px",
-                                  fontWeight: 700
-                                }}
-                              >
-                                {q.marks >= 5 ? "Long Answer" : "Short Answer"}
-                              </span>
-                              {q.page && paperPageCount > 0 && (
-                                <span
-                                  style={{
-                                    fontSize: "0.7rem",
-                                    background: "#f8fafc",
-                                    border: "1px solid #e2e8f0",
-                                    color: "#64748b",
-                                    padding: "0.1rem 0.45rem",
-                                    borderRadius: "5px",
-                                    fontWeight: 600
-                                  }}
-                                >
-                                  Page {q.page}
-                                </span>
-                              )}
-                              {Number(q.marks) === 0 && (
-                                <span
-                                  style={{
-                                    fontSize: "0.7rem",
-                                    color: "#b45309",
-                                    background: "#fef3c7",
-                                    padding: "0.12rem 0.45rem",
-                                    borderRadius: "5px",
-                                    fontWeight: 700
-                                  }}
-                                >
-                                  Fix missing marks
-                                </span>
-                              )}
-                            </div>
-
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }} onClick={(e) => e.stopPropagation()}>
-                              <input
-                                type="number"
-                                step="0.5"
-                                value={q.marks}
-                                onChange={(e) => handleMarkChange(idx, Number(e.target.value))}
-                                style={{
-                                  width: "62px",
-                                  padding: "0.25rem 0.45rem",
-                                  borderRadius: "6px",
-                                  background: "#ffffff",
-                                  border: "1px solid #cbd5e1",
-                                  color: "#0f172a",
-                                  fontWeight: 700,
-                                  fontSize: "0.85rem",
-                                  textAlign: "center"
-                                }}
-                              />
-                              <span style={{ fontSize: "0.76rem", color: "#64748b", fontWeight: 600 }}>marks</span>
-                              <button
-                                onClick={() => handleDeleteQuestion(idx)}
-                                style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", padding: "0.2rem" }}
-                                title="Delete question"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Question Body: Nicely Formatted Markdown until Double-Click / Double-Tap */}
+                        <React.Fragment key={qKey}>
                           <div
-                            onDoubleClick={(e) => {
-                              e.stopPropagation();
-                              setEditingQuestionIdx(idx);
+                            ref={(el) => {
+                              if (q.id) questionCardRefs.current[q.id] = el;
                             }}
-                            onTouchEnd={() => handleQuestionTouchEnd(idx)}
+                            onClick={() => selectAndSyncQuestion(q)}
                             style={{
-                              background: isEditing ? "#ffffff" : "#f8fafc",
-                              padding: "0.85rem",
-                              borderRadius: "10px",
-                              border: isEditing ? "1.5px solid #2563eb" : "1px solid #e2e8f0",
-                              cursor: isEditing ? "text" : "pointer"
+                              background: isActive ? "#f8faff" : "#ffffff",
+                              border: isActive ? "2px solid #2563eb" : "1px solid #e2e8f0",
+                              borderRadius: "12px",
+                              padding: isCollapsed ? "0.7rem 0.95rem" : "1rem",
+                              boxShadow: isActive
+                                ? "0 4px 14px rgba(37, 99, 235, 0.08)"
+                                : "0 1px 2px rgba(15, 23, 42, 0.03)",
+                              transition: "border-color 0.15s ease, box-shadow 0.15s ease"
                             }}
                           >
-                            <div
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                marginBottom: "0.45rem"
-                              }}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                                <span
+                            {/* Question Header */}
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isCollapsed ? 0 : "0.65rem", gap: "0.5rem", flexWrap: "wrap" }}>
+                              <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.4rem", flex: 1, minWidth: 0 }} onClick={(e) => e.stopPropagation()}>
+                                <input
+                                  type="text"
+                                  value={q.q_no}
+                                  onChange={(e) => handleQNoChange(idx, e.target.value)}
+                                  title="Edit question number"
                                   style={{
-                                    padding: "0.14rem 0.5rem",
-                                    borderRadius: "999px",
-                                    background: "#2563eb",
-                                    color: "#ffffff",
-                                    fontSize: "0.72rem",
-                                    fontWeight: 700
+                                    width: "72px",
+                                    padding: "0.18rem 0.45rem",
+                                    borderRadius: "6px",
+                                    border: "1px solid #cbd5e1",
+                                    background: "#f8fafc",
+                                    color: "#0f172a",
+                                    fontWeight: 800,
+                                    fontSize: "0.86rem"
                                   }}
-                                >
-                                  {q.q_no}
-                                </span>
-                                <span style={{ fontSize: "0.72rem", color: "#64748b", display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
-                                  <Edit3 size={11} />
-                                  {isEditing ? "Editing Markdown source" : "Double-tap to edit"}
-                                </span>
-                              </div>
-
-                              <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                                {isEditing && (
-                                  <button
-                                    onClick={() => setEditingQuestionIdx(null)}
+                                />
+                                {q.section && (
+                                  <span
                                     style={{
-                                      background: "#eff6ff",
-                                      border: "1px solid #bfdbfe",
-                                      color: "#1d4ed8",
-                                      padding: "0.22rem 0.6rem",
-                                      borderRadius: "6px",
-                                      fontSize: "0.74rem",
-                                      fontWeight: 700,
-                                      cursor: "pointer"
+                                      fontSize: "0.72rem",
+                                      background: "#f1f5f9",
+                                      color: "#475569",
+                                      padding: "0.15rem 0.45rem",
+                                      borderRadius: "5px",
+                                      fontWeight: 600
                                     }}
                                   >
-                                    Done
-                                  </button>
+                                    {q.section}
+                                  </span>
                                 )}
-                                <button
-                                  onClick={() => handleOpenRefineModal(idx)}
+                                {q.is_or_choice && (
+                                  <span
+                                    style={{
+                                      fontSize: "0.7rem",
+                                      background: "#fffbeb",
+                                      color: "#b45309",
+                                      border: "1px solid #fde68a",
+                                      padding: "0.14rem 0.45rem",
+                                      borderRadius: "5px",
+                                      fontWeight: 800
+                                    }}
+                                  >
+                                    OR Choice
+                                  </span>
+                                )}
+                                {q.page && paperPageCount > 0 && (
+                                  <span
+                                    style={{
+                                      fontSize: "0.7rem",
+                                      background: "#f8fafc",
+                                      border: "1px solid #e2e8f0",
+                                      color: "#64748b",
+                                      padding: "0.1rem 0.45rem",
+                                      borderRadius: "5px",
+                                      fontWeight: 600
+                                    }}
+                                  >
+                                    P{q.page}
+                                  </span>
+                                )}
+                                {isCollapsed && (
+                                  <span
+                                    style={{
+                                      fontSize: "0.78rem",
+                                      color: "#475569",
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      whiteSpace: "nowrap",
+                                      maxWidth: "240px"
+                                    }}
+                                  >
+                                    {(q.text || "").replace(/[*`#>\n]+/g, " ").trim()}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }} onClick={(e) => e.stopPropagation()}>
+                                <input
+                                  type="number"
+                                  step="0.5"
+                                  value={q.marks}
+                                  onChange={(e) => handleMarkChange(idx, Number(e.target.value))}
                                   style={{
-                                    background: "#ffffff",
-                                    border: "1px solid #bfdbfe",
-                                    color: "#2563eb",
-                                    padding: "0.24rem 0.65rem",
+                                    width: "56px",
+                                    padding: "0.22rem 0.38rem",
                                     borderRadius: "6px",
-                                    fontSize: "0.76rem",
+                                    background: "#ffffff",
+                                    border: "1px solid #cbd5e1",
+                                    color: "#0f172a",
                                     fontWeight: 700,
-                                    cursor: "pointer",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "0.28rem"
+                                    fontSize: "0.82rem",
+                                    textAlign: "center"
+                                  }}
+                                />
+                                <span style={{ fontSize: "0.74rem", color: "#64748b", fontWeight: 600 }}>M</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddOrChoiceBelow(idx)}
+                                  title="Add OR Alternative below this question"
+                                  style={{
+                                    background: "#fffbeb",
+                                    border: "1px solid #fde68a",
+                                    color: "#b45309",
+                                    padding: "0.2rem 0.45rem",
+                                    borderRadius: "6px",
+                                    fontSize: "0.7rem",
+                                    fontWeight: 700,
+                                    cursor: "pointer"
                                   }}
                                 >
-                                  <Sparkles size={12} /> Refine
+                                  + OR
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleInsertQuestionBelow(idx)}
+                                  title="Insert a new question below"
+                                  style={{
+                                    background: "#f8fafc",
+                                    border: "1px solid #cbd5e1",
+                                    color: "#334155",
+                                    padding: "0.22rem 0.42rem",
+                                    borderRadius: "6px",
+                                    fontSize: "0.72rem",
+                                    fontWeight: 700,
+                                    cursor: "pointer",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "0.15rem"
+                                  }}
+                                >
+                                  <Plus size={12} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleSingleQuestionCollapse(qKey)}
+                                  title={isCollapsed ? "Expand question" : "Collapse question"}
+                                  style={{
+                                    background: "#ffffff",
+                                    border: "1px solid #e2e8f0",
+                                    color: "#64748b",
+                                    borderRadius: "6px",
+                                    padding: "0.22rem",
+                                    cursor: "pointer"
+                                  }}
+                                >
+                                  {isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteQuestion(idx)}
+                                  style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", padding: "0.2rem" }}
+                                  title="Delete question"
+                                >
+                                  <Trash2 size={14} />
                                 </button>
                               </div>
                             </div>
 
-                            {isEditing ? (
-                              <div>
-                                <textarea
-                                  autoFocus
-                                  rows={Math.max(3, Math.min(8, q.text.split("\n").length + 1))}
-                                  value={q.text}
-                                  onClick={(e) => e.stopPropagation()}
-                                  onChange={(e) => handleTextChange(idx, e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Escape") {
-                                      setEditingQuestionIdx(null);
-                                    }
-                                  }}
-                                  onBlur={() => setEditingQuestionIdx(null)}
+                            {/* Collapsible Body */}
+                            {!isCollapsed && (
+                              <div
+                                onDoubleClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingQuestionIdx(idx);
+                                }}
+                                onTouchEnd={() => handleQuestionTouchEnd(idx)}
+                                style={{
+                                  background: isEditing ? "#ffffff" : "#f8fafc",
+                                  padding: "0.85rem",
+                                  borderRadius: "10px",
+                                  border: isEditing ? "1.5px solid #2563eb" : "1px solid #e2e8f0",
+                                  cursor: isEditing ? "text" : "pointer"
+                                }}
+                              >
+                                <div
                                   style={{
-                                    width: "100%",
-                                    background: "#ffffff",
-                                    border: "1px solid #cbd5e1",
-                                    color: "#0f172a",
-                                    borderRadius: "8px",
-                                    padding: "0.55rem 0.65rem",
-                                    fontSize: "0.86rem",
-                                    lineHeight: 1.55,
-                                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-                                    resize: "vertical"
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    marginBottom: "0.45rem"
                                   }}
-                                />
-                                <div style={{ fontSize: "0.71rem", color: "#64748b", marginTop: "0.3rem" }}>
-                                  Markdown supported (`**bold**`, `` `code / grammar` ``, `- bullets`). Press Esc or click outside to preview.
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                                    <span
+                                      style={{
+                                        padding: "0.14rem 0.5rem",
+                                        borderRadius: "999px",
+                                        background: "#2563eb",
+                                        color: "#ffffff",
+                                        fontSize: "0.72rem",
+                                        fontWeight: 700
+                                      }}
+                                    >
+                                      {q.q_no}
+                                    </span>
+                                    <span style={{ fontSize: "0.72rem", color: "#64748b", display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
+                                      <Edit3 size={11} />
+                                      {isEditing ? "Editing Markdown source" : "Double-tap to edit"}
+                                    </span>
+                                  </div>
+
+                                  <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                                    {isEditing && (
+                                      <button
+                                        onClick={() => setEditingQuestionIdx(null)}
+                                        style={{
+                                          background: "#eff6ff",
+                                          border: "1px solid #bfdbfe",
+                                          color: "#1d4ed8",
+                                          padding: "0.22rem 0.6rem",
+                                          borderRadius: "6px",
+                                          fontSize: "0.74rem",
+                                          fontWeight: 700,
+                                          cursor: "pointer"
+                                        }}
+                                      >
+                                        Done
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => handleOpenRefineModal(idx)}
+                                      style={{
+                                        background: "#ffffff",
+                                        border: "1px solid #bfdbfe",
+                                        color: "#2563eb",
+                                        padding: "0.24rem 0.65rem",
+                                        borderRadius: "6px",
+                                        fontSize: "0.76rem",
+                                        fontWeight: 700,
+                                        cursor: "pointer",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "0.28rem"
+                                      }}
+                                    >
+                                      <Sparkles size={12} /> Refine
+                                    </button>
+                                  </div>
                                 </div>
+
+                                {isEditing ? (
+                                  <div>
+                                    <textarea
+                                      autoFocus
+                                      rows={Math.max(3, Math.min(8, q.text.split("\n").length + 1))}
+                                      value={q.text}
+                                      onClick={(e) => e.stopPropagation()}
+                                      onChange={(e) => handleTextChange(idx, e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Escape") {
+                                          setEditingQuestionIdx(null);
+                                        }
+                                      }}
+                                      onBlur={() => setEditingQuestionIdx(null)}
+                                      style={{
+                                        width: "100%",
+                                        background: "#ffffff",
+                                        border: "1px solid #cbd5e1",
+                                        color: "#0f172a",
+                                        borderRadius: "8px",
+                                        padding: "0.55rem 0.65rem",
+                                        fontSize: "0.86rem",
+                                        lineHeight: 1.55,
+                                        fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+                                        resize: "vertical"
+                                      }}
+                                    />
+                                    <div style={{ fontSize: "0.71rem", color: "#64748b", marginTop: "0.3rem" }}>
+                                      Markdown supported (`**bold**`, `` `code / grammar` ``, `- bullets`). Press Esc or click outside to preview.
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <MarkdownQuestionView text={q.text} />
+                                )}
                               </div>
-                            ) : (
-                              <MarkdownQuestionView text={q.text} />
                             )}
                           </div>
-                        </div>
+
+                          {/* Interactive OR Divider between adjacent questions */}
+                          {idx < questions.length - 1 && (
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.6rem",
+                                padding: sharesOrWithNext ? "0.15rem 0.25rem" : "0"
+                              }}
+                            >
+                              <div style={{ flex: 1, height: "1px", background: sharesOrWithNext ? "#f59e0b" : "#e2e8f0" }} />
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleOrMiddle(idx);
+                                }}
+                                title={sharesOrWithNext ? "Remove OR link between these two questions" : "Insert OR choice divider between these two existing questions"}
+                                style={{
+                                  background: sharesOrWithNext ? "#fffbeb" : "#ffffff",
+                                  border: sharesOrWithNext ? "1.5px solid #f59e0b" : "1px dashed #cbd5e1",
+                                  color: sharesOrWithNext ? "#b45309" : "#64748b",
+                                  borderRadius: "999px",
+                                  padding: sharesOrWithNext ? "0.16rem 0.85rem" : "0.14rem 0.65rem",
+                                  fontSize: "0.7rem",
+                                  fontWeight: 800,
+                                  cursor: "pointer",
+                                  whiteSpace: "nowrap"
+                                }}
+                              >
+                                {sharesOrWithNext ? "— OR — (click to unlink)" : "+ Add OR mark in middle"}
+                              </button>
+                              <div style={{ flex: 1, height: "1px", background: sharesOrWithNext ? "#f59e0b" : "#e2e8f0" }} />
+                            </div>
+                          )}
+                        </React.Fragment>
                       );
                     })}
 
@@ -2591,19 +2807,20 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                                   left: `${xmin / 10}%`,
                                   height: `${Math.max(2.4, (ymax - ymin) / 10)}%`,
                                   width: `${Math.max(4, (xmax - xmin) / 10)}%`,
-                                  border: isSelected ? "2px solid #2563eb" : "1.5px dashed rgba(37, 99, 235, 0.65)",
-                                  background: isSelected ? "rgba(37, 99, 235, 0.14)" : "rgba(37, 99, 235, 0.05)",
+                                  border: isSelected ? "2px solid #2563eb" : "1.5px dashed rgba(37, 99, 235, 0.55)",
+                                  background: isSelected ? "rgba(37, 99, 235, 0.14)" : "rgba(37, 99, 235, 0.04)",
                                   borderRadius: "6px",
                                   pointerEvents: "auto",
                                   cursor: "pointer",
+                                  zIndex: isSelected ? 5 : 1,
                                   transition: "all 0.15s ease"
                                 }}
                               >
                                 <span
                                   style={{
                                     position: "absolute",
-                                    top: "-11px",
-                                    left: "4px",
+                                    top: "-10px",
+                                    right: "6px",
                                     background: isSelected ? "#1d4ed8" : "#2563eb",
                                     color: "#ffffff",
                                     fontSize: "0.66rem",
@@ -2628,299 +2845,291 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
             </div>
           </div>
 
-          {/* PURE WHITE REFINE & AUTO-GENERATE QUESTIONS MODAL */}
+          {/* NON-BLURRING FLOATING REFINE WINDOW (No dim backdrop, lazy on user action) */}
           {refineModalIdx !== null && questions[refineModalIdx] && (
             <div
-              onClick={() => setRefineModalIdx(null)}
+              onClick={(e) => e.stopPropagation()}
               style={{
                 position: "fixed",
-                inset: 0,
-                zIndex: 1000,
-                background: "rgba(15, 23, 42, 0.42)",
-                backdropFilter: "blur(3px)",
+                bottom: "20px",
+                right: "24px",
+                zIndex: 1050,
+                width: "min(560px, calc(100vw - 32px))",
+                maxHeight: "78vh",
+                background: "#ffffff",
+                borderRadius: "16px",
+                border: "1px solid #cbd5e1",
+                boxShadow: "0 18px 48px rgba(15, 23, 42, 0.16)",
                 display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "1.25rem"
+                flexDirection: "column",
+                overflow: "hidden"
               }}
             >
+              {/* Floating Window Header */}
               <div
-                onClick={(e) => e.stopPropagation()}
                 style={{
-                  width: "100%",
-                  maxWidth: "820px",
-                  maxHeight: "88vh",
+                  padding: "0.9rem 1.15rem",
+                  borderBottom: "1px solid #e2e8f0",
                   background: "#ffffff",
-                  borderRadius: "16px",
-                  border: "1px solid #cbd5e1",
-                  boxShadow: "0 20px 50px rgba(15, 23, 42, 0.18)",
                   display: "flex",
-                  flexDirection: "column",
-                  overflow: "hidden"
+                  justifyContent: "space-between",
+                  alignItems: "center"
                 }}
               >
-                {/* Modal Header */}
-                <div
-                  style={{
-                    padding: "1rem 1.35rem",
-                    borderBottom: "1px solid #e2e8f0",
-                    background: "#ffffff",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center"
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                    <div
-                      style={{
-                        width: "34px",
-                        height: "34px",
-                        borderRadius: "9px",
-                        background: "#eff6ff",
-                        color: "#2563eb",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center"
-                      }}
-                    >
-                      <Wand2 size={18} />
-                    </div>
-                    <div>
-                      <h3 style={{ margin: 0, fontSize: "1.02rem", fontWeight: 800, color: "#0f172a" }}>
-                        Refine & Auto-Generate Same-Topic Questions ({questions[refineModalIdx].q_no})
-                      </h3>
-                      <div style={{ fontSize: "0.76rem", color: "#64748b" }}>
-                        {refineTopic
-                          ? `Detected Topic: ${refineTopic} — Keep topic constant and shift question level or add fresh questions`
-                          : "Keep the same syllabus topic while changing difficulty level or generating parallel questions"}
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setRefineModalIdx(null)}
+                <div style={{ display: "flex", alignItems: "center", gap: "0.55rem" }}>
+                  <div
                     style={{
-                      background: "#f8fafc",
-                      border: "1px solid #e2e8f0",
-                      color: "#475569",
+                      width: "32px",
+                      height: "32px",
                       borderRadius: "8px",
-                      padding: "0.35rem",
-                      cursor: "pointer"
+                      background: "#eff6ff",
+                      color: "#2563eb",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center"
                     }}
                   >
-                    <X size={16} />
-                  </button>
+                    <Wand2 size={16} />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: "0.96rem", fontWeight: 800, color: "#0f172a" }}>
+                      Refine &amp; Generate Variants ({questions[refineModalIdx].q_no})
+                    </h3>
+                    <div style={{ fontSize: "0.73rem", color: "#64748b" }}>
+                      {refineTopic
+                        ? `Topic: ${refineTopic}`
+                        : "Pick a level preset or type a prompt to generate same-topic variants"}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setRefineModalIdx(null)}
+                  style={{
+                    background: "#f8fafc",
+                    border: "1px solid #e2e8f0",
+                    color: "#475569",
+                    borderRadius: "8px",
+                    padding: "0.35rem",
+                    cursor: "pointer"
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Floating Window Body */}
+              <div style={{ padding: "1rem 1.15rem", overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.9rem", background: "#ffffff" }}>
+                {/* Current Question Snapshot */}
+                <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "0.75rem 0.9rem" }}>
+                  <div style={{ fontSize: "0.7rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase", marginBottom: "0.25rem" }}>
+                    Current Question ({questions[refineModalIdx].marks} marks)
+                  </div>
+                  <MarkdownQuestionView text={questions[refineModalIdx].text} compact />
                 </div>
 
-                {/* Modal Body */}
-                <div style={{ padding: "1.2rem 1.35rem", overflowY: "auto", display: "flex", flexDirection: "column", gap: "1rem", background: "#ffffff" }}>
-                  {/* Current Question Snapshot */}
-                  <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "0.85rem 1rem" }}>
-                    <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "#64748b", textTransform: "uppercase", marginBottom: "0.3rem" }}>
-                      Current Question ({questions[refineModalIdx].marks} marks)
-                    </div>
-                    <MarkdownQuestionView text={questions[refineModalIdx].text} compact />
+                {/* Difficulty & Generator Controls */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.55rem" }}>
+                  <div style={{ fontSize: "0.76rem", fontWeight: 800, color: "#0f172a" }}>
+                    Click a preset or enter custom prompt below:
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+                    {[
+                      { label: "Easier", action: "level_shift" as const, level: "Easy" },
+                      { label: "Medium", action: "level_shift" as const, level: "Medium" },
+                      { label: "Harder / Analytical", action: "level_shift" as const, level: "Hard" },
+                      { label: "Practical Problem", action: "practical" as const, level: "Practical" },
+                      { label: "Rephrase", action: "rephrase" as const, level: "Medium" },
+                      { label: "Auto-Generate Set", action: "auto_generate" as const, level: "Mixed" }
+                    ].map((preset) => {
+                      const isSelected = refineAction === preset.action && refineTargetLevel === preset.level && refineSuggestions.length > 0;
+                      return (
+                        <button
+                          key={preset.label}
+                          disabled={refineLoading}
+                          onClick={() => runRefineRequest(refineModalIdx, preset.action, preset.level, refineCustomInstruction)}
+                          style={{
+                            background: isSelected ? "#2563eb" : "#ffffff",
+                            border: isSelected ? "1px solid #2563eb" : "1px solid #cbd5e1",
+                            color: isSelected ? "#ffffff" : "#1e293b",
+                            padding: "0.38rem 0.72rem",
+                            borderRadius: "8px",
+                            fontSize: "0.76rem",
+                            fontWeight: 700,
+                            cursor: refineLoading ? "wait" : "pointer"
+                          }}
+                        >
+                          {preset.label}
+                        </button>
+                      );
+                    })}
                   </div>
 
-                  {/* Difficulty & Generator Controls */}
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
-                    <div style={{ fontSize: "0.78rem", fontWeight: 800, color: "#0f172a" }}>
-                      Change Difficulty Level or Auto-Generate (Same Topic):
-                    </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem" }}>
-                      {[
-                        { label: "Easier (Conceptual)", action: "level_shift" as const, level: "Easy" },
-                        { label: "Medium (Standard)", action: "level_shift" as const, level: "Medium" },
-                        { label: "Harder / Analytical", action: "level_shift" as const, level: "Hard" },
-                        { label: "Practical / Numerical Problem", action: "practical" as const, level: "Practical" },
-                        { label: "Rephrase Clearly", action: "rephrase" as const, level: "Medium" },
-                        { label: "Auto-Generate New Questions", action: "auto_generate" as const, level: "Mixed" }
-                      ].map((preset) => {
-                        const isSelected = refineAction === preset.action && refineTargetLevel === preset.level;
-                        return (
-                          <button
-                            key={preset.label}
-                            disabled={refineLoading}
-                            onClick={() => runRefineRequest(refineModalIdx, preset.action, preset.level, refineCustomInstruction)}
-                            style={{
-                              background: isSelected ? "#2563eb" : "#ffffff",
-                              border: isSelected ? "1px solid #2563eb" : "1px solid #cbd5e1",
-                              color: isSelected ? "#ffffff" : "#1e293b",
-                              padding: "0.42rem 0.85rem",
-                              borderRadius: "8px",
-                              fontSize: "0.8rem",
-                              fontWeight: 700,
-                              cursor: refineLoading ? "wait" : "pointer"
-                            }}
-                          >
-                            {preset.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div style={{ display: "flex", gap: "0.5rem" }}>
-                      <input
-                        type="text"
-                        placeholder="Optional instruction (e.g. include a parsing table or add 2-part numerical trace)..."
-                        value={refineCustomInstruction}
-                        onChange={(e) => setRefineCustomInstruction(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !refineLoading) {
-                            void runRefineRequest(refineModalIdx, refineAction, refineTargetLevel, refineCustomInstruction);
-                          }
-                        }}
-                        style={{
-                          flex: 1,
-                          padding: "0.48rem 0.75rem",
-                          borderRadius: "8px",
-                          background: "#ffffff",
-                          border: "1px solid #cbd5e1",
-                          color: "#0f172a",
-                          fontSize: "0.82rem"
-                        }}
-                      />
-                      <button
-                        disabled={refineLoading}
-                        onClick={() => runRefineRequest(refineModalIdx, refineAction, refineTargetLevel, refineCustomInstruction)}
-                        style={{
-                          background: "#0f172a",
-                          color: "#ffffff",
-                          border: "none",
-                          padding: "0.48rem 1rem",
-                          borderRadius: "8px",
-                          fontSize: "0.82rem",
-                          fontWeight: 700,
-                          cursor: refineLoading ? "wait" : "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "0.35rem"
-                        }}
-                      >
-                        <Sparkles size={14} /> Generate
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Generated Candidates List */}
-                  {refineLoading ? (
-                    <div
+                  <div style={{ display: "flex", gap: "0.45rem" }}>
+                    <input
+                      type="text"
+                      placeholder="Type custom instruction & press Enter..."
+                      value={refineCustomInstruction}
+                      onChange={(e) => setRefineCustomInstruction(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !refineLoading) {
+                          void runRefineRequest(refineModalIdx, refineAction, refineTargetLevel, refineCustomInstruction);
+                        }
+                      }}
                       style={{
-                        padding: "2rem",
-                        background: "#f8fafc",
-                        border: "1px solid #e2e8f0",
-                        borderRadius: "12px",
+                        flex: 1,
+                        padding: "0.45rem 0.7rem",
+                        borderRadius: "8px",
+                        background: "#ffffff",
+                        border: "1px solid #cbd5e1",
+                        color: "#0f172a",
+                        fontSize: "0.8rem"
+                      }}
+                    />
+                    <button
+                      disabled={refineLoading}
+                      onClick={() => runRefineRequest(refineModalIdx, refineAction, refineTargetLevel, refineCustomInstruction)}
+                      style={{
+                        background: "#0f172a",
+                        color: "#ffffff",
+                        border: "none",
+                        padding: "0.45rem 0.9rem",
+                        borderRadius: "8px",
+                        fontSize: "0.78rem",
+                        fontWeight: 700,
+                        cursor: refineLoading ? "wait" : "pointer",
                         display: "flex",
-                        flexDirection: "column",
                         alignItems: "center",
-                        gap: "0.55rem",
-                        color: "#334155"
+                        gap: "0.3rem"
                       }}
                     >
-                      <RefreshCw size={22} className="spin" style={{ color: "#2563eb" }} />
-                      <span style={{ fontWeight: 700, fontSize: "0.88rem" }}>
-                        Generating same-topic questions with Gemini...
-                      </span>
-                    </div>
-                  ) : refineError ? (
-                    <div style={{ padding: "1rem", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "10px", color: "#b91c1c", fontSize: "0.84rem" }}>
-                      {refineError}
-                    </div>
-                  ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-                      {refineSuggestions.map((sug, sIdx) => {
-                        const lvlLower = (sug.difficulty_level || "").toLowerCase();
-                        const badgeColors =
-                          lvlLower.includes("easy")
-                            ? { bg: "#ecfdf5", text: "#047857", border: "#a7f3d0" }
-                            : lvlLower.includes("hard") || lvlLower.includes("analy")
-                              ? { bg: "#fef2f2", text: "#b91c1c", border: "#fecaca" }
-                              : lvlLower.includes("pract")
-                                ? { bg: "#fffbeb", text: "#b45309", border: "#fde68a" }
-                                : { bg: "#eff6ff", text: "#1d4ed8", border: "#bfdbfe" };
+                      <Sparkles size={13} /> Generate
+                    </button>
+                  </div>
+                </div>
 
-                        return (
-                          <div
-                            key={sIdx}
-                            style={{
-                              background: "#ffffff",
-                              border: "1px solid #e2e8f0",
-                              borderRadius: "12px",
-                              padding: "1rem",
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: "0.55rem"
-                            }}
-                          >
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                                <span
-                                  style={{
-                                    background: badgeColors.bg,
-                                    color: badgeColors.text,
-                                    border: `1px solid ${badgeColors.border}`,
-                                    padding: "0.14rem 0.55rem",
-                                    borderRadius: "999px",
-                                    fontSize: "0.72rem",
-                                    fontWeight: 800
-                                  }}
-                                >
-                                  {sug.difficulty_level}
-                                </span>
-                                <span style={{ fontWeight: 800, fontSize: "0.88rem", color: "#0f172a" }}>
-                                  {sug.title}
-                                </span>
-                              </div>
-                              <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "#475569" }}>
-                                {sug.marks} marks
+                {/* Generated Candidates List (Empty prompt hint until user triggers generation) */}
+                {refineLoading ? (
+                  <div
+                    style={{
+                      padding: "1.5rem",
+                      background: "#f8fafc",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "10px",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: "0.45rem",
+                      color: "#334155"
+                    }}
+                  >
+                    <RefreshCw size={20} className="spin" style={{ color: "#2563eb" }} />
+                    <span style={{ fontWeight: 700, fontSize: "0.82rem" }}>
+                      Generating same-topic options with Gemini...
+                    </span>
+                  </div>
+                ) : refineError ? (
+                  <div style={{ padding: "0.85rem", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "10px", color: "#b91c1c", fontSize: "0.8rem" }}>
+                    {refineError}
+                  </div>
+                ) : refineSuggestions.length === 0 ? (
+                  <div style={{ padding: "0.9rem", background: "#f8fafc", border: "1px dashed #cbd5e1", borderRadius: "10px", color: "#64748b", fontSize: "0.78rem", textAlign: "center" }}>
+                    Nothing sent yet. Choose a level button above or type an instruction and click <strong>Generate</strong> to preview replacement questions.
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                    {refineSuggestions.map((sug, sIdx) => {
+                      const lvlLower = (sug.difficulty_level || "").toLowerCase();
+                      const badgeColors =
+                        lvlLower.includes("easy")
+                          ? { bg: "#ecfdf5", text: "#047857", border: "#a7f3d0" }
+                          : lvlLower.includes("hard") || lvlLower.includes("analy")
+                            ? { bg: "#fef2f2", text: "#b91c1c", border: "#fecaca" }
+                            : lvlLower.includes("pract")
+                              ? { bg: "#fffbeb", text: "#b45309", border: "#fde68a" }
+                              : { bg: "#eff6ff", text: "#1d4ed8", border: "#bfdbfe" };
+
+                      return (
+                        <div
+                          key={sIdx}
+                          style={{
+                            background: "#ffffff",
+                            border: "1px solid #e2e8f0",
+                            borderRadius: "10px",
+                            padding: "0.85rem",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "0.45rem"
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                              <span
+                                style={{
+                                  background: badgeColors.bg,
+                                  color: badgeColors.text,
+                                  border: `1px solid ${badgeColors.border}`,
+                                  padding: "0.12rem 0.5rem",
+                                  borderRadius: "999px",
+                                  fontSize: "0.7rem",
+                                  fontWeight: 800
+                                }}
+                              >
+                                {sug.difficulty_level}
+                              </span>
+                              <span style={{ fontWeight: 800, fontSize: "0.84rem", color: "#0f172a" }}>
+                                {sug.title}
                               </span>
                             </div>
-
-                            <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "0.75rem 0.9rem" }}>
-                              <MarkdownQuestionView text={sug.question_text} compact />
-                            </div>
-
-                            <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
-                              <strong>Rationale:</strong> {sug.rationale}
-                            </div>
-
-                            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.55rem", marginTop: "0.2rem" }}>
-                              <button
-                                onClick={() => handleAddGeneratedAsNewQuestion(sug)}
-                                style={{
-                                  background: "#ffffff",
-                                  border: "1px solid #cbd5e1",
-                                  color: "#0f172a",
-                                  padding: "0.42rem 0.85rem",
-                                  borderRadius: "8px",
-                                  fontSize: "0.8rem",
-                                  fontWeight: 700,
-                                  cursor: "pointer"
-                                }}
-                              >
-                                + Add as New Question
-                              </button>
-                              <button
-                                onClick={() => handleApplyReplaceQuestion(sug)}
-                                style={{
-                                  background: "#2563eb",
-                                  border: "none",
-                                  color: "#ffffff",
-                                  padding: "0.42rem 0.95rem",
-                                  borderRadius: "8px",
-                                  fontSize: "0.8rem",
-                                  fontWeight: 700,
-                                  cursor: "pointer"
-                                }}
-                              >
-                                Replace Question
-                              </button>
-                            </div>
+                            <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "#475569" }}>
+                              {sug.marks} marks
+                            </span>
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+
+                          <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "0.65rem 0.8rem" }}>
+                            <MarkdownQuestionView text={sug.question_text} compact />
+                          </div>
+
+                          <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                            <strong>Rationale:</strong> {sug.rationale}
+                          </div>
+
+                          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "0.15rem" }}>
+                            <button
+                              onClick={() => handleAddGeneratedAsNewQuestion(sug)}
+                              style={{
+                                background: "#ffffff",
+                                border: "1px solid #cbd5e1",
+                                color: "#0f172a",
+                                padding: "0.36rem 0.72rem",
+                                borderRadius: "7px",
+                                fontSize: "0.76rem",
+                                fontWeight: 700,
+                                cursor: "pointer"
+                              }}
+                            >
+                              + Add as New Question
+                            </button>
+                            <button
+                              onClick={() => handleApplyReplaceQuestion(sug)}
+                              style={{
+                                background: "#2563eb",
+                                border: "none",
+                                color: "#ffffff",
+                                padding: "0.36rem 0.82rem",
+                                borderRadius: "7px",
+                                fontSize: "0.76rem",
+                                fontWeight: 700,
+                                cursor: "pointer"
+                              }}
+                            >
+                              Replace Question
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           )}

@@ -70,6 +70,14 @@ export interface Subject {
   created_at?: string;
 }
 
+export interface SemesterRecord {
+  semester: string;
+  sgpa?: number;
+  cgpa?: number;
+  credits?: number;
+  status?: string;
+}
+
 export interface Student {
   id: string;
   subject_id: string;
@@ -88,13 +96,26 @@ export interface Student {
   admission_year?: string;
   status?: string;
   notes?: string;
+  semester_records?: SemesterRecord[];
   created_at?: string;
+}
+
+export interface EnrolledSubjectItem {
+  student_row_id: string;
+  subject_id: string;
+  subject_name: string;
+  subject_code: string;
+  section?: string;
+  credits?: number | null;
+  semester_or_grade?: string;
+  attendance_percentage?: number;
 }
 
 export interface StudentFullProfile {
   student: Student;
   subject?: Subject | null;
   class_item?: ClassItem | null;
+  enrolled_subjects?: EnrolledSubjectItem[];
   evaluations: AcademicEvaluation[];
   upcoming_exams: Exam[];
   stats: {
@@ -163,6 +184,16 @@ export interface ExamScanResponse {
   api_error?: string;
 }
 
+export interface AnswerKeyStructuredItem {
+  q_no: string;
+  marks: number;
+  model_answer: string;
+  marks_distribution?: { label: string; marks: number; color?: string }[];
+  rubric_items?: { title: string; marks: number; criteria: string[] }[];
+  marking_notes?: string;
+  bloom_level?: string;
+}
+
 export interface Exam {
   id: string;
   subject_id: string;
@@ -171,15 +202,54 @@ export interface Exam {
   max_marks: number;
   passing_marks: number;
   academic_year: string;
+  target_section?: string;
   exam_date?: string;
   correction_deadline?: string;
   question_paper_filename?: string;
   paper_id?: string;
   paper_page_count?: number;
   answer_key_text?: string;
+  answer_key_structured?: AnswerKeyStructuredItem[];
   questions: QuestionItem[];
   evaluations_count?: number;
   created_at?: string;
+}
+
+export interface ExamEligibleStudent {
+  student_id: string;
+  name: string;
+  roll_number: string;
+  email?: string;
+  section?: string;
+  sections?: string[];
+  status?: string;
+  cgpa_or_percentage?: number;
+  enrolled_subjects?: string[];
+  evaluated: boolean;
+  evaluation_id?: string | null;
+  total_score?: number | null;
+  max_score?: number | null;
+  percentage?: number | null;
+  grade?: string | null;
+}
+
+export interface ExamDetailsResponse {
+  exam: Exam;
+  subject?: Subject | null;
+  class_item?: ClassItem | null;
+  available_sections: string[];
+  eligible_students: ExamEligibleStudent[];
+}
+
+export interface BackgroundJobStatus {
+  job_id: string;
+  exam_id?: string;
+  kind?: string;
+  status: "running" | "completed" | "failed";
+  started_at?: string;
+  completed_at?: string;
+  result?: any;
+  error?: string | null;
 }
 
 export interface RubricCheckItem {

@@ -139,14 +139,54 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
     }
   };
 
-  const handleDelete = async (studentId: string, name: string) => {
-    if (!window.confirm(`Are you sure you want to remove ${name} from this roster?`)) return;
+  const handleDeleteGroup = async (rowsToDelete: Student[], name: string) => {
+    const suffix = rowsToDelete.length > 1 ? ` (across ${rowsToDelete.length} enrolled subjects)` : "";
+    if (!window.confirm(`Are you sure you want to remove ${name}${suffix} from this roster?`)) return;
     try {
-      await academicApi.deleteStudent(studentId);
+      for (const row of rowsToDelete) {
+        await academicApi.deleteStudent(row.id);
+      }
       await loadStudents();
     } catch (err) {
       alert("Failed to delete student.");
     }
+  };
+
+  interface ConsolidatedStudentGroup {
+    primary: Student;
+    rows: Student[];
+    enrolledSubjects: Subject[];
+    sections: string[];
+  }
+
+  const consolidateStudents = (rows: Student[]): ConsolidatedStudentGroup[] => {
+    const byRoll = new Map<string, ConsolidatedStudentGroup>();
+    rows.forEach((stud) => {
+      const rollKey = (stud.roll_number || stud.id).trim().toUpperCase();
+      const subj = subjects.find((s) => s.id === stud.subject_id);
+      const sec = (stud.section || "").trim();
+      const existing = byRoll.get(rollKey);
+      if (!existing) {
+        byRoll.set(rollKey, {
+          primary: stud,
+          rows: [stud],
+          enrolledSubjects: subj ? [subj] : [],
+          sections: sec ? [sec] : []
+        });
+      } else {
+        existing.rows.push(stud);
+        if (subj && !existing.enrolledSubjects.some((s) => s.id === subj.id)) {
+          existing.enrolledSubjects.push(subj);
+        }
+        if (sec && !existing.sections.includes(sec)) {
+          existing.sections.push(sec);
+        }
+        if (!existing.primary.cgpa_or_percentage && stud.cgpa_or_percentage) {
+          existing.primary = stud;
+        }
+      }
+    });
+    return Array.from(byRoll.values());
   };
 
   const filteredStudents = students.filter((s) => {
@@ -159,7 +199,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
     );
   });
 
-  // Group students by Class
+  // Group students by Class, consolidating multi-subject enrollments by roll_number
   const classMap = new Map<string, Student[]>();
   const unassignedStudents: Student[] = [];
 
@@ -174,6 +214,9 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
       unassignedStudents.push(stud);
     }
   });
+
+  const uniqueTotalStudents = consolidateStudents(filteredStudents).length;
+  const unassignedGroups = consolidateStudents(unassignedStudents);
 
   return (
     <div className="students-roster-page pb-28">
@@ -194,7 +237,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                 borderRadius: "9999px"
               }}
             >
-              {filteredStudents.length} Students Total
+              {uniqueTotalStudents} {uniqueTotalStudents === 1 ? "Student" : "Students"} Total
             </span>
           </div>
           <p style={{ color: "#64748b", fontSize: "0.88rem", marginTop: "0.3rem", margin: 0 }}>
@@ -342,7 +385,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1.1rem" }}>
               {classes.map((cls) => {
-                const count = (classMap.get(cls.id) || []).length;
+                const count = consolidateStudents(classMap.get(cls.id) || []).length;
                 return (
                   <div
                     key={cls.id}
@@ -402,7 +445,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                 );
               })}
 
-              {unassignedStudents.length > 0 && (
+              {unassignedGroups.length > 0 && (
                 <div
                   onClick={() => setSelectedClassId("__unassigned__")}
                   style={{
@@ -434,7 +477,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                       </div>
                     </div>
                     <span style={{ fontSize: "0.76rem", fontWeight: 700, background: "#f1f5f9", color: "#334155", padding: "0.2rem 0.6rem", borderRadius: "9999px" }}>
-                      {unassignedStudents.length} {unassignedStudents.length === 1 ? "Student" : "Students"}
+                      {unassignedGroups.length} {unassignedGroups.length === 1 ? "Student" : "Students"}
                     </span>
                   </div>
                   <div style={{ display: "flex", justifyContent: "flex-end", borderTop: "1px solid #f1f5f9", paddingTop: "0.75rem", fontSize: "0.78rem", color: "#2563eb", fontWeight: 700 }}>
@@ -483,6 +526,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
               .filter((cls) => cls.id === selectedClassId)
               .map((cls) => {
                 const classStudents = classMap.get(cls.id) || [];
+                const classGroups = consolidateStudents(classStudents);
                 return (
                   <div
                     key={cls.id}
@@ -522,7 +566,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                               </span>
                             )}
                             <span style={{ fontSize: "0.75rem", fontWeight: 700, background: "#e0f2fe", color: "#0369a1", padding: "0.15rem 0.55rem", borderRadius: "9999px" }}>
-                              {classStudents.length} {classStudents.length === 1 ? "Student" : "Students"}
+                              {classGroups.length} {classGroups.length === 1 ? "Student" : "Students"}
                             </span>
                           </div>
                           <div style={{ fontSize: "0.8rem", color: "#64748b", marginTop: "0.2rem" }}>
@@ -541,8 +585,8 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                       </button>
                     </div>
 
-                    {/* Students List in this Class (Click any row for details) */}
-                    {classStudents.length === 0 ? (
+                    {/* Students List in this Class (Deduplicated by roll_number; click row for full details) */}
+                    {classGroups.length === 0 ? (
                       <div style={{ padding: "2.5rem 1.5rem", textAlign: "center", color: "#64748b", fontSize: "0.88rem" }}>
                         No students enrolled in <strong>{cls.name}</strong> yet.
                       </div>
@@ -555,13 +599,15 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                               <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Student Name</th>
                               <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Roll Number</th>
                               <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Section</th>
-                              <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Subject</th>
+                              <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Enrolled Subjects</th>
+                              <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>CGPA / Record</th>
                               <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", textAlign: "right" }}>Actions</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {classStudents.map((stud, idx) => {
-                              const subj = subjects.find((s) => s.id === stud.subject_id);
+                            {classGroups.map((group, idx) => {
+                              const stud = group.primary;
+                              const semCount = Array.isArray(stud.semester_records) ? stud.semester_records.length : 0;
                               return (
                                 <tr
                                   key={stud.id}
@@ -578,7 +624,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                                       {stud.name}
                                     </div>
                                     <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
-                                      {stud.email || "Click row for full profile"}
+                                      {stud.email || "Click row for full profile & semester CGPA"}
                                     </div>
                                   </td>
                                   <td style={{ padding: "0.85rem 1.25rem" }}>
@@ -587,16 +633,54 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                                     </span>
                                   </td>
                                   <td style={{ padding: "0.85rem 1.25rem" }}>
-                                    <span style={{ background: "#e2e8f0", color: "#334155", padding: "0.15rem 0.5rem", borderRadius: "4px", fontSize: "0.75rem", fontWeight: 600 }}>
-                                      Section {stud.section || "A"}
-                                    </span>
+                                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
+                                      {(group.sections.length > 0 ? group.sections : [stud.section || "A"]).map((sec) => (
+                                        <span key={sec} style={{ background: "#e2e8f0", color: "#334155", padding: "0.15rem 0.5rem", borderRadius: "4px", fontSize: "0.75rem", fontWeight: 600 }}>
+                                          Section {sec}
+                                        </span>
+                                      ))}
+                                    </div>
                                   </td>
                                   <td style={{ padding: "0.85rem 1.25rem" }}>
-                                    <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#1e293b" }}>
-                                      {subj?.name || "Subject"}
+                                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
+                                      {group.enrolledSubjects.length > 0 ? (
+                                        group.enrolledSubjects.map((subj) => (
+                                          <span
+                                            key={subj.id}
+                                            style={{
+                                              display: "inline-flex",
+                                              alignItems: "center",
+                                              gap: "0.3rem",
+                                              background: "#eff6ff",
+                                              border: "1px solid #bfdbfe",
+                                              color: "#1e3a8a",
+                                              padding: "0.18rem 0.55rem",
+                                              borderRadius: "9999px",
+                                              fontSize: "0.75rem",
+                                              fontWeight: 700
+                                            }}
+                                            title={subj.name}
+                                          >
+                                            <span>{subj.code}</span>
+                                            <span style={{ fontWeight: 500, color: "#3b82f6" }}>·</span>
+                                            <span style={{ fontWeight: 600, maxWidth: "150px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                              {subj.name}
+                                            </span>
+                                          </span>
+                                        ))
+                                      ) : (
+                                        <span style={{ fontSize: "0.8rem", color: "#64748b" }}>General</span>
+                                      )}
                                     </div>
-                                    <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
-                                      {subj?.code || ""}
+                                  </td>
+                                  <td style={{ padding: "0.85rem 1.25rem" }}>
+                                    <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#0f172a" }}>
+                                      {stud.cgpa_or_percentage && stud.cgpa_or_percentage > 0
+                                        ? `CGPA ${stud.cgpa_or_percentage.toFixed(2)}`
+                                        : "Not set"}
+                                    </div>
+                                    <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                                      {semCount > 0 ? `${semCount} sem record${semCount > 1 ? "s" : ""}` : "Add sem history"}
                                     </div>
                                   </td>
                                   <td style={{ padding: "0.85rem 1.25rem", textAlign: "right" }}>
@@ -614,7 +698,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          handleDelete(stud.id, stud.name);
+                                          handleDeleteGroup(group.rows, stud.name);
                                         }}
                                         title="Delete Student"
                                         style={{ padding: "0.35rem", background: "none", border: "none", color: "#ef4444", cursor: "pointer" }}
@@ -653,7 +737,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                   </div>
                 </div>
                 <span style={{ fontSize: "0.75rem", fontWeight: 700, background: "#e2e8f0", color: "#334155", padding: "0.2rem 0.6rem", borderRadius: "9999px" }}>
-                  {unassignedStudents.length} Students
+                  {unassignedGroups.length} {unassignedGroups.length === 1 ? "Student" : "Students"}
                 </span>
               </div>
 
@@ -665,13 +749,13 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                       <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Student Name</th>
                       <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Roll Number</th>
                       <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Section</th>
-                      <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Subject</th>
+                      <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Enrolled Subjects</th>
                       <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", textAlign: "right" }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {unassignedStudents.map((stud, idx) => {
-                      const subj = subjects.find((s) => s.id === stud.subject_id);
+                    {unassignedGroups.map((group, idx) => {
+                      const stud = group.primary;
                       return (
                         <tr
                           key={stud.id}
@@ -689,8 +773,16 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                               {stud.roll_number}
                             </span>
                           </td>
-                          <td style={{ padding: "0.85rem 1.25rem" }}>Section {stud.section || "A"}</td>
-                          <td style={{ padding: "0.85rem 1.25rem" }}>{subj?.name || "Subject"}</td>
+                          <td style={{ padding: "0.85rem 1.25rem" }}>Section {group.sections.join(", ") || stud.section || "A"}</td>
+                          <td style={{ padding: "0.85rem 1.25rem" }}>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
+                              {group.enrolledSubjects.map((s) => (
+                                <span key={s.id} style={{ background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", padding: "0.15rem 0.5rem", borderRadius: "9999px", fontSize: "0.74rem", fontWeight: 700 }}>
+                                  {s.code} · {s.name}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
                           <td style={{ padding: "0.85rem 1.25rem", textAlign: "right" }}>
                             <button
                               onClick={(e) => {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { academicApi } from "../api/academicApi";
-import type { Student, Exam, AcademicEvaluation } from "../types/academic";
+import type { Student, Exam, AcademicEvaluation, SemesterRecord, StudentFullProfile } from "../types/academic";
 import {
   X,
   Save,
@@ -8,7 +8,11 @@ import {
   Clock,
   ChevronDown,
   ChevronUp,
-  FileCheck2
+  FileCheck2,
+  Plus,
+  Trash2,
+  BookOpen,
+  Award
 } from "lucide-react";
 
 interface StudentProfileModalProps {
@@ -25,7 +29,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
   onStudentUpdated
 }) => {
   const [activeTab, setActiveTab] = useState<"overview" | "history" | "upcoming">("overview");
-  const [fullData, setFullData] = useState<any>(null);
+  const [fullData, setFullData] = useState<StudentFullProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -45,6 +49,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
   const [admissionYear, setAdmissionYear] = useState("2024");
   const [status, setStatus] = useState("Active");
   const [notes, setNotes] = useState("");
+  const [semesterRecords, setSemesterRecords] = useState<SemesterRecord[]>([]);
 
   const [expandedEvalId, setExpandedEvalId] = useState<string | null>(null);
 
@@ -66,6 +71,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
     setAdmissionYear(student.admission_year || "2024");
     setStatus(student.status || "Active");
     setNotes(student.notes || "");
+    setSemesterRecords(Array.isArray(student.semester_records) ? student.semester_records : []);
 
     setLoading(true);
     academicApi
@@ -88,6 +94,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
           setAdmissionYear(s.admission_year || "2024");
           setStatus(s.status || "Active");
           setNotes(s.notes || "");
+          setSemesterRecords(Array.isArray(s.semester_records) ? s.semester_records : []);
         }
         if (data.evaluations?.length > 0) {
           setExpandedEvalId(data.evaluations[0].id);
@@ -108,6 +115,16 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
     setIsSaving(true);
     setSaveSuccess(false);
 
+    const cleanedRecords = semesterRecords
+      .map((r) => ({
+        semester: (r.semester || "").trim(),
+        sgpa: Number(r.sgpa || 0),
+        cgpa: Number(r.cgpa || 0),
+        credits: r.credits !== undefined ? Number(r.credits) : undefined,
+        status: r.status || "Completed"
+      }))
+      .filter((r) => r.semester.length > 0);
+
     try {
       const updated = await academicApi.updateStudent(student.id, {
         name: name.trim(),
@@ -123,7 +140,8 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
         cgpa_or_percentage: Number(cgpa),
         admission_year: admissionYear,
         status: status,
-        notes: notes.trim()
+        notes: notes.trim(),
+        semester_records: cleanedRecords
       });
 
       setSaveSuccess(true);
@@ -135,6 +153,8 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
       setIsSaving(false);
     }
   };
+
+  const enrolledSubjects = fullData?.enrolled_subjects || [];
 
   const evaluations: AcademicEvaluation[] = fullData?.evaluations || [];
   const upcomingExams: Exam[] = fullData?.upcoming_exams || [];
@@ -208,7 +228,13 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
               )}
             </div>
             <p style={{ color: "#64748b", fontSize: "0.82rem", margin: 0, marginTop: "0.25rem" }}>
-              Enrolled in {fullData?.subject?.name || "Subject"} ({fullData?.subject?.code || "CODE"}) • Section {section} • Class: {fullData?.class_item?.name || "General"}
+              Class: {fullData?.class_item?.name || "General"}
+              {" • "}
+              {enrolledSubjects.length > 0
+                ? `${enrolledSubjects.length} Enrolled ${enrolledSubjects.length === 1 ? "Subject" : "Subjects"}`
+                : `${fullData?.subject?.name || "Subject"} (${fullData?.subject?.code || "CODE"})`}
+              {" • "}
+              Section {section}
             </p>
           </div>
 
@@ -305,18 +331,20 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                   display: "grid",
                   gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
                   gap: "1rem",
-                  marginBottom: "1.5rem"
+                  marginBottom: "1.25rem"
                 }}
               >
                 <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "1rem" }}>
                   <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-                    Attendance
+                    Cumulative CGPA / Score
                   </div>
                   <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#0f172a", marginTop: "0.2rem" }}>
-                    {attendance}%
+                    {cgpa > 0 ? cgpa.toFixed(2) : "—"}
                   </div>
-                  <span style={{ fontSize: "0.75rem", color: attendance >= 75 ? "#16a34a" : "#dc2626", fontWeight: 600 }}>
-                    {attendance >= 75 ? "Eligible for Examinations" : "Below 75% Requirement"}
+                  <span style={{ fontSize: "0.75rem", color: "#64748b", fontWeight: 600 }}>
+                    {semesterRecords.length > 0
+                      ? `${semesterRecords.length} semester record(s) logged`
+                      : `Admitted ${admissionYear}`}
                   </span>
                 </div>
 
@@ -334,15 +362,55 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
 
                 <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "1rem" }}>
                   <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
-                    Target Program
+                    Enrolled Subjects
                   </div>
-                  <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "#0f172a", marginTop: "0.3rem" }}>
-                    {fullData?.subject?.semester_or_grade || "Sem 6"}
+                  <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#0f172a", marginTop: "0.2rem" }}>
+                    {enrolledSubjects.length || 1}
                   </div>
                   <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
-                    {fullData?.subject?.grading_system || "Standard Grading"}
+                    {fullData?.subject?.semester_or_grade || "Active Cohort"}
                   </span>
                 </div>
+              </div>
+
+              {/* Enrolled Subjects List */}
+              <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "1rem 1.25rem", marginBottom: "1.25rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", fontSize: "0.82rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.65rem" }}>
+                  <BookOpen size={15} style={{ color: "#2563eb" }} /> Enrolled Subjects in Cohort
+                </div>
+                {enrolledSubjects.length > 0 ? (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                    {enrolledSubjects.map((es) => (
+                      <div
+                        key={es.subject_id}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.45rem",
+                          padding: "0.35rem 0.75rem",
+                          borderRadius: "8px",
+                          background: "#f8fafc",
+                          border: "1px solid #e2e8f0",
+                          fontSize: "0.8rem"
+                        }}
+                      >
+                        <span style={{ fontFamily: "monospace", fontWeight: 800, color: "#2563eb" }}>
+                          {es.subject_code || "SUB"}
+                        </span>
+                        <span style={{ fontWeight: 700, color: "#0f172a" }}>{es.subject_name}</span>
+                        {es.section && (
+                          <span style={{ background: "#e2e8f0", color: "#334155", padding: "0.08rem 0.4rem", borderRadius: "4px", fontSize: "0.7rem", fontWeight: 700 }}>
+                            Sec {es.section}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: "0.82rem", color: "#64748b" }}>
+                    {fullData?.subject?.name || "Primary Subject"} ({fullData?.subject?.code || "SUB"}) • Section {section}
+                  </div>
+                )}
               </div>
 
               {/* Editable Form */}
@@ -467,7 +535,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                   </div>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
                   <div>
                     <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
                       Date of Birth
@@ -482,15 +550,27 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
 
                   <div>
                     <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                      Attendance (%)
+                      Cumulative CGPA / %
                     </label>
                     <input
                       type="number"
-                      step="0.1"
+                      step="0.01"
                       min="0"
                       max="100"
-                      value={attendance}
-                      onChange={(e) => setAttendance(Number(e.target.value))}
+                      value={cgpa}
+                      onChange={(e) => setCgpa(Number(e.target.value))}
+                      style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem", fontWeight: 700 }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                      Admission Year
+                    </label>
+                    <input
+                      type="text"
+                      value={admissionYear}
+                      onChange={(e) => setAdmissionYear(e.target.value)}
                       style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
                     />
                   </div>
@@ -509,6 +589,176 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                       <option value="Alumni">Alumni</option>
                     </select>
                   </div>
+                </div>
+
+                {/* Other Semester SGPAs & Cumulative CGPAs */}
+                <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "1rem 1.25rem", marginBottom: "1.25rem" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                      <Award size={16} style={{ color: "#2563eb" }} />
+                      <h4 style={{ fontSize: "0.9rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
+                        Other Semester CGPAs & Academic Records
+                      </h4>
+                    </div>
+                    <div style={{ display: "flex", gap: "0.45rem" }}>
+                      {semesterRecords.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const valid = semesterRecords.filter((r) => Number(r.sgpa || r.cgpa || 0) > 0);
+                            if (valid.length > 0) {
+                              const avg = valid.reduce((sum, r) => sum + Number(r.sgpa || r.cgpa || 0), 0) / valid.length;
+                              setCgpa(Number(avg.toFixed(2)));
+                            }
+                          }}
+                          style={{
+                            padding: "0.3rem 0.65rem",
+                            fontSize: "0.75rem",
+                            fontWeight: 700,
+                            borderRadius: "6px",
+                            border: "1px solid #bfdbfe",
+                            background: "#eff6ff",
+                            color: "#1d4ed8",
+                            cursor: "pointer"
+                          }}
+                        >
+                          Sync CGPA Avg
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSemesterRecords((prev) => [
+                            ...prev,
+                            { semester: `Semester ${prev.length + 1}`, sgpa: 0, cgpa: cgpa || 0, credits: 20, status: "Completed" }
+                          ])
+                        }
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.3rem",
+                          padding: "0.3rem 0.65rem",
+                          fontSize: "0.75rem",
+                          fontWeight: 700,
+                          borderRadius: "6px",
+                          border: "1px solid #cbd5e1",
+                          background: "#ffffff",
+                          color: "#0f172a",
+                          cursor: "pointer"
+                        }}
+                      >
+                        <Plus size={13} /> Add Semester Record
+                      </button>
+                    </div>
+                  </div>
+
+                  {semesterRecords.length === 0 ? (
+                    <div style={{ fontSize: "0.8rem", color: "#64748b", padding: "0.5rem 0" }}>
+                      No previous semester SGPA/CGPA records added yet. Click &quot;Add Semester Record&quot; to log historical semesters.
+                    </div>
+                  ) : (
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8rem" }}>
+                        <thead>
+                          <tr style={{ borderBottom: "1px solid #cbd5e1", color: "#475569", textAlign: "left" }}>
+                            <th style={{ padding: "0.4rem 0.5rem" }}>Semester</th>
+                            <th style={{ padding: "0.4rem 0.5rem" }}>SGPA</th>
+                            <th style={{ padding: "0.4rem 0.5rem" }}>Cumulative CGPA</th>
+                            <th style={{ padding: "0.4rem 0.5rem" }}>Credits</th>
+                            <th style={{ padding: "0.4rem 0.5rem" }}>Status</th>
+                            <th style={{ padding: "0.4rem 0.5rem", width: "40px" }}></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {semesterRecords.map((rec, rIdx) => (
+                            <tr key={rIdx} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                              <td style={{ padding: "0.4rem 0.4rem" }}>
+                                <input
+                                  type="text"
+                                  value={rec.semester}
+                                  placeholder="e.g. Sem 4"
+                                  onChange={(e) =>
+                                    setSemesterRecords((prev) =>
+                                      prev.map((item, i) => (i === rIdx ? { ...item, semester: e.target.value } : item))
+                                    )
+                                  }
+                                  style={{ width: "100%", padding: "0.35rem 0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", background: "#ffffff", fontSize: "0.8rem" }}
+                                />
+                              </td>
+                              <td style={{ padding: "0.4rem 0.4rem" }}>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  max="10"
+                                  value={rec.sgpa ?? ""}
+                                  onChange={(e) =>
+                                    setSemesterRecords((prev) =>
+                                      prev.map((item, i) => (i === rIdx ? { ...item, sgpa: Number(e.target.value) } : item))
+                                    )
+                                  }
+                                  style={{ width: "80px", padding: "0.35rem 0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", background: "#ffffff", fontSize: "0.8rem" }}
+                                />
+                              </td>
+                              <td style={{ padding: "0.4rem 0.4rem" }}>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  max="10"
+                                  value={rec.cgpa ?? ""}
+                                  onChange={(e) =>
+                                    setSemesterRecords((prev) =>
+                                      prev.map((item, i) => (i === rIdx ? { ...item, cgpa: Number(e.target.value) } : item))
+                                    )
+                                  }
+                                  style={{ width: "85px", padding: "0.35rem 0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", background: "#ffffff", fontSize: "0.8rem" }}
+                                />
+                              </td>
+                              <td style={{ padding: "0.4rem 0.4rem" }}>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={rec.credits ?? ""}
+                                  onChange={(e) =>
+                                    setSemesterRecords((prev) =>
+                                      prev.map((item, i) => (i === rIdx ? { ...item, credits: Number(e.target.value) } : item))
+                                    )
+                                  }
+                                  style={{ width: "70px", padding: "0.35rem 0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", background: "#ffffff", fontSize: "0.8rem" }}
+                                />
+                              </td>
+                              <td style={{ padding: "0.4rem 0.4rem" }}>
+                                <select
+                                  value={rec.status || "Completed"}
+                                  onChange={(e) =>
+                                    setSemesterRecords((prev) =>
+                                      prev.map((item, i) => (i === rIdx ? { ...item, status: e.target.value } : item))
+                                    )
+                                  }
+                                  style={{ padding: "0.35rem 0.5rem", borderRadius: "6px", border: "1px solid #cbd5e1", background: "#ffffff", fontSize: "0.8rem" }}
+                                >
+                                  <option value="Completed">Completed</option>
+                                  <option value="Ongoing">Ongoing</option>
+                                  <option value="Backlog Cleared">Backlog Cleared</option>
+                                </select>
+                              </td>
+                              <td style={{ padding: "0.4rem 0.4rem", textAlign: "center" }}>
+                                <button
+                                  type="button"
+                                  onClick={() => setSemesterRecords((prev) => prev.filter((_, i) => i !== rIdx))}
+                                  style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", padding: "0.2rem" }}
+                                  title="Remove record"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ marginBottom: "1.5rem" }}>
