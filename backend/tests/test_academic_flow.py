@@ -77,7 +77,13 @@ def test_academic_institutions_hierarchy():
 
 def test_subjects_listing():
     insts = client.get("/api/v1/academic/institutions", headers=AUTH_HEADERS).json()
-    college_inst = next((i for i in insts if i["type"] == "college"), insts[0])
+    college_inst = next((i for i in insts if i["type"] == "college"), None)
+    if college_inst is None:
+        college_inst = client.post(
+            "/api/v1/academic/institutions",
+            json={"name": "Test Engineering College", "code": "TEC", "type": "college"},
+            headers=AUTH_HEADERS,
+        ).json()
 
     # Create subject
     client.post("/api/v1/academic/subjects", json={
@@ -320,6 +326,197 @@ def test_review_paper_overlays_and_question_refine():
     assert all("question_text" in s and "difficulty_level" in s for s in ref_data["suggestions"])
 
 
+def test_multi_subject_student_dedup_semester_records_and_exam_details():
+    import time
+
+    insts = client.get("/api/v1/academic/institutions", headers=AUTH_HEADERS).json()
+    college_inst = next((i for i in insts if i["type"] == "college"), None)
+    if college_inst is None:
+        college_inst = client.post(
+            "/api/v1/academic/institutions",
+            json={"name": "Test Engineering College", "code": "TEC", "type": "college"},
+            headers=AUTH_HEADERS,
+        ).json()
+
+    # Create a dedicated class cohort + two subjects
+    cls = client.post(
+        "/api/v1/academic/classes",
+        json={
+            "name": "CSD-Test Sem 5",
+            "code": "CSD-T5",
+            "institution_id": college_inst["id"],
+            "department": "CSE (DS)",
+            "academic_year": "2026-2027",
+        },
+        headers=AUTH_HEADERS,
+    ).json()
+
+    s1 = client.post(
+        "/api/v1/academic/subjects",
+        json={
+            "name": "NLP Core",
+            "code": "NLP-T1",
+            "institution_id": college_inst["id"],
+            "class_id": cls["id"],
+            "institution_type": "college",
+            "semester_or_grade": "Sem 5",
+            "credits": 4,
+            "academic_year": "2026-2027",
+        },
+        headers=AUTH_HEADERS,
+    ).json()
+    s2 = client.post(
+        "/api/v1/academic/subjects",
+        json={
+            "name": "Compiler Theory",
+            "code": "ATCD-T2",
+            "institution_id": college_inst["id"],
+            "class_id": cls["id"],
+            "institution_type": "college",
+            "semester_or_grade": "Sem 5",
+            "credits": 4,
+            "academic_year": "2026-2027",
+        },
+        headers=AUTH_HEADERS,
+    ).json()
+
+    # Enroll same student (same roll number) in both subjects across Section A and Section B
+    stud_a = client.post(
+        f"/api/v1/academic/subjects/{s1['id']}/students",
+        json={
+            "name": "Arjun MultiSubj",
+            "roll_number": "24K91A6799",
+            "section": "A",
+            "class_id": cls["id"],
+            "cgpa_or_percentage": 8.75,
+            "semester_records": [
+                {"semester": "Semester 1", "sgpa": 8.5, "cgpa": 8.5, "credits": 20, "status": "Completed"},
+                {"semester": "Semester 2", "sgpa": 9.0, "cgpa": 8.75, "credits": 22, "status": "Completed"},
+            ],
+        },
+        headers=AUTH_HEADERS,
+    ).json()
+    stud_b = client.post(
+        f"/api/v1/academic/subjects/{s2['id']}/students",
+        json={
+            "name": "Arjun MultiSubj",
+            "roll_number": "24K91A6799",
+            "section": "B",
+            "class_id": cls["id"],
+        },
+        headers=AUTH_HEADERS,
+    ).json()
+
+    # Enroll another student only in Section B
+    client.post(
+        f"/api/v1/academic/subjects/{s1['id']}/students",
+        json={
+            "name": "Meera SectionB",
+            "roll_number": "24K91A6788",
+            "section": "B",
+            "class_id": cls["id"],
+        },
+        headers=AUTH_HEADERS,
+    )
+
+    # Update semester_records on stud_a and verify it syncs across both rows and returns both subjects
+    upd = client.put(
+        f"/api/v1/academic/students/{stud_a['id']}",
+        json={
+            "cgpa_or_percentage": 8.9,
+            "semester_records": [
+                {"semester": "Semester 1", "sgpa": 8.5, "cgpa": 8.5, "credits": 20, "status": "Completed"},
+                {"semester": "Semester 3", "sgpa": 9.3, "cgpa": 8.9, "credits": 21, "status": "Completed"},
+            ],
+        },
+        headers=AUTH_HEADERS,
+    )
+    assert upd.status_code == 200
+    assert len(upd.json()["semester_records"]) == 2
+
+    prof = client.get(f"/api/v1/academic/students/{stud_b['id']}", headers=AUTH_HEADERS).json()
+    assert len(prof["enrolled_subjects"]) == 2
+    assert prof["student"]["cgpa_or_percentage"] == 8.9
+    assert len(prof["student"]["semester_records"]) == 2
+
+    # Create Exam under s1, check exam details filtering & non-blocking background answer key job
+    ex = client.post(
+        "/api/v1/academic/exams",
+        json={
+            "subject_id": s1["id"],
+            "title": "ATCD Section Filter & Background Key Exam",
+            "exam_type": "Assignment",
+            "max_marks": 10.0,
+            "passing_marks": 4.0,
+            "academic_year": "2026-2027",
+            "target_section": "A",
+            "questions": [
+                {
+                    "id": "q-1",
+                    "q_no": "Q1",
+                    "text": "Construct **SLR** parsing table for `S -> (L) | a, L -> L,S | S`.",
+                    "marks": 10.0,
+                    "rubric": "Award 4M LR(0), 6M parsing table.",
+                }
+            ],
+        },
+        headers=AUTH_HEADERS,
+    ).json()
+
+    det_a = client.get(f"/api/v1/academic/exams/{ex['id']}/details", headers=AUTH_HEADERS).json()
+    assert det_a["exam"]["target_section"] == "A"
+    # Arjun is in Section A (under s1), Meera is Section B only -> only Arjun qualifies for Section A
+    rolls_a = [s["roll_number"] for s in det_a["eligible_students"]]
+    assert "24K91A6799" in rolls_a
+    assert "24K91A6788" not in rolls_a
+
+    # Switch exam target_section to "" (All Sections) -> both unique students qualify (deduplicated)
+    meta_res = client.put(
+        f"/api/v1/academic/exams/{ex['id']}",
+        json={"target_section": ""},
+        headers=AUTH_HEADERS,
+    )
+    assert meta_res.status_code == 200
+    det_all = client.get(f"/api/v1/academic/exams/{ex['id']}/details", headers=AUTH_HEADERS).json()
+    rolls_all = [s["roll_number"] for s in det_all["eligible_students"]]
+    assert rolls_all.count("24K91A6799") == 1
+    assert "24K91A6788" in rolls_all
+
+    # Manual answer key + structured save
+    ak_put = client.put(
+        f"/api/v1/academic/exams/{ex['id']}/answer-key",
+        json={
+            "answer_key_text": "[Q1] Manual canonical key",
+            "answer_key_structured": [
+                {"q_no": "Q1", "marks": 10.0, "model_answer": "Construct canonical LR(0) items I0..I8."}
+            ],
+        },
+        headers=AUTH_HEADERS,
+    )
+    assert ak_put.status_code == 200
+    assert ak_put.json()["exam"]["answer_key_structured"][0]["q_no"] == "Q1"
+
+    # Non-blocking background generation returns job_id immediately
+    bg_res = client.post(
+        f"/api/v1/academic/exams/{ex['id']}/generate-answer-key?background=true",
+        headers=AUTH_HEADERS,
+    )
+    assert bg_res.status_code == 200
+    job_id = bg_res.json()["job_id"]
+    assert bg_res.json()["status"] == "accepted"
+
+    final_job = None
+    for _ in range(90):
+        j_res = client.get(f"/api/v1/academic/jobs/{job_id}", headers=AUTH_HEADERS)
+        assert j_res.status_code == 200
+        final_job = j_res.json()
+        if final_job["status"] in ("completed", "failed"):
+            break
+        time.sleep(0.5)
+    assert final_job is not None and final_job["status"] == "completed", final_job
+    assert final_job["result"]["answer_key_text"]
+
+
 if __name__ == "__main__":
     test_auth_and_profile()
     test_academic_institutions_hierarchy()
@@ -329,4 +526,5 @@ if __name__ == "__main__":
     test_strict_student_evaluation_with_rubric()
     test_student_profile_and_update()
     test_review_paper_overlays_and_question_refine()
+    test_multi_subject_student_dedup_semester_records_and_exam_details()
     print("ALL ACADEMIC FLOW TESTS PASSED!")

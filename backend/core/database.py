@@ -125,6 +125,7 @@ def init_sqlite_db(db_path: Optional[str] = None) -> None:
         _add_column_if_not_exists(cursor, "students", "admission_year", "TEXT DEFAULT '2024'")
         _add_column_if_not_exists(cursor, "students", "status", "TEXT DEFAULT 'Active'")
         _add_column_if_not_exists(cursor, "students", "notes", "TEXT DEFAULT ''")
+        _add_column_if_not_exists(cursor, "students", "semester_records_json", "TEXT DEFAULT '[]'")
 
         # 5. Exams Table (With question paper, scanned questions, rubrics, answer keys)
         cursor.execute("""
@@ -146,6 +147,8 @@ def init_sqlite_db(db_path: Optional[str] = None) -> None:
         _add_column_if_not_exists(cursor, "exams", "correction_deadline", "TEXT DEFAULT ''")
         _add_column_if_not_exists(cursor, "exams", "paper_id", "TEXT DEFAULT ''")
         _add_column_if_not_exists(cursor, "exams", "paper_page_count", "INTEGER DEFAULT 0")
+        _add_column_if_not_exists(cursor, "exams", "target_section", "TEXT DEFAULT ''")
+        _add_column_if_not_exists(cursor, "exams", "answer_key_json", "TEXT DEFAULT '{}'")
 
         # 6. Academic Evaluations Table (Strict evaluated student papers)
         cursor.execute("""
@@ -487,11 +490,21 @@ class SQLiteDatabase:
 
     # --- Student operations (Added one-by-one with rich academic profile) ---
 
+    @staticmethod
+    def _parse_student_row(row: sqlite3.Row) -> Dict[str, Any]:
+        d = dict(row)
+        try:
+            d["semester_records"] = json.loads(d.get("semester_records_json") or "[]")
+        except Exception:
+            d["semester_records"] = []
+        return d
+
     def list_students(self, subject_id: Optional[str] = None, class_id: Optional[str] = None) -> List[Dict[str, Any]]:
         query = """
             SELECT id, subject_id, class_id, name, roll_number, email, section,
                    phone, parent_name, parent_phone, dob, blood_group,
-                   attendance_percentage, cgpa_or_percentage, admission_year, status, notes, created_at
+                   attendance_percentage, cgpa_or_percentage, admission_year, status, notes,
+                   semester_records_json, created_at
             FROM students WHERE 1=1
         """
         params: List[Any] = []
@@ -505,7 +518,24 @@ class SQLiteDatabase:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(query, tuple(params))
-            return [dict(r) for r in cursor.fetchall()]
+            return [self._parse_student_row(r) for r in cursor.fetchall()]
+
+    def find_students_by_roll(self, roll_number: str, class_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        query = """
+            SELECT id, subject_id, class_id, name, roll_number, email, section,
+                   phone, parent_name, parent_phone, dob, blood_group,
+                   attendance_percentage, cgpa_or_percentage, admission_year, status, notes,
+                   semester_records_json, created_at
+            FROM students WHERE UPPER(TRIM(roll_number)) = UPPER(TRIM(?))
+        """
+        params: List[Any] = [roll_number]
+        if class_id:
+            query += " AND class_id = ?"
+            params.append(class_id)
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, tuple(params))
+            return [self._parse_student_row(r) for r in cursor.fetchall()]
 
     def get_student(self, student_id: str) -> Optional[Dict[str, Any]]:
         with self.get_connection() as conn:
@@ -513,12 +543,13 @@ class SQLiteDatabase:
             cursor.execute("""
                 SELECT id, subject_id, class_id, name, roll_number, email, section,
                        phone, parent_name, parent_phone, dob, blood_group,
-                       attendance_percentage, cgpa_or_percentage, admission_year, status, notes, created_at
+                       attendance_percentage, cgpa_or_percentage, admission_year, status, notes,
+                       semester_records_json, created_at
                 FROM students WHERE id = ?
             """, (student_id,))
             row = cursor.fetchone()
             if row:
-                return dict(row)
+                return self._parse_student_row(row)
         return None
 
     def add_student(
@@ -538,9 +569,11 @@ class SQLiteDatabase:
         cgpa_or_percentage: float = 0.0,
         admission_year: str = "2024",
         status: str = "Active",
-        notes: str = ""
+        notes: str = "",
+        semester_records: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         student_id = f"stud-{uuid.uuid4().hex[:8]}"
+        sem_json = json.dumps(semester_records or [])
         with self.get_connection() as conn:
             cursor = conn.cursor()
             # If student with this roll number already exists for this subject, update instead of duplicating
@@ -550,24 +583,29 @@ class SQLiteDatabase:
             )
             existing = cursor.fetchone()
             if existing:
-                self.update_student(existing[0], {
+                upd_payload: Dict[str, Any] = {
                     "name": name,
                     "email": email,
                     "section": section,
-                    "class_id": class_id
-                })
+                    "class_id": class_id,
+                }
+                if semester_records is not None:
+                    upd_payload["semester_records"] = semester_records
+                self.update_student(existing[0], upd_payload)
                 return self.get_student(existing[0]) # type: ignore
 
             cursor.execute("""
                 INSERT INTO students (
                     id, subject_id, class_id, name, roll_number, email, section,
                     phone, parent_name, parent_phone, dob, blood_group,
-                    attendance_percentage, cgpa_or_percentage, admission_year, status, notes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    attendance_percentage, cgpa_or_percentage, admission_year, status, notes,
+                    semester_records_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 student_id, subject_id, class_id, name, roll_number, email, section,
                 phone, parent_name, parent_phone, dob, blood_group,
-                attendance_percentage, cgpa_or_percentage, admission_year, status, notes
+                attendance_percentage, cgpa_or_percentage, admission_year, status, notes,
+                sem_json
             ))
             conn.commit()
             return self.get_student(student_id) # type: ignore
@@ -578,18 +616,52 @@ class SQLiteDatabase:
             "phone", "parent_name", "parent_phone", "dob", "blood_group",
             "attendance_percentage", "cgpa_or_percentage", "admission_year", "status", "notes"
         ]
+        normalized_updates = dict(updates)
+        if "semester_records" in normalized_updates and normalized_updates["semester_records"] is not None:
+            normalized_updates["semester_records_json"] = json.dumps(normalized_updates.pop("semester_records"))
+            allowed.append("semester_records_json")
+
         fields = []
         values = []
-        for k, v in updates.items():
+        for k, v in normalized_updates.items():
             if k in allowed and v is not None:
                 fields.append(f"{k} = ?")
                 values.append(v)
         if not fields:
             return self.get_student(student_id)
+
+        current = self.get_student(student_id)
         values.append(student_id)
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(f"UPDATE students SET {', '.join(fields)} WHERE id = ?", tuple(values))
+
+            # Sync shared student profile fields (CGPA, semester records, contact info, name) across sibling subject rows
+            if current and current.get("roll_number"):
+                shared_allowed = [
+                    "name", "email", "section", "phone", "parent_name", "parent_phone",
+                    "dob", "blood_group", "cgpa_or_percentage", "admission_year",
+                    "status", "notes", "semester_records_json"
+                ]
+                shared_fields = []
+                shared_vals: List[Any] = []
+                for sk in shared_allowed:
+                    if sk in normalized_updates and normalized_updates[sk] is not None:
+                        shared_fields.append(f"{sk} = ?")
+                        shared_vals.append(normalized_updates[sk])
+                if shared_fields:
+                    shared_vals.append(current["roll_number"].strip())
+                    if current.get("class_id"):
+                        shared_vals.append(current["class_id"])
+                        cursor.execute(
+                            f"UPDATE students SET {', '.join(shared_fields)} WHERE UPPER(TRIM(roll_number)) = UPPER(?) AND class_id = ?",
+                            tuple(shared_vals),
+                        )
+                    else:
+                        cursor.execute(
+                            f"UPDATE students SET {', '.join(shared_fields)} WHERE UPPER(TRIM(roll_number)) = UPPER(?)",
+                            tuple(shared_vals),
+                        )
             conn.commit()
         return self.get_student(student_id)
 
@@ -603,8 +675,23 @@ class SQLiteDatabase:
 
     # --- Exam operations ---
 
+    @staticmethod
+    def _parse_exam_row(row: sqlite3.Row) -> Dict[str, Any]:
+        d = dict(row)
+        d["questions"] = json.loads(d.get("questions_json") or "[]")
+        try:
+            d["answer_key_structured"] = json.loads(d.get("answer_key_json") or "{}")
+        except Exception:
+            d["answer_key_structured"] = {}
+        d["target_section"] = d.get("target_section") or ""
+        return d
+
     def list_exams(self, subject_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        query = "SELECT id, subject_id, title, exam_type, max_marks, passing_marks, academic_year, exam_date, correction_deadline, question_paper_filename, paper_id, paper_page_count, answer_key_text, questions_json, created_at FROM exams"
+        query = (
+            "SELECT id, subject_id, title, exam_type, max_marks, passing_marks, academic_year, "
+            "exam_date, correction_deadline, question_paper_filename, paper_id, paper_page_count, "
+            "target_section, answer_key_text, answer_key_json, questions_json, created_at FROM exams"
+        )
         params: List[Any] = []
         if subject_id:
             query += " WHERE subject_id = ?"
@@ -616,9 +703,7 @@ class SQLiteDatabase:
             cursor.execute(query, tuple(params))
             results = []
             for r in cursor.fetchall():
-                d = dict(r)
-                d["questions"] = json.loads(d.get("questions_json") or "[]")
-                # Count evaluations
+                d = self._parse_exam_row(r)
                 cursor2 = conn.cursor()
                 cursor2.execute("SELECT COUNT(*) FROM academic_evaluations WHERE exam_id = ?", (d["id"],))
                 d["evaluations_count"] = cursor2.fetchone()[0]
@@ -629,13 +714,14 @@ class SQLiteDatabase:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT id, subject_id, title, exam_type, max_marks, passing_marks, academic_year, exam_date, correction_deadline, question_paper_filename, paper_id, paper_page_count, answer_key_text, questions_json, created_at
+                SELECT id, subject_id, title, exam_type, max_marks, passing_marks, academic_year,
+                       exam_date, correction_deadline, question_paper_filename, paper_id, paper_page_count,
+                       target_section, answer_key_text, answer_key_json, questions_json, created_at
                 FROM exams WHERE id = ?
             """, (exam_id,))
             row = cursor.fetchone()
             if row:
-                d = dict(row)
-                d["questions"] = json.loads(d.get("questions_json") or "[]")
+                d = self._parse_exam_row(row)
                 cursor.execute("SELECT COUNT(*) FROM academic_evaluations WHERE exam_id = ?", (exam_id,))
                 d["evaluations_count"] = cursor.fetchone()[0]
                 return d
@@ -655,14 +741,15 @@ class SQLiteDatabase:
             except Exception:
                 correction_deadline = time.strftime("%Y-%m-%d")
 
+        answer_key_structured = data.get("answer_key_structured") or {}
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO exams (
                     id, subject_id, title, exam_type, max_marks, passing_marks,
                     academic_year, exam_date, correction_deadline, question_paper_filename,
-                    paper_id, paper_page_count, answer_key_text, questions_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    paper_id, paper_page_count, target_section, answer_key_text, answer_key_json, questions_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 exam_id,
                 data.get("subject_id", "subj-nlp-101"),
@@ -676,7 +763,9 @@ class SQLiteDatabase:
                 data.get("question_paper_filename", ""),
                 data.get("paper_id", ""),
                 int(data.get("paper_page_count") or 0),
+                data.get("target_section", ""),
                 data.get("answer_key_text", ""),
+                json.dumps(answer_key_structured),
                 json.dumps(questions)
             ))
             conn.commit()
@@ -700,6 +789,7 @@ class SQLiteDatabase:
         question_paper_filename: Optional[str] = None,
         title: Optional[str] = None,
         correction_deadline: Optional[str] = None,
+        target_section: Optional[str] = None,
     ) -> bool:
         updates = ["questions_json = ?"]
         params: List[Any] = [json.dumps(questions)]
@@ -721,6 +811,9 @@ class SQLiteDatabase:
         if correction_deadline is not None:
             updates.append("correction_deadline = ?")
             params.append(correction_deadline)
+        if target_section is not None:
+            updates.append("target_section = ?")
+            params.append(target_section)
 
         params.append(exam_id)
         with self.get_connection() as conn:
@@ -729,10 +822,41 @@ class SQLiteDatabase:
             conn.commit()
             return cursor.rowcount > 0
 
-    def update_exam_answer_key(self, exam_id: str, answer_key_text: str) -> bool:
+    def update_exam_meta(self, exam_id: str, meta: Dict[str, Any]) -> bool:
+        allowed = [
+            "title", "exam_type", "max_marks", "passing_marks",
+            "academic_year", "exam_date", "correction_deadline", "target_section", "subject_id"
+        ]
+        updates: List[str] = []
+        params: List[Any] = []
+        for k, v in meta.items():
+            if k in allowed and v is not None:
+                updates.append(f"{k} = ?")
+                params.append(v)
+        if not updates:
+            return False
+        params.append(exam_id)
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("UPDATE exams SET answer_key_text = ? WHERE id = ?", (answer_key_text, exam_id))
+            cursor.execute(f"UPDATE exams SET {', '.join(updates)} WHERE id = ?", tuple(params))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def update_exam_answer_key(
+        self,
+        exam_id: str,
+        answer_key_text: str,
+        answer_key_structured: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            if answer_key_structured is not None:
+                cursor.execute(
+                    "UPDATE exams SET answer_key_text = ?, answer_key_json = ? WHERE id = ?",
+                    (answer_key_text, json.dumps(answer_key_structured), exam_id),
+                )
+            else:
+                cursor.execute("UPDATE exams SET answer_key_text = ? WHERE id = ?", (answer_key_text, exam_id))
             conn.commit()
             return cursor.rowcount > 0
 

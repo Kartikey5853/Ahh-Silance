@@ -64,7 +64,7 @@ class MagicInkService:
     and pixel-accurate MagicInk red-pen overlays.
     """
 
-    CANDIDATE_MODELS = ["gemini-2.5-flash", "gemini-flash-lite-latest"]
+    CANDIDATE_MODELS = ["gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-2.5-flash"]
 
     @staticmethod
     def _normalize_q_no(q_no: Any) -> str:
@@ -124,7 +124,7 @@ class MagicInkService:
         try:
             from google import genai
             from google.genai import types
-            return genai.Client(api_key=key, http_options=types.HttpOptions(api_version="v1beta"))
+            return genai.Client(api_key=key, http_options=types.HttpOptions(api_version="v1beta", timeout=45000))
         except Exception as e:
             logger.warning(f"Failed to initialize google-genai Client: {e}")
             return None

@@ -14,7 +14,10 @@ Provides REST API endpoints for:
 import os
 import json
 import uuid
-from typing import Dict, Any, List, Optional
+import asyncio
+import threading
+from datetime import datetime, timezone
+from typing import Dict, Any, List, Optional, Set
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query, Depends
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -26,6 +29,9 @@ from backend.services.page_storage_service import PageStorageService
 from backend.services.magic_ink_service import MagicInkService
 
 router = APIRouter(prefix="/academic", tags=["Academic Evaluation"])
+
+# Non-blocking background job registry (for long-running Gemini tasks)
+_BACKGROUND_JOBS: Dict[str, Dict[str, Any]] = {}
 
 
 # --- Pydantic Request Models ---
@@ -88,6 +94,7 @@ class StudentCreateRequest(BaseModel):
     admission_year: Optional[str] = Field("2024")
     status: Optional[str] = Field("Active")
     notes: Optional[str] = Field("")
+    semester_records: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class StudentUpdateRequest(BaseModel):
@@ -107,6 +114,7 @@ class StudentUpdateRequest(BaseModel):
     admission_year: Optional[str] = None
     status: Optional[str] = None
     notes: Optional[str] = None
+    semester_records: Optional[List[Dict[str, Any]]] = None
 
 
 class ExamCreateRequest(BaseModel):
@@ -116,12 +124,14 @@ class ExamCreateRequest(BaseModel):
     max_marks: float = 50.0
     passing_marks: float = 20.0
     academic_year: str = "2026-2027"
+    target_section: Optional[str] = ""
     exam_date: Optional[str] = None
     correction_deadline: Optional[str] = None
     question_paper_filename: Optional[str] = ""
     paper_id: Optional[str] = ""
     paper_page_count: Optional[int] = 0
     answer_key_text: Optional[str] = ""
+    answer_key_structured: Optional[List[Dict[str, Any]]] = None
     questions: List[Dict[str, Any]] = Field(default_factory=list)
 
 
@@ -132,7 +142,20 @@ class QuestionsUpdateRequest(BaseModel):
     paper_page_count: Optional[int] = None
     question_paper_filename: Optional[str] = None
     title: Optional[str] = None
+    target_section: Optional[str] = None
     correction_deadline: Optional[str] = None
+
+
+class ExamUpdateRequest(BaseModel):
+    title: Optional[str] = None
+    exam_type: Optional[str] = None
+    max_marks: Optional[float] = None
+    passing_marks: Optional[float] = None
+    academic_year: Optional[str] = None
+    target_section: Optional[str] = None
+    exam_date: Optional[str] = None
+    correction_deadline: Optional[str] = None
+    answer_key_text: Optional[str] = None
 
 
 class QuestionRefineRequest(BaseModel):
@@ -149,6 +172,7 @@ class QuestionRefineRequest(BaseModel):
 
 class AnswerKeyUpdateRequest(BaseModel):
     answer_key_text: str
+    answer_key_structured: Optional[List[Dict[str, Any]]] = None
 
 
 # --- Endpoints ---
@@ -308,7 +332,8 @@ def add_student(subject_id: str, req: StudentCreateRequest):
         cgpa_or_percentage=float(req.cgpa_or_percentage or 0.0),
         admission_year=req.admission_year or "2024",
         status=req.status or "Active",
-        notes=req.notes or ""
+        notes=req.notes or "",
+        semester_records=req.semester_records,
     )
     return student
 
@@ -323,15 +348,58 @@ def get_student_profile(student_id: str):
     subject = db.get_subject(student["subject_id"]) if student.get("subject_id") else None
     class_item = db.get_class(student["class_id"]) if student.get("class_id") else None
 
-    # Past evaluations
-    evaluations = db.list_academic_evaluations(student_id=student_id)
+    # Gather all subject enrollment rows sharing this student's roll_number in the same class
+    sibling_rows = db.find_students_by_roll(
+        student.get("roll_number", ""),
+        class_id=student.get("class_id") or None,
+    )
+    if not sibling_rows:
+        sibling_rows = [student]
 
-    # All exams for this student's subject
-    subject_exams = db.list_exams(subject_id=student.get("subject_id")) if student.get("subject_id") else []
+    enrolled_subjects: List[Dict[str, Any]] = []
+    seen_subject_ids: Set[str] = set()
+    all_evals_map: Dict[str, Dict[str, Any]] = {}
+    all_subject_exams: List[Dict[str, Any]] = []
+    seen_exam_ids: Set[str] = set()
+
+    for row in sibling_rows:
+        sid = row.get("subject_id") or ""
+        subj_obj = db.get_subject(sid) if sid else None
+        if sid and sid not in seen_subject_ids:
+            seen_subject_ids.add(sid)
+            enrolled_subjects.append({
+                "student_row_id": row["id"],
+                "subject_id": sid,
+                "subject_name": subj_obj.get("name") if subj_obj else "Enrolled Subject",
+                "subject_code": subj_obj.get("code") if subj_obj else "",
+                "section": row.get("section") or "",
+                "credits": subj_obj.get("credits") if subj_obj else None,
+                "semester_or_grade": subj_obj.get("semester_or_grade") if subj_obj else "",
+                "attendance_percentage": row.get("attendance_percentage", 0.0),
+            })
+            for ex in db.list_exams(subject_id=sid):
+                if ex["id"] not in seen_exam_ids:
+                    # Respect target_section if specified on the exam
+                    ts = (ex.get("target_section") or "").strip().lower()
+                    row_sec = (row.get("section") or "").strip().lower()
+                    ts_norm = ts.replace("section ", "").strip()
+                    row_norm = row_sec.replace("section ", "").strip()
+                    if not ts_norm or ts_norm in ("all", "all sections") or ts_norm == row_norm:
+                        seen_exam_ids.add(ex["id"])
+                        all_subject_exams.append(ex)
+
+        for ev in db.list_academic_evaluations(student_id=row["id"]):
+            all_evals_map[ev["id"]] = ev
+
+    evaluations = sorted(
+        all_evals_map.values(),
+        key=lambda e: str(e.get("created_at") or ""),
+        reverse=True,
+    )
     evaluated_exam_ids = {e["exam_id"] for e in evaluations}
-    upcoming_exams = [ex for ex in subject_exams if ex["id"] not in evaluated_exam_ids]
+    upcoming_exams = [ex for ex in all_subject_exams if ex["id"] not in evaluated_exam_ids]
 
-    # Calculate performance stats
+    # Calculate performance stats across all evaluations for this student
     total_percentage = sum(e["percentage"] for e in evaluations) if evaluations else 0.0
     avg_percentage = round(total_percentage / len(evaluations), 1) if evaluations else 0.0
 
@@ -339,6 +407,7 @@ def get_student_profile(student_id: str):
         "student": student,
         "subject": subject,
         "class_item": class_item,
+        "enrolled_subjects": enrolled_subjects,
         "evaluations": evaluations,
         "upcoming_exams": upcoming_exams,
         "stats": {
@@ -456,6 +525,121 @@ def get_exam(exam_id: str):
     return exam
 
 
+def _section_matches(target_section: Optional[str], student_sections: List[str]) -> bool:
+    ts = (target_section or "").strip().lower().replace("section ", "").strip()
+    if not ts or ts in ("all", "all sections", "*"):
+        return True
+    for s in student_sections:
+        sn = (s or "").strip().lower().replace("section ", "").strip()
+        if sn and sn == ts:
+            return True
+    return False
+
+
+@router.get("/exams/{exam_id}/details")
+def get_exam_details(exam_id: str):
+    """Returns full exam overview, target section roster of eligible students, and evaluation statuses."""
+    exam = db.get_exam(exam_id)
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+
+    subject = db.get_subject(exam["subject_id"]) if exam.get("subject_id") else None
+    class_item = db.get_class(subject["class_id"]) if subject and subject.get("class_id") else None
+
+    # Gather cohort students (both direct subject rows and parent class rows)
+    subject_rows = db.list_students(subject_id=exam.get("subject_id")) if exam.get("subject_id") else []
+    class_rows = db.list_students(class_id=class_item["id"]) if class_item else []
+    combined_rows = subject_rows + class_rows
+
+    subject_lookup = {s["id"]: s for s in db.list_subjects()}
+    exam_evals = db.list_academic_evaluations(exam_id=exam_id)
+    eval_by_student_id: Dict[str, Dict[str, Any]] = {}
+    for ev in exam_evals:
+        sid = ev.get("student_id")
+        if sid and sid not in eval_by_student_id:
+            eval_by_student_id[sid] = ev
+
+    # Deduplicate by roll_number, preferring the row enrolled in exam.subject_id
+    by_roll: Dict[str, Dict[str, Any]] = {}
+    all_sections: Set[str] = set()
+    for row in combined_rows:
+        sec_clean = (row.get("section") or "").strip()
+        if sec_clean:
+            all_sections.add(sec_clean)
+        roll_key = (row.get("roll_number") or row["id"]).strip().upper()
+        subj_id = row.get("subject_id") or ""
+        subj_meta = subject_lookup.get(subj_id)
+
+        entry = by_roll.get(roll_key)
+        row_eval = eval_by_student_id.get(row["id"])
+        if entry is None:
+            entry = {
+                "student_id": row["id"],
+                "name": row.get("name", ""),
+                "roll_number": row.get("roll_number", ""),
+                "email": row.get("email", ""),
+                "section": sec_clean,
+                "sections": [sec_clean] if sec_clean else [],
+                "status": row.get("status", "Active"),
+                "cgpa_or_percentage": row.get("cgpa_or_percentage", 0.0),
+                "enrolled_subjects": [],
+                "evaluation": row_eval,
+                "_is_direct_subject": subj_id == exam.get("subject_id"),
+            }
+            by_roll[roll_key] = entry
+        else:
+            if sec_clean and sec_clean not in entry["sections"]:
+                entry["sections"].append(sec_clean)
+            if subj_id == exam.get("subject_id") and not entry["_is_direct_subject"]:
+                entry["student_id"] = row["id"]
+                if sec_clean:
+                    entry["section"] = sec_clean
+                entry["_is_direct_subject"] = True
+            if row_eval and not entry["evaluation"]:
+                entry["evaluation"] = row_eval
+
+        if subj_meta:
+            subj_tag = f"{subj_meta['code']} · {subj_meta['name']}"
+            if subj_tag not in entry["enrolled_subjects"]:
+                entry["enrolled_subjects"].append(subj_tag)
+
+    target_section = exam.get("target_section") or ""
+    eligible_students: List[Dict[str, Any]] = []
+    for entry in by_roll.values():
+        candidate_secs = entry["sections"] or ([entry["section"]] if entry["section"] else [])
+        if _section_matches(target_section, candidate_secs):
+            ev = entry.pop("evaluation")
+            entry.pop("_is_direct_subject", None)
+            entry["evaluated"] = ev is not None
+            entry["evaluation_id"] = ev["id"] if ev else None
+            entry["total_score"] = ev.get("total_score") if ev else None
+            entry["max_score"] = ev.get("max_score") if ev else exam.get("max_marks")
+            entry["percentage"] = ev.get("percentage") if ev else None
+            entry["grade"] = ev.get("grade") if ev else None
+            eligible_students.append(entry)
+
+    eligible_students.sort(key=lambda s: (s.get("section") or "", s.get("roll_number") or "", s.get("name") or ""))
+
+    return {
+        "exam": exam,
+        "subject": subject,
+        "class_item": class_item,
+        "available_sections": sorted(all_sections),
+        "eligible_students": eligible_students,
+    }
+
+
+@router.put("/exams/{exam_id}")
+def update_exam_meta(exam_id: str, req: ExamUpdateRequest):
+    """Updates exam metadata including target section, title, schedule, and marks."""
+    exam = db.get_exam(exam_id)
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+    updates = req.model_dump(exclude_unset=True)
+    db.update_exam_meta(exam_id, updates)
+    return {"status": "success", "exam": db.get_exam(exam_id)}
+
+
 @router.put("/exams/{exam_id}/questions")
 def update_exam_questions(exam_id: str, req: QuestionsUpdateRequest):
     """Updates question statements, marks allocation, paper reference, and rubrics."""
@@ -468,25 +652,83 @@ def update_exam_questions(exam_id: str, req: QuestionsUpdateRequest):
         question_paper_filename=req.question_paper_filename,
         title=req.title,
         correction_deadline=req.correction_deadline,
+        target_section=req.target_section,
     )
     return {"status": "success" if success else "failed", "exam": db.get_exam(exam_id)}
 
 
 @router.put("/exams/{exam_id}/answer-key")
 def update_exam_answer_key(exam_id: str, req: AnswerKeyUpdateRequest):
-    """Updates master answer key for an examination."""
-    success = db.update_exam_answer_key(exam_id, req.answer_key_text)
-    return {"status": "success" if success else "failed"}
+    """Updates master answer key text and optional structured per-question answers."""
+    success = db.update_exam_answer_key(
+        exam_id,
+        req.answer_key_text,
+        answer_key_structured=req.answer_key_structured,
+    )
+    return {"status": "success" if success else "failed", "exam": db.get_exam(exam_id)}
+
+
+@router.get("/jobs/{job_id}")
+def get_background_job_status(job_id: str):
+    """Returns non-blocking Gemini background task status and result when completed."""
+    job = _BACKGROUND_JOBS.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Background job not found")
+    return job
+
+
+async def _run_answer_key_background_job(
+    job_id: str,
+    exam_id: str,
+    questions: List[Dict[str, Any]],
+    exam_title: str,
+    user_key: Optional[str],
+) -> None:
+    try:
+        result = await GeminiAcademicService.generate_answer_key(
+            questions=questions,
+            exam_title=exam_title,
+            user_api_key=user_key,
+        )
+        if result.get("answer_key_text"):
+            db.update_exam_answer_key(
+                exam_id,
+                result["answer_key_text"],
+                answer_key_structured=result.get("answers"),
+            )
+        _BACKGROUND_JOBS[job_id].update({
+            "status": "completed",
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "result": result,
+        })
+    except Exception as exc:
+        _BACKGROUND_JOBS[job_id].update({
+            "status": "failed",
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "error": str(exc),
+        })
+
+
+def _run_answer_key_background_thread(
+    job_id: str,
+    exam_id: str,
+    questions: List[Dict[str, Any]],
+    exam_title: str,
+    user_key: Optional[str],
+) -> None:
+    """Runs background answer-key generation on an isolated daemon thread event loop."""
+    asyncio.run(_run_answer_key_background_job(job_id, exam_id, questions, exam_title, user_key))
 
 
 @router.post("/exams/{exam_id}/generate-answer-key")
 async def generate_exam_answer_key(
     exam_id: str,
-    current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)
+    background: bool = Query(False),
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user),
 ):
     """
     Generates a comprehensive Master Answer Key with marking rubrics using Gemini API.
-    Persists the answer key into the exam record in SQLite.
+    When `background=true`, immediately returns a `job_id` so UI navigation never stalls.
     """
     exam = db.get_exam(exam_id)
     if not exam:
@@ -496,22 +738,40 @@ async def generate_exam_answer_key(
     if not questions:
         raise HTTPException(status_code=400, detail="Exam has no questions to generate answer key for")
 
-    user_key = None
-    if current_user:
-        u = db.get_user_by_username(current_user.get("username", ""))
-        if u:
-            user_key = u.get("gemini_api_key")
-    if not user_key:
-        user_key = os.getenv("GEMINI_API_KEY", "").strip() or None
+    user_key = _resolve_gemini_key(None, current_user)
+    exam_title = exam.get("title", "Examination")
+
+    if background:
+        job_id = f"job-{uuid.uuid4().hex[:10]}"
+        _BACKGROUND_JOBS[job_id] = {
+            "job_id": job_id,
+            "exam_id": exam_id,
+            "kind": "answer_key",
+            "status": "running",
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "result": None,
+            "error": None,
+        }
+        worker = threading.Thread(
+            target=_run_answer_key_background_thread,
+            args=(job_id, exam_id, questions, exam_title, user_key),
+            daemon=True,
+        )
+        worker.start()
+        return {"status": "accepted", "job_id": job_id, "exam_id": exam_id}
 
     result = await GeminiAcademicService.generate_answer_key(
         questions=questions,
-        exam_title=exam.get("title", "Examination"),
-        user_api_key=user_key
+        exam_title=exam_title,
+        user_api_key=user_key,
     )
 
     if result.get("answer_key_text"):
-        db.update_exam_answer_key(exam_id, result["answer_key_text"])
+        db.update_exam_answer_key(
+            exam_id,
+            result["answer_key_text"],
+            answer_key_structured=result.get("answers"),
+        )
 
     return result
 

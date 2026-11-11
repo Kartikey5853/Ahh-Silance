@@ -8,6 +8,8 @@ Includes high-precision offline PyMuPDF fallback parsing.
 """
 
 import os
+import re
+import time
 import json
 import uuid
 import asyncio
@@ -15,7 +17,7 @@ import logging
 from typing import Dict, List, Any, Optional, Tuple
 from dotenv import load_dotenv
 import pymupdf as fitz
-from PIL import Image
+from PIL import Image, ImageDraw
 import io
 
 try:
@@ -26,18 +28,86 @@ except ImportError:
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-# Fast, active Gemini models verified for v1beta multimodal JSON workflows
-DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+# Healthy, low-latency Gemini models prioritized ahead of quota-limited 2.5-flash free tier
+_ENV_MODEL = (os.getenv("GEMINI_MODEL") or "").strip()
 CANDIDATE_MODELS = list(dict.fromkeys([
-    DEFAULT_MODEL,
-    "gemini-2.5-flash",
-    "gemini-flash-lite-latest",
-    "gemini-flash-latest",
+    m for m in [
+        _ENV_MODEL if _ENV_MODEL and _ENV_MODEL != "gemini-2.5-flash" else "",
+        "gemini-3.5-flash-lite",
+        "gemini-flash-lite-latest",
+        "gemini-flash-latest",
+        "gemini-2.5-flash",
+    ] if m
 ]))
 
+# Per-model transient cooldown map (epoch seconds) to avoid burning latency on 429/503 models
+_MODEL_COOLDOWN_UNTIL: Dict[str, float] = {}
 
-def _resize_image_file_for_gemini(image_path: str, max_dim: int = 1400) -> Optional[bytes]:
-    """Loads a rasterized page image and caps its longest edge at max_dim for fast multimodal scanning."""
+
+def _get_active_candidate_models() -> List[str]:
+    """Returns candidate models ordered by health, skipping cooled-down 429/404 models while healthy ones remain."""
+    now = time.time()
+    healthy = [m for m in CANDIDATE_MODELS if _MODEL_COOLDOWN_UNTIL.get(m, 0.0) <= now]
+    return healthy if healthy else [CANDIDATE_MODELS[0]]
+
+
+def _record_model_failure(model_name: str, err: Exception) -> None:
+    """Places 429/503/404 failing models on temporary cooldown so subsequent requests stay fast."""
+    msg = str(err).upper()
+    if "429" in msg or "RESOURCE_EXHAUSTED" in msg or "404" in msg or "NOT_FOUND" in msg:
+        _MODEL_COOLDOWN_UNTIL[model_name] = time.time() + 300.0
+    elif "503" in msg or "UNAVAILABLE" in msg or "504" in msg or "DEADLINE" in msg or "TIMEOUT" in msg:
+        _MODEL_COOLDOWN_UNTIL[model_name] = time.time() + 45.0
+
+
+async def _call_gemini_json(
+    client: Any,
+    contents: List[Any],
+    temperature: float = 0.1,
+    timeout_sec: float = 40.0,
+) -> Tuple[Optional[Dict[str, Any]], Optional[str], Optional[str]]:
+    """
+    Runs a structured JSON Gemini generation call off the FastAPI event loop via `asyncio.to_thread`
+    with an explicit timeout and automatic 429/503 model failover.
+    Returns `(parsed_json, model_used, last_error_message)`.
+    """
+    from google.genai import types
+
+    last_err_msg: Optional[str] = None
+    for model_name in _get_active_candidate_models():
+        try:
+            def _invoke(m: str = model_name):
+                return client.models.generate_content(
+                    model=m,
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        temperature=temperature,
+                    ),
+                )
+
+            response = await asyncio.wait_for(asyncio.to_thread(_invoke), timeout=timeout_sec)
+            raw_text = getattr(response, "text", None) or ""
+            if raw_text.strip():
+                return clean_json_response(raw_text), model_name, None
+        except Exception as exc:
+            _record_model_failure(model_name, exc)
+            last_err_msg = f"{model_name}: {exc}"
+            logger.warning(f"Gemini JSON call failed with {model_name}: {exc}")
+            continue
+    return None, None, last_err_msg
+
+
+def _resize_image_file_for_gemini(
+    image_path: str,
+    max_dim: int = 1400,
+    with_ruler_grid: bool = False,
+) -> Optional[bytes]:
+    """
+    Loads a rasterized page image and caps its longest edge at max_dim for Gemini vision.
+    When `with_ruler_grid=True`, overlays subtle 0..1000 normalized reference tick marks along edges
+    without changing image aspect ratio or mutating the original saved file on disk.
+    """
     try:
         with Image.open(image_path) as img:
             if img.mode != "RGB":
@@ -46,12 +116,84 @@ def _resize_image_file_for_gemini(image_path: str, max_dim: int = 1400) -> Optio
             if max(w, h) > max_dim:
                 scale = max_dim / float(max(w, h))
                 img = img.resize((max(1, int(w * scale)), max(1, int(h * scale))), Image.Resampling.LANCZOS)
+                w, h = img.size
+
+            if with_ruler_grid:
+                overlay = img.copy()
+                draw = ImageDraw.Draw(overlay)
+                for norm in range(100, 1000, 100):
+                    y_px = int((norm / 1000.0) * h)
+                    draw.line([(0, y_px), (w, y_px)], fill=(219, 234, 254), width=1)
+                    draw.rectangle([2, max(0, y_px - 8), 34, min(h, y_px + 7)], fill=(29, 78, 216))
+                    draw.text((5, max(0, y_px - 6)), f"{norm}", fill=(255, 255, 255))
+                    draw.rectangle([max(0, w - 34), max(0, y_px - 8), w - 2, min(h, y_px + 7)], fill=(29, 78, 216))
+                    draw.text((max(0, w - 31), max(0, y_px - 6)), f"{norm}", fill=(255, 255, 255))
+                img = overlay
+
             buf = io.BytesIO()
             img.save(buf, format="JPEG", quality=88)
             return buf.getvalue()
     except Exception as exc:
         logger.warning(f"Failed resizing paper page {image_path}: {exc}")
         return None
+
+
+def _snap_boxes_from_pdf_blocks(file_bytes: bytes, questions_list: List[Dict[str, Any]]) -> None:
+    """
+    For native digital PDFs containing embedded vector text, refines Gemini bounding boxes using
+    millimeter-exact PyMuPDF text block rectangles. Modifies `questions_list` in-place when matched.
+    """
+    try:
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
+    except Exception:
+        return
+
+    try:
+        for q in questions_list:
+            p_idx = int(q.get("page") or 1) - 1
+            if p_idx < 0 or p_idx >= len(doc):
+                continue
+            page = doc[p_idx]
+            pw = float(page.rect.width or 1.0)
+            ph = float(page.rect.height or 1.0)
+            blocks = page.get_text("blocks") or []
+
+            raw_txt = re.sub(r"[`*#_>\n\r]+", " ", str(q.get("text") or "")).strip().lower()
+            words = [w for w in re.findall(r"[a-z0-9]{3,}", raw_txt) if w not in {"the", "and", "for", "with", "that", "from", "this", "what", "explain", "define"}]
+            if not words:
+                continue
+            anchor_words = words[:6]
+
+            best_score = 0
+            matched_rects: List[Tuple[float, float, float, float]] = []
+            for b in blocks:
+                if len(b) < 5:
+                    continue
+                bx0, by0, bx1, by1, btext = float(b[0]), float(b[1]), float(b[2]), float(b[3]), str(b[4]).lower()
+                hits = sum(1 for aw in anchor_words if aw in btext)
+                if hits >= max(2, len(anchor_words) // 2):
+                    if hits > best_score:
+                        best_score = hits
+                        matched_rects = [(bx0, by0, bx1, by1)]
+                    elif hits == best_score:
+                        # Include closely stacked continuation block of the same question
+                        prev = matched_rects[-1]
+                        if abs(by0 - prev[3]) < ph * 0.08:
+                            matched_rects.append((bx0, by0, bx1, by1))
+
+            if matched_rects:
+                x0 = min(r[0] for r in matched_rects)
+                y0 = min(r[1] for r in matched_rects)
+                x1 = max(r[2] for r in matched_rects)
+                y1 = max(r[3] for r in matched_rects)
+                q["box_2d"] = [
+                    max(0, min(975, int(round((y0 / ph) * 1000)) - 6)),
+                    max(0, min(950, int(round((x0 / pw) * 1000)) - 8)),
+                    max(24, min(1000, int(round((y1 / ph) * 1000)) + 8)),
+                    max(50, min(1000, int(round((x1 / pw) * 1000)) + 10)),
+                ]
+    finally:
+        doc.close()
 
 
 def _normalize_question_boxes(questions_list: List[Dict[str, Any]], page_count: int) -> List[Dict[str, Any]]:
@@ -80,10 +222,10 @@ def _normalize_question_boxes(questions_list: List[Dict[str, Any]], page_count: 
         if isinstance(raw_box, (list, tuple)) and len(raw_box) == 4:
             try:
                 ymin, xmin, ymax, xmax = [int(round(float(v))) for v in raw_box]
-                ymin = max(0, min(980, ymin))
-                xmin = max(0, min(960, xmin))
-                ymax = max(ymin + 24, min(1000, ymax))
-                xmax = max(xmin + 40, min(1000, xmax))
+                ymin = max(0, min(970, ymin))
+                xmin = max(0, min(950, xmin))
+                ymax = max(ymin + 30, min(1000, ymax))
+                xmax = max(xmin + 60, min(1000, xmax))
                 q["box_2d"] = [ymin, xmin, ymax, xmax]
                 valid_box = True
             except (TypeError, ValueError):
@@ -122,7 +264,7 @@ def get_gemini_client(api_key: Optional[str] = None):
     """
     Initializes and returns the official google-genai Client.
     Prioritizes passed api_key, then environment variable GEMINI_API_KEY.
-    Explicitly enforces api_version='v1beta' via HttpOptions to support JSON mode across models.
+    Explicitly enforces api_version='v1beta' with a 35s HTTP timeout so requests never stall the backend.
     """
     key = (api_key or os.getenv("GEMINI_API_KEY", "")).strip()
     if not key:
@@ -130,7 +272,7 @@ def get_gemini_client(api_key: Optional[str] = None):
     try:
         from google import genai
         from google.genai import types
-        return genai.Client(api_key=key, http_options=types.HttpOptions(api_version="v1beta"))
+        return genai.Client(api_key=key, http_options=types.HttpOptions(api_version="v1beta", timeout=35000))
     except Exception as e:
         logger.warning(f"Could not initialize google-genai Client: {e}")
         return None
@@ -209,11 +351,13 @@ class GeminiAcademicService:
                     "You are an expert Academic Examination Parser. Analyze ALL pages of this uploaded question paper "
                     "and extract EVERY question accurately into a clean Digital Question Paper.\n"
                     "Important extraction rules:\n"
-                    "1. Preserve the real marks, question numbering (`q_no`, e.g. `Q1.a`, `Q2`), sections, and internal 'OR' choices (`is_or_choice`, `or_group`). Compute `header.max_marks` accurately from the actual paper.\n"
-                    "2. Format each question `text` using clean, readable Markdown (e.g. **bold** key emphasis, bullet points `- ` for sub-clauses, inline backticks `` `S -> (L) | a` `` or fenced code blocks for grammars/code/expressions, Markdown tables if present). Never drop important mathematical symbols or grammar rules.\n"
-                    "3. For EVERY question, provide spatial coordinates matching the rasterized page images:\n"
-                    "   - `page`: 1-based page number (1 to " + str(paper_page_count) + ") where the question appears.\n"
-                    "   - `box_2d`: `[ymin, xmin, ymax, xmax]` normalized to integers in `0..1000` tightly enclosing that question block on that page.\n"
+                    "1. NEVER split a single question across multiple items! Multi-line grammar productions (e.g. `S -> (L) | a`, `L -> L,S | S`), equations, code snippets, sub-bullets, or tables belonging to one question MUST stay inside that single question's `text`.\n"
+                    "2. NEVER create a standalone question for the separator word `OR` or headers/table borders! When two consecutive questions (or units) have `OR` between them, extract ONLY the actual questions and assign BOTH choices the SAME `or_group` string (e.g. `\"or-1\"`) and `is_or_choice: true`.\n"
+                    "3. Preserve the exact marks, numbering (`q_no`, e.g. `Q1.a`, `Q1.b`, `Q2`), and sections. Compute `header.max_marks` summing non-OR questions plus each unique `or_group` only once.\n"
+                    "4. Format each question `text` using clean Markdown (**bold** emphasis, `- ` bullets, inline backticks `` `S -> (L) | a` `` or fenced blocks for grammars/code).\n"
+                    "5. Notice the light-blue horizontal ruler lines labeled `100`..`900` on the page image margins representing `y` from `0..1000`. Use them to output accurate spatial coordinates:\n"
+                    "   - `page`: 1-based page number (1 to " + str(paper_page_count) + ").\n"
+                    "   - `box_2d`: `[ymin, xmin, ymax, xmax]` integer coordinates in `0..1000` tightly enclosing ALL lines of that complete question.\n"
                     "Return ONLY valid JSON with this exact schema:\n"
                     "{\n"
                     '  "header": {\n'
@@ -246,13 +390,15 @@ class GeminiAcademicService:
                 )
 
                 contents: List[Any] = []
-                # Attach rasterized page images (exact same pages displayed in the frontend UI)
+                # Attach rasterized page images overlaid with 0..1000 reference rulers (never written to disk)
                 attached_images = 0
                 for page_meta in pages_meta[:12]:
                     p_num = int(page_meta.get("page_num", 1))
-                    img_bytes = await asyncio.to_thread(_resize_image_file_for_gemini, page_meta["path"], 1400)
+                    img_bytes = await asyncio.to_thread(
+                        _resize_image_file_for_gemini, page_meta["path"], 1400, True
+                    )
                     if img_bytes:
-                        contents.append(f"--- Question Paper Page {p_num} of {paper_page_count} ---")
+                        contents.append(f"--- Question Paper Page {p_num} of {paper_page_count} (with 0-1000 Y ruler marks) ---")
                         contents.append(types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"))
                         attached_images += 1
 
@@ -271,66 +417,70 @@ class GeminiAcademicService:
 
                 contents.append(system_prompt)
 
-                # Try candidate models without blocking the FastAPI event loop
-                last_exc = None
-                for model_name in CANDIDATE_MODELS:
-                    try:
-                        def _call_model(m: str = model_name):
-                            return client.models.generate_content(
-                                model=m,
-                                contents=contents,
-                                config=types.GenerateContentConfig(
-                                    response_mime_type="application/json",
-                                    temperature=0.1
-                                )
-                            )
+                data, model_name, api_err = await _call_gemini_json(
+                    client, contents, temperature=0.1, timeout_sec=45.0
+                )
+                if data is not None:
+                    raw_questions = data.get("questions", [])
+                    # Filter out accidental fake standalone OR rows if any slipped through
+                    questions_list = [
+                        q for q in raw_questions
+                        if str(q.get("q_no") or "").strip().upper() != "OR"
+                        and str(q.get("text") or "").strip().upper() != "OR"
+                    ]
+                    for idx, q in enumerate(questions_list):
+                        if "id" not in q or not q["id"]:
+                            q["id"] = f"q-{idx + 1}"
+                        if "q_no" not in q or not q["q_no"]:
+                            q["q_no"] = f"Q{idx + 1}"
+                        if "marks" not in q or q["marks"] is None:
+                            q["marks"] = 5.0
+                        if "rubric" not in q:
+                            q["rubric"] = f"Award up to {q['marks']} marks based on accuracy and completeness."
 
-                        response = await asyncio.to_thread(_call_model)
-                        if response.text:
-                            data = clean_json_response(response.text)
-                            questions_list = data.get("questions", [])
-                            for idx, q in enumerate(questions_list):
-                                if "id" not in q or not q["id"]:
-                                    q["id"] = f"q-{idx + 1}"
-                                if "q_no" not in q or not q["q_no"]:
-                                    q["q_no"] = f"Q{idx + 1}"
-                                if "marks" not in q or q["marks"] is None:
-                                    q["marks"] = 5.0
-                                if "rubric" not in q:
-                                    q["rubric"] = f"Award up to {q['marks']} marks based on accuracy and completeness."
+                    if filename.lower().endswith(".pdf"):
+                        await asyncio.to_thread(_snap_boxes_from_pdf_blocks, file_bytes, questions_list)
 
-                            questions_list = _normalize_question_boxes(questions_list, paper_page_count)
-                            total_marks = sum(float(q.get("marks", 5.0)) for q in questions_list)
-                            header = data.get("header") or {}
-                            header.setdefault("title", "Examination Question Paper")
-                            header.setdefault("institution", "Academic Department")
-                            header.setdefault("course", "Course Curriculum")
-                            header.setdefault("time_allowed", "3 Hours")
-                            header.setdefault("max_marks", total_marks)
-                            header.setdefault("instructions", ["Answer all questions.", "Marks are indicated against each question."])
+                    questions_list = _normalize_question_boxes(questions_list, paper_page_count)
 
-                            return {
-                                "status": "success",
-                                "source": "gemini",
-                                "model_used": model_name,
-                                "filename": filename,
-                                "paper_id": paper_id,
-                                "paper_page_count": paper_page_count,
-                                "raw_text": extracted_text or "Processed via Gemini Multimodal Vision",
-                                "header": header,
-                                "sections": data.get("sections", [{"name": "Section A", "description": "Core Questions"}]),
-                                "questions": questions_list,
-                                "questions_count": len(questions_list),
-                                "total_marks": total_marks,
-                                "digital_paper_code": json.dumps({"header": header, "questions": questions_list}, indent=2)
-                            }
-                    except Exception as model_err:
-                        last_exc = model_err
-                        logger.warning(f"Model {model_name} failed: {model_err}")
-                        continue
+                    # Sum non-OR questions plus unique or_group max marks once
+                    seen_or_groups: Dict[str, float] = {}
+                    total_marks = 0.0
+                    for q in questions_list:
+                        m = float(q.get("marks", 5.0) or 0.0)
+                        og = str(q.get("or_group") or "").strip()
+                        if q.get("is_or_choice") and og:
+                            seen_or_groups[og] = max(seen_or_groups.get(og, 0.0), m)
+                        else:
+                            total_marks += m
+                    total_marks += sum(seen_or_groups.values())
 
-                if last_exc:
-                    gemini_error = str(last_exc)
+                    header = data.get("header") or {}
+                    header.setdefault("title", "Examination Question Paper")
+                    header.setdefault("institution", "Academic Department")
+                    header.setdefault("course", "Course Curriculum")
+                    header.setdefault("time_allowed", "3 Hours")
+                    header.setdefault("max_marks", total_marks)
+                    header.setdefault("instructions", ["Answer all questions.", "Marks are indicated against each question."])
+
+                    return {
+                        "status": "success",
+                        "source": "gemini",
+                        "model_used": model_name,
+                        "filename": filename,
+                        "paper_id": paper_id,
+                        "paper_page_count": paper_page_count,
+                        "raw_text": extracted_text or "Processed via Gemini Multimodal Vision",
+                        "header": header,
+                        "sections": data.get("sections", [{"name": "Section A", "description": "Core Questions"}]),
+                        "questions": questions_list,
+                        "questions_count": len(questions_list),
+                        "total_marks": total_marks,
+                        "digital_paper_code": json.dumps({"header": header, "questions": questions_list}, indent=2)
+                    }
+
+                if api_err:
+                    gemini_error = api_err
 
             except Exception as e:
                 logger.error(f"Gemini API Question Paper scan error: {e}")
@@ -497,48 +647,32 @@ class GeminiAcademicService:
                     "}"
                 )
 
-                last_exc = None
-                for model_name in CANDIDATE_MODELS:
-                    try:
-                        def _call_refine(m: str = model_name):
-                            return client.models.generate_content(
-                                model=m,
-                                contents=[prompt],
-                                config=types.GenerateContentConfig(
-                                    response_mime_type="application/json",
-                                    temperature=0.4
-                                )
-                            )
+                parsed, model_name, api_err = await _call_gemini_json(
+                    client, [prompt], temperature=0.4, timeout_sec=35.0
+                )
+                if parsed is not None:
+                    suggestions = parsed.get("suggestions", [])
+                    if isinstance(suggestions, list) and len(suggestions) > 0:
+                        cleaned_suggestions = []
+                        for s in suggestions[:4]:
+                            cleaned_suggestions.append({
+                                "title": str(s.get("title") or f"{target_level} Variant"),
+                                "difficulty_level": str(s.get("difficulty_level") or target_level),
+                                "question_text": str(s.get("question_text") or question_text).strip(),
+                                "marks": float(s.get("marks") if s.get("marks") is not None else marks),
+                                "rubric": str(s.get("rubric") or f"Award up to {marks} marks."),
+                                "rationale": str(s.get("rationale") or "Generated on the same topic."),
+                            })
+                        return {
+                            "status": "success",
+                            "source": "gemini",
+                            "model_used": model_name,
+                            "topic_detected": str(parsed.get("topic_detected") or "Core Topic"),
+                            "suggestions": cleaned_suggestions,
+                        }
 
-                        response = await asyncio.to_thread(_call_refine)
-                        if response.text:
-                            parsed = clean_json_response(response.text)
-                            suggestions = parsed.get("suggestions", [])
-                            if isinstance(suggestions, list) and len(suggestions) > 0:
-                                cleaned_suggestions = []
-                                for s in suggestions[:4]:
-                                    cleaned_suggestions.append({
-                                        "title": str(s.get("title") or f"{target_level} Variant"),
-                                        "difficulty_level": str(s.get("difficulty_level") or target_level),
-                                        "question_text": str(s.get("question_text") or question_text).strip(),
-                                        "marks": float(s.get("marks") if s.get("marks") is not None else marks),
-                                        "rubric": str(s.get("rubric") or f"Award up to {marks} marks."),
-                                        "rationale": str(s.get("rationale") or "Generated on the same topic."),
-                                    })
-                                return {
-                                    "status": "success",
-                                    "source": "gemini",
-                                    "model_used": model_name,
-                                    "topic_detected": str(parsed.get("topic_detected") or "Core Topic"),
-                                    "suggestions": cleaned_suggestions,
-                                }
-                    except Exception as model_err:
-                        last_exc = model_err
-                        logger.warning(f"Refine question model {model_name} failed: {model_err}")
-                        continue
-
-                if last_exc:
-                    gemini_error = str(last_exc)
+                if api_err:
+                    gemini_error = api_err
             except Exception as exc:
                 logger.error(f"Gemini refine_question error: {exc}")
                 gemini_error = str(exc)
@@ -739,28 +873,15 @@ class GeminiAcademicService:
 
                 contents.append(prompt)
 
-                for model_name in CANDIDATE_MODELS:
-                    try:
-                        response = client.models.generate_content(
-                            model=model_name,
-                            contents=contents,
-                            config=types.GenerateContentConfig(
-                                response_mime_type="application/json",
-                                temperature=0.0
-                            )
-                        )
-
-                        if response.text:
-                            res_data = clean_json_response(response.text)
-                            if "breakdown" in res_data:
-                                sum_awarded = sum(float(item.get("awarded_marks", 0.0)) for item in res_data["breakdown"])
-                                res_data["total_score"] = round(sum_awarded, 1)
-                                res_data["max_score"] = round(max_total_marks, 1)
-                                res_data["percentage"] = round((res_data["total_score"] / max_total_marks) * 100, 1) if max_total_marks > 0 else 0.0
-                                return res_data
-                    except Exception as model_err:
-                        logger.warning(f"Evaluation model {model_name} failed: {model_err}")
-                        continue
+                res_data, _model_name, _api_err = await _call_gemini_json(
+                    client, contents, temperature=0.0, timeout_sec=55.0
+                )
+                if res_data and "breakdown" in res_data:
+                    sum_awarded = sum(float(item.get("awarded_marks", 0.0)) for item in res_data["breakdown"])
+                    res_data["total_score"] = round(sum_awarded, 1)
+                    res_data["max_score"] = round(max_total_marks, 1)
+                    res_data["percentage"] = round((res_data["total_score"] / max_total_marks) * 100, 1) if max_total_marks > 0 else 0.0
+                    return res_data
             except Exception as e:
                 logger.error(f"Gemini API Strict Evaluation error: {e}")
 
@@ -935,42 +1056,42 @@ You must respond ONLY with a valid JSON object following this schema:
     }}
   ]
 }}"""
+            gemini_warning: Optional[str] = None
             try:
-                from google.genai import types
-                for model_candidate in ["gemini-2.5-flash", "gemini-3.1-flash-lite", "gemini-3.8-flash"]:
-                    try:
-                        response = client.models.generate_content(
-                            model=model_candidate,
-                            contents=[prompt],
-                            config=types.GenerateContentConfig(
-                                temperature=0.2,
-                                response_mime_type="application/json"
-                            )
-                        )
-                        parsed = clean_json_response(response.text)
-                        if "answers" in parsed and len(parsed["answers"]) > 0:
-                            answers = parsed["answers"]
-                            text_lines = [f"=== MASTER ANSWER KEY & RUBRIC: {exam_title} ==="]
-                            for ans in answers:
-                                text_lines.append(f"\n[{ans.get('q_no', 'Q')}] ({ans.get('marks', 0)} Marks)")
-                                text_lines.append(f"Model Answer:\n{ans.get('model_answer', '')}")
-                                text_lines.append("Grading Criteria:")
-                                for r in ans.get("rubric_items", []):
-                                    text_lines.append(f"- {r.get('title', 'Rubric')} ({r.get('marks', 0)}m): " + " | ".join(r.get("criteria", [])))
-                            return {
-                                "status": "success",
-                                "source": "gemini_api",
-                                "model_used": model_candidate,
-                                "answers": answers,
-                                "answer_key_text": "\n".join(text_lines)
-                            }
-                    except Exception as me:
-                        logger.warning(f"Gemini answer key generation failed with {model_candidate}: {me}")
+                parsed, model_candidate, api_err = await _call_gemini_json(
+                    client, [prompt], temperature=0.2, timeout_sec=45.0
+                )
+                if parsed and "answers" in parsed and len(parsed["answers"]) > 0:
+                    answers = parsed["answers"]
+                    text_lines = [f"=== MASTER ANSWER KEY & RUBRIC: {exam_title} ==="]
+                    for ans in answers:
+                        text_lines.append(f"\n[{ans.get('q_no', 'Q')}] ({ans.get('marks', 0)} Marks)")
+                        text_lines.append(f"Model Answer:\n{ans.get('model_answer', '')}")
+                        text_lines.append("Grading Criteria:")
+                        for r in ans.get("rubric_items", []):
+                            text_lines.append(f"- {r.get('title', 'Rubric')} ({r.get('marks', 0)}m): " + " | ".join(r.get("criteria", [])))
+                    return {
+                        "status": "success",
+                        "source": "gemini_api",
+                        "model_used": model_candidate,
+                        "answers": answers,
+                        "answer_key_text": "\n".join(text_lines)
+                    }
+                gemini_warning = api_err
             except Exception as e:
+                gemini_warning = str(e)
                 logger.warning(f"Error in Gemini answer key generation: {e}")
 
-        # Fallback generator
-        return cls._fallback_answer_key_generator(questions, exam_title)
+            fallback = cls._fallback_answer_key_generator(questions, exam_title)
+            if gemini_warning:
+                fallback["api_warning"] = gemini_warning
+            return fallback
+
+        # Fallback generator when API key missing or no questions
+        fallback = cls._fallback_answer_key_generator(questions, exam_title)
+        if not client:
+            fallback["api_warning"] = "No Gemini API Key configured; generated deterministic rubric offline."
+        return fallback
 
     @classmethod
     def _fallback_answer_key_generator(
