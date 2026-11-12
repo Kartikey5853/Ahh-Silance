@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { academicApi } from "../api/academicApi";
-import type { Subject, Student, ClassItem } from "../types/academic";
+import type { Subject, Student, ClassItem, InstitutionType } from "../types/academic";
 import { StudentProfileModal } from "../components/StudentProfileModal";
 import {
   UserPlus,
@@ -32,6 +32,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStudentForProfile, setSelectedStudentForProfile] = useState<Student | null>(null);
+  const [activeOrgType, setActiveOrgType] = useState<InstitutionType>("college");
 
   // Add Student Modal State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -45,12 +46,21 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
 
   const loadInitialData = async () => {
     try {
-      const [classList, subjList] = await Promise.all([
+      const [classList, subjList, instList, profData] = await Promise.all([
         academicApi.listClasses(),
-        academicApi.listSubjects()
+        academicApi.listSubjects(),
+        academicApi.listInstitutions().catch(() => []),
+        academicApi.getProfile().catch(() => null)
       ]);
       setClasses(classList);
       setSubjects(subjList);
+
+      if (instList && instList.length > 0) {
+        const found = instList.find(
+          (i) => i.id === (profData?.institution_id || classList[0]?.institution_id)
+        ) || instList[0];
+        if (found) setActiveOrgType(found.type);
+      }
 
       if (classList.length > 0) {
         setModalClassId(classList[0].id);
@@ -217,6 +227,9 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
 
   const uniqueTotalStudents = consolidateStudents(filteredStudents).length;
   const unassignedGroups = consolidateStudents(unassignedStudents);
+  const isCollege = activeOrgType === "college";
+  const classLabel = isCollege ? "Semester" : "Class";
+  const classPluralLabel = isCollege ? "Semesters" : "Classes";
 
   return (
     <div className="students-roster-page pb-28">
@@ -308,7 +321,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                 fontWeight: 500
               }}
             >
-              <option value="">Class: All Boxes Menu</option>
+              <option value="">{classLabel}: All Boxes Menu</option>
               {classes.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -369,10 +382,10 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
           <div style={{ background: "#ffffff", border: "2px dashed #cbd5e1", borderRadius: "16px", padding: "4rem 2rem", textAlign: "center" }}>
             <Users size={48} style={{ color: "#94a3b8", margin: "0 auto 1rem" }} />
             <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.4rem" }}>
-              No Classes or Students Found
+              No {classPluralLabel} or Students Found
             </h3>
             <p style={{ color: "#64748b", fontSize: "0.9rem", maxWidth: "460px", margin: "0 auto 1.5rem" }}>
-              Create your first academic class or batch in Dashboard, then enroll students to track evaluations.
+              Create your first academic {classLabel.toLowerCase()} in Dashboard, then enroll students to track evaluations.
             </p>
             <button onClick={() => onNavigate("dashboard")} className="btn btn-primary">
               Go to Dashboard
@@ -381,7 +394,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
         ) : (
           <div style={{ marginBottom: "1.75rem" }}>
             <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.85rem" }}>
-              Class Boxes — Select a class tile to open students
+              {classLabel} Boxes — Select a {classLabel.toLowerCase()} tile to open students
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1.1rem" }}>
               {classes.map((cls) => {
@@ -438,7 +451,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                         {cls.academic_year || "2026-2027"}
                       </span>
                       <span style={{ color: "#2563eb", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "0.2rem" }}>
-                        Open Class <ChevronRight size={14} />
+                        Open {classLabel} <ChevronRight size={14} />
                       </span>
                     </div>
                   </div>
@@ -472,7 +485,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                           Unassigned Students
                         </div>
                         <div style={{ fontSize: "0.78rem", fontWeight: 600, color: "#64748b", marginTop: "0.15rem" }}>
-                          Not linked to a class cohort
+                          Not linked to a {classLabel.toLowerCase()} cohort
                         </div>
                       </div>
                     </div>
@@ -517,7 +530,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                 cursor: "pointer"
               }}
             >
-              <ArrowLeft size={15} /> Back to All Class Boxes
+              <ArrowLeft size={15} /> Back to All {classLabel} Boxes
             </button>
           </div>
 
@@ -581,7 +594,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                         className="btn btn-secondary"
                         style={{ fontSize: "0.82rem", display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem" }}
                       >
-                        <UserPlus size={14} /> Add Student to this Class
+                        <UserPlus size={14} /> Add Student to this {classLabel}
                       </button>
                     </div>
 
@@ -882,7 +895,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1.25rem" }}>
                       <div>
                         <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
-                          Class / Cohort *
+                          {classLabel} / Cohort *
                         </label>
                         <select
                           value={modalClassId}

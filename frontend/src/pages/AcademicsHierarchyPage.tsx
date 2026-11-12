@@ -8,7 +8,11 @@ import {
   Plus,
   ChevronRight,
   FileSpreadsheet,
-  Users
+  Users,
+  GraduationCap,
+  School,
+  Target,
+  X
 } from "lucide-react";
 
 interface AcademicsHierarchyProps {
@@ -33,9 +37,63 @@ export const AcademicsHierarchyPage: React.FC<AcademicsHierarchyProps> = ({ onNa
   const [newOrgType, setNewOrgType] = useState<"college" | "school" | "competitive">("college");
   const [newOrgCode, setNewOrgCode] = useState("");
 
-  const [newClassName, setNewClassName] = useState("");
-  const [newClassCode, setNewClassCode] = useState("");
-  const [newClassDept, setNewClassDept] = useState("");
+  const [newClassName, setNewClassName] = useState("Semester 1");
+  const [newClassCode, setNewClassCode] = useState("SEM-01");
+  const [newClassDept, setNewClassDept] = useState("Computer Science & Engineering");
+
+  const COLLEGE_CLASS_PRESETS = [
+    { label: "Sem 1", name: "Semester 1", code: "SEM-01", dept: "Foundation Engineering" },
+    { label: "Sem 2", name: "Semester 2", code: "SEM-02", dept: "Core Engineering" },
+    { label: "Sem 3", name: "Semester 3", code: "SEM-03", dept: "Computer Science" },
+    { label: "Sem 4", name: "Semester 4", code: "SEM-04", dept: "Computer Science" },
+    { label: "Sem 5", name: "Semester 5", code: "SEM-05", dept: "Computer Science" },
+    { label: "Sem 6", name: "Semester 6 - CSE", code: "CSE-SEM6", dept: "Computer Science" },
+    { label: "Sem 7", name: "Semester 7", code: "SEM-07", dept: "Advanced Specialization" },
+    { label: "Sem 8", name: "Semester 8", code: "SEM-08", dept: "Major Project & Capstone" },
+  ];
+
+  const SCHOOL_CLASS_PRESETS = [
+    { label: "Class 8", name: "Class 8 - Section A", code: "CLS-8A", dept: "Middle School" },
+    { label: "Class 9", name: "Class 9 - Section A", code: "CLS-9A", dept: "Secondary" },
+    { label: "Class 10 - A", name: "Class 10 - Section A", code: "CLS-10A", dept: "Secondary (Board)" },
+    { label: "Class 10 - B", name: "Class 10 - Section B", code: "CLS-10B", dept: "Secondary (Board)" },
+    { label: "Class 11 - Sci", name: "Class 11 - Science", code: "CLS-11SCI", dept: "Science (PCM/B)" },
+    { label: "Class 11 - Comm", name: "Class 11 - Commerce", code: "CLS-11COMM", dept: "Commerce" },
+    { label: "Class 12 - Sci", name: "Class 12 - Science", code: "CLS-12SCI", dept: "Senior Secondary" },
+    { label: "Class 12 - Comm", name: "Class 12 - Commerce", code: "CLS-12COMM", dept: "Senior Secondary" },
+  ];
+
+  const JEE_CLASS_PRESETS = [
+    { label: "Class 11 JEE", name: "Class 11 - JEE Advanced", code: "JEE-11-ADV", dept: "Target 2027 (PCM)" },
+    { label: "Class 12 JEE", name: "Class 12 - JEE Advanced", code: "JEE-12-ADV", dept: "Target 2026 (PCM)" },
+    { label: "Repeater / Dropper", name: "Repeater Batch - JEE Main & Adv", code: "JEE-REPEAT-1", dept: "Full-Time Intensive" },
+    { label: "Foundation Class 10", name: "Foundation Class 10 - JEE Prep", code: "JEE-FND-10", dept: "Early Olympiad / JEE" },
+    { label: "Crash Course", name: "JEE Main Final Lap Crash Course", code: "JEE-CRASH", dept: "Mock Tests & Rank Boost" },
+  ];
+
+  const applyOrgTypeDefaults = (type: "college" | "school" | "competitive") => {
+    if (type === "college") {
+      setNewClassName("Semester 1");
+      setNewClassCode("SEM-01");
+      setNewClassDept("Computer Science & Engineering");
+    } else if (type === "school") {
+      setNewClassName("Class 10 - Section A");
+      setNewClassCode("CLS-10A");
+      setNewClassDept("Science (CBSE)");
+    } else {
+      setNewClassName("Class 11 - JEE Advanced");
+      setNewClassCode("JEE-11-ADV");
+      setNewClassDept("PCM (Target 2027)");
+    }
+  };
+
+  const handleOpenClassModal = () => {
+    const org = institutions.find((i) => i.id === selectedInstId);
+    if (org) {
+      applyOrgTypeDefaults(org.type);
+    }
+    setShowClassModal(true);
+  };
 
   const [newSubjName, setNewSubjName] = useState("");
   const [newSubjCode, setNewSubjCode] = useState("");
@@ -118,6 +176,10 @@ export const AcademicsHierarchyPage: React.FC<AcademicsHierarchyProps> = ({ onNa
           ? selectedInstId
           : instList[0].id;
         setSelectedInstId(activeInst);
+        const activeOrg = instList.find((i) => i.id === activeInst);
+        if (activeOrg) {
+          applyOrgTypeDefaults(activeOrg.type);
+        }
 
         const classList = await academicApi.listClasses(activeInst);
         setClasses(classList);
@@ -149,6 +211,10 @@ export const AcademicsHierarchyPage: React.FC<AcademicsHierarchyProps> = ({ onNa
 
   const handleSelectInstitution = async (instId: string) => {
     setSelectedInstId(instId);
+    const target = institutions.find((i) => i.id === instId);
+    if (target) {
+      applyOrgTypeDefaults(target.type);
+    }
     try {
       const classList = await academicApi.listClasses(instId);
       setClasses(classList);
@@ -279,12 +345,12 @@ export const AcademicsHierarchyPage: React.FC<AcademicsHierarchyProps> = ({ onNa
           </button>
           {institutions.length > 0 && (
             <button
-              onClick={() => setShowClassModal(true)}
+              onClick={handleOpenClassModal}
               className="btn btn-secondary"
               style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem", padding: "0.5rem 0.85rem" }}
             >
               <FolderGit2 size={15} />
-              Add Class
+              {currentOrg?.type === "college" ? "Add Semester" : "Add Class"}
             </button>
           )}
           {classes.length > 0 && (
@@ -374,10 +440,12 @@ export const AcademicsHierarchyPage: React.FC<AcademicsHierarchyProps> = ({ onNa
 
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
               <FolderGit2 size={16} style={{ color: "#16a34a" }} />
-              <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#64748b" }}>Class / Batch:</span>
+              <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#64748b" }}>
+                {currentOrg?.type === "college" ? "Semester:" : "Class / Batch:"}
+              </span>
               {classes.length === 0 ? (
                 <button
-                  onClick={() => setShowClassModal(true)}
+                  onClick={handleOpenClassModal}
                   style={{
                     background: "#f1f5f9",
                     border: "1px dashed #cbd5e1",
@@ -388,7 +456,7 @@ export const AcademicsHierarchyPage: React.FC<AcademicsHierarchyProps> = ({ onNa
                     color: "#334155"
                   }}
                 >
-                  + Add First Class
+                  + Add First {currentOrg?.type === "college" ? "Semester" : "Class"}
                 </button>
               ) : (
                 <select
@@ -403,7 +471,7 @@ export const AcademicsHierarchyPage: React.FC<AcademicsHierarchyProps> = ({ onNa
                     background: "#ffffff"
                   }}
                 >
-                  <option value="">All Classes</option>
+                  <option value="">All {currentOrg?.type === "college" ? "Semesters" : "Classes"} in {currentOrg?.code || "Org"}</option>
                   {classes.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
@@ -604,71 +672,126 @@ export const AcademicsHierarchyPage: React.FC<AcademicsHierarchyProps> = ({ onNa
         </div>
       )}
 
-      {/* Modal: Add Class */}
-      {showClassModal && (
-        <div className="modal-backdrop" onClick={() => setShowClassModal(false)}>
-          <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "480px" }}>
-            <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.25rem" }}>
-              Add Class / Batch
-            </h3>
-            <p style={{ fontSize: "0.82rem", color: "#64748b", marginBottom: "1.25rem" }}>
-              Belongs to: <strong>{currentOrg?.name}</strong>
-            </p>
+      {/* Modal: Add Class / Semester */}
+      {showClassModal && (() => {
+        const isCollege = currentOrg?.type === "college";
+        const isSchool = currentOrg?.type === "school";
+        const presets = isCollege
+          ? COLLEGE_CLASS_PRESETS
+          : isSchool
+          ? SCHOOL_CLASS_PRESETS
+          : JEE_CLASS_PRESETS;
 
-            <form onSubmit={handleCreateClass}>
-              <div style={{ marginBottom: "1rem" }}>
-                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
-                  Class / Batch Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Semester 6 - CSE"
-                  value={newClassName}
-                  onChange={(e) => setNewClassName(e.target.value)}
-                  style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
-                />
+        return (
+          <div className="modal-backdrop" onClick={() => setShowClassModal(false)}>
+            <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "520px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.25rem" }}>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    {isCollege ? <GraduationCap size={20} style={{ color: "#2563eb" }} /> : isSchool ? <School size={20} style={{ color: "#0f766e" }} /> : <Target size={20} style={{ color: "#c2410c" }} />}
+                    <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
+                      {isCollege ? "Add College Semester" : isSchool ? "Add School Class" : "Add JEE Class / Batch"}
+                    </h3>
+                  </div>
+                  <p style={{ fontSize: "0.82rem", color: "#64748b", margin: "0.2rem 0 0" }}>
+                    Belongs to: <strong>{currentOrg?.name}</strong> ({currentOrg?.type.toUpperCase()})
+                  </p>
+                </div>
+                <button onClick={() => setShowClassModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }}>
+                  <X size={18} />
+                </button>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1.25rem" }}>
-                <div>
+              {/* Quick Presets */}
+              <div style={{ margin: "1rem 0", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "0.6rem 0.75rem" }}>
+                <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "0.35rem" }}>
+                  Quick Fill {isCollege ? "Semesters" : "Classes"}:
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
+                  {presets.map((p, idx) => {
+                    const isSel = newClassName === p.name;
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          setNewClassName(p.name);
+                          setNewClassCode(p.code);
+                          setNewClassDept(p.dept);
+                        }}
+                        style={{
+                          padding: "0.2rem 0.55rem",
+                          borderRadius: "5px",
+                          border: isSel ? "1.5px solid #2563eb" : "1px solid #cbd5e1",
+                          background: isSel ? "#eff6ff" : "#ffffff",
+                          color: isSel ? "#1d4ed8" : "#334155",
+                          fontSize: "0.75rem",
+                          fontWeight: isSel ? 800 : 600,
+                          cursor: "pointer"
+                        }}
+                      >
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <form onSubmit={handleCreateClass}>
+                <div style={{ marginBottom: "0.9rem" }}>
                   <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
-                    Class Code
+                    {isCollege ? "Semester Name *" : isSchool ? "Class / Grade Name *" : "Class / Target Batch Name *"}
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. CSE-SEM6"
-                    value={newClassCode}
-                    onChange={(e) => setNewClassCode(e.target.value)}
+                    required
+                    placeholder={isCollege ? "e.g. Semester 6 - Computer Science" : isSchool ? "e.g. Class 10 - Section A" : "e.g. Class 11 - JEE Advanced (Target 2027)"}
+                    value={newClassName}
+                    onChange={(e) => setNewClassName(e.target.value)}
                     style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
                   />
                 </div>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
-                    Department
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Computer Science"
-                    value={newClassDept}
-                    onChange={(e) => setNewClassDept(e.target.value)}
-                    style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
-                  />
-                </div>
-              </div>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-                <button type="button" onClick={() => setShowClassModal(false)} className="btn btn-secondary">
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  Save Class
-                </button>
-              </div>
-            </form>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1.25rem" }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
+                      {isCollege ? "Semester Code" : isSchool ? "Class Code / Section" : "Batch Code"}
+                    </label>
+                    <input
+                      type="text"
+                      placeholder={isCollege ? "e.g. CSE-SEM6" : isSchool ? "e.g. CLS-10A" : "e.g. JEE-11-ADV"}
+                      value={newClassCode}
+                      onChange={(e) => setNewClassCode(e.target.value)}
+                      style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
+                      {isCollege ? "Department / Degree" : isSchool ? "Stream / Board" : "Target Stream / Exam Track"}
+                    </label>
+                    <input
+                      type="text"
+                      placeholder={isCollege ? "e.g. Computer Science" : isSchool ? "e.g. Science" : "e.g. PCM"}
+                      value={newClassDept}
+                      onChange={(e) => setNewClassDept(e.target.value)}
+                      style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+                  <button type="button" onClick={() => setShowClassModal(false)} className="btn btn-secondary">
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary">
+                    {isCollege ? "Save Semester" : "Save Class"}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Modal: Add Subject with Strict Org & Class Hierarchy */}
       {showSubjectModal && (
