@@ -7,7 +7,6 @@ import { MarkdownQuestionView } from "../components/MarkdownQuestionView";
 import { useAnswerKeyStudio } from "../hooks/useAnswerKeyStudio";
 import type { Exam, Student, AcademicEvaluation, Subject, ClassItem, AnswerRegionItem } from "../types/academic";
 import {
-  Sparkles,
   UploadCloud,
   CheckCircle2,
   Clock,
@@ -30,7 +29,8 @@ import {
   CheckSquare,
   Layers,
   RefreshCw,
-  ScanLine
+  ScanLine,
+  Sparkles
 } from "lucide-react";
 
 interface ScanningJobState {
@@ -93,9 +93,25 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
   // Live non-blocking background evaluation scanner state
   const [evaluatingStudentId, setEvaluatingStudentId] = useState<string | null>(null);
   const [isEvaluatingAll, setIsEvaluatingAll] = useState(false);
+  const [isEvaluatingAllMinimized, setIsEvaluatingAllMinimized] = useState(false);
+  const [scanElapsed, setScanElapsed] = useState(0);
   const [evalProgressMessage, setEvalProgressMessage] = useState<string | null>(null);
   const [scanningJob, setScanningJob] = useState<ScanningJobState | null>(null);
   const scanPollRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    let timer: number | null = null;
+    if (scanningJob || isEvaluatingAll) {
+      timer = window.setInterval(() => {
+        setScanElapsed((s) => s + 1);
+      }, 1000);
+    } else {
+      setScanElapsed(0);
+    }
+    return () => {
+      if (timer !== null) window.clearInterval(timer);
+    };
+  }, [Boolean(scanningJob), isEvaluatingAll]);
 
   // Filters for View 2 (Exams Deadlines Overview)
   const [examSearchQuery, setExamSearchQuery] = useState("");
@@ -500,12 +516,12 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
       { key: "rasterized", label: "Rasterize PDF / Image Booklet (200 DPI)", done: true },
       {
         key: "prompt1_ocr",
-        label: "Prompt 1/2: Extract Handwriting + Real Page & X/Y Regions",
+        label: "Prompt 1/2: Extract Handwriting + Real Page & X/Y Regions (Gemini 3.8 Flash)",
         done: ["prompt2_evaluate", "rendering_overlays", "completed"].includes(scanningJob.stage)
       },
       {
         key: "prompt2_evaluate",
-        label: "Prompt 2/2: Unpack Answers, Trace Page Bounds & Check Rubrics",
+        label: "Prompt 2/2: High Thinking Multi-Step Rubric Reasoning & Marks",
         done: ["rendering_overlays", "completed"].includes(scanningJob.stage)
       },
       {
@@ -547,15 +563,44 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
           {/* Left: Pipeline Steps */}
           <div style={{ padding: "1.75rem", display: "flex", flexDirection: "column", justifyContent: "space-between", gap: "1.25rem", borderRight: "1px solid #e2e8f0" }}>
             <div>
-              <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", padding: "0.25rem 0.65rem", borderRadius: "999px", fontSize: "0.74rem", fontWeight: 800, marginBottom: "0.75rem" }}>
-                <ScanLine size={13} /> LIVE 2-PROMPT GEMINI SCANNER
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.45rem", marginBottom: "0.75rem" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", padding: "0.25rem 0.65rem", borderRadius: "999px", fontSize: "0.74rem", fontWeight: 800 }}>
+                  <ScanLine size={13} /> LIVE 2-PROMPT SCANNER
+                </span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", background: "#f5f3ff", color: "#6d28d9", border: "1px solid #ddd6fe", padding: "0.25rem 0.65rem", borderRadius: "999px", fontSize: "0.72rem", fontWeight: 800 }}>
+                  <Sparkles size={12} /> GEMINI 3.8 FLASH • HIGH THINKING
+                </span>
               </div>
               <h2 style={{ margin: "0 0 0.35rem", fontSize: "1.35rem", fontWeight: 900, color: "#0f172a" }}>
-                Scanning {scanningJob.studentName}&apos;s Paper
+                Evaluating {scanningJob.studentName}&apos;s Paper
               </h2>
-              <p style={{ margin: "0 0 1.25rem", fontSize: "0.84rem", color: "#475569", lineHeight: 1.5 }}>
+              <p style={{ margin: "0 0 1rem", fontSize: "0.84rem", color: "#475569", lineHeight: 1.5 }}>
                 {scanningJob.message}
               </p>
+
+              {/* Live Reasoning Elapsed Feedback */}
+              <div
+                style={{
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "10px",
+                  padding: "0.65rem 0.85rem",
+                  marginBottom: "1rem",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  fontSize: "0.78rem"
+                }}
+              >
+                <span style={{ color: "#475569", fontWeight: 600 }}>
+                  Reasoning elapsed: <strong style={{ color: "#0f172a" }}>{scanElapsed}s</strong>
+                </span>
+                {scanElapsed >= 8 && (
+                  <span style={{ color: "#6d28d9", fontWeight: 700, fontSize: "0.72rem" }}>
+                    🧠 Deep chain-of-thought verification in progress...
+                  </span>
+                )}
+              </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
                 {stages.map((st, sIdx) => {
@@ -621,47 +666,189 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
                 Uploaded Sheet Preview · Page {previewPage} / {scanningJob.pageCount}
               </span>
               {scanningJob.pageCount > 1 && (
-                <div style={{ display: "flex", gap: "0.3rem" }}>
+                <div style={{ display: "flex", gap: "0.35rem" }}>
                   <button
                     type="button"
                     disabled={previewPage <= 1}
-                    onClick={() => setScanningJob((p) => (p ? { ...p, activePreviewPage: Math.max(1, previewPage - 1) } : p))}
-                    style={{ background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "6px", padding: "0.2rem 0.45rem", cursor: "pointer" }}
+                    onClick={() => setScanningJob((j) => (j ? { ...j, activePreviewPage: Math.max(1, previewPage - 1) } : null))}
+                    style={{ background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "6px", padding: "0.15rem 0.45rem", fontSize: "0.72rem", cursor: "pointer" }}
                   >
-                    <ChevronLeft size={14} />
+                    Prev
                   </button>
                   <button
                     type="button"
                     disabled={previewPage >= scanningJob.pageCount}
-                    onClick={() => setScanningJob((p) => (p ? { ...p, activePreviewPage: Math.min(p.pageCount, previewPage + 1) } : p))}
-                    style={{ background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "6px", padding: "0.2rem 0.45rem", cursor: "pointer" }}
+                    onClick={() => setScanningJob((j) => (j ? { ...j, activePreviewPage: Math.min(scanningJob.pageCount, previewPage + 1) } : null))}
+                    style={{ background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "6px", padding: "0.15rem 0.45rem", fontSize: "0.72rem", cursor: "pointer" }}
                   >
-                    <ChevronRight size={14} />
+                    Next
                   </button>
                 </div>
               )}
             </div>
 
-            <div style={{ position: "relative", flex: 1, overflow: "auto", background: "#ffffff", borderRadius: "10px", border: "1px solid #e2e8f0", boxShadow: "0 4px 16px rgba(15,23,42,0.06)" }}>
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                background: "#ffffff",
+                border: "1px solid #e2e8f0",
+                borderRadius: "10px",
+                position: "relative",
+                overflow: "hidden",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center"
+              }}
+            >
               <img
                 src={resolveApiUrl(`/api/v1/academic/evaluations/${scanningJob.evalId}/pages/${previewPage}`)}
-                alt={`Scanning Page ${previewPage}`}
-                style={{ width: "100%", height: "auto", display: "block" }}
+                alt={`Student Sheet Preview Page ${previewPage}`}
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                }}
+                style={{ width: "100%", height: "100%", objectFit: "contain" }}
               />
-              {/* Animated scan laser bar */}
+
+              {/* Live Laser Sweep Scan Animation */}
               <div
                 style={{
-                  position: "sticky",
-                  bottom: "45%",
+                  position: "absolute",
                   left: 0,
                   right: 0,
                   height: "3px",
-                  background: "linear-gradient(90deg, transparent, #2563eb, #0ea5e9, transparent)",
-                  boxShadow: "0 0 18px 4px rgba(37, 99, 235, 0.45)",
-                  pointerEvents: "none"
+                  background: "linear-gradient(90deg, transparent, #2563eb, #9333ea, #2563eb, transparent)",
+                  boxShadow: "0 0 12px 2px rgba(37, 99, 235, 0.65)",
+                  animation: "laserSweep 2.2s ease-in-out infinite"
                 }}
               />
             </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ==============================================================
+  // VIEW 0C: BATCH "EVALUATE ALL" FULL SCREEN LOADING MODAL
+  // ==============================================================
+  const renderEvaluatingAllModal = () => {
+    if (!isEvaluatingAll) return null;
+
+    if (isEvaluatingAllMinimized) {
+      return (
+        <div
+          onClick={() => setIsEvaluatingAllMinimized(false)}
+          style={{
+            position: "fixed",
+            bottom: "1.5rem",
+            right: "1.5rem",
+            zIndex: 9999,
+            background: "#1e293b",
+            color: "#ffffff",
+            padding: "0.65rem 1rem",
+            borderRadius: "999px",
+            boxShadow: "0 10px 25px rgba(0, 0, 0, 0.25)",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.6rem",
+            cursor: "pointer",
+            border: "1px solid #334155"
+          }}
+        >
+          <RefreshCw size={14} className="spin" style={{ color: "#60a5fa" }} />
+          <span style={{ fontSize: "0.8rem", fontWeight: 700 }}>
+            Evaluating All Students ({scanElapsed}s)
+          </span>
+          <span style={{ background: "#2563eb", padding: "0.15rem 0.5rem", borderRadius: "999px", fontSize: "0.7rem", fontWeight: 800 }}>
+            Click to expand
+          </span>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(15, 23, 42, 0.6)",
+          backdropFilter: "blur(4px)",
+          zIndex: 9999,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "1.5rem"
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            maxWidth: "540px",
+            background: "#ffffff",
+            borderRadius: "18px",
+            border: "1px solid #e2e8f0",
+            boxShadow: "0 24px 60px rgba(15, 23, 42, 0.25)",
+            padding: "2rem",
+            display: "flex",
+            flexDirection: "column",
+            gap: "1.25rem",
+            textAlign: "center"
+          }}
+        >
+          <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.4rem", alignSelf: "center", background: "#f5f3ff", color: "#6d28d9", border: "1px solid #ddd6fe", padding: "0.28rem 0.75rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 800 }}>
+            <Sparkles size={13} /> GEMINI 3.8 FLASH • HIGH THINKING ACTIVE
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.5rem" }}>
+            <div style={{ width: "52px", height: "52px", borderRadius: "50%", background: "#eff6ff", border: "2px solid #bfdbfe", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <RefreshCw size={26} className="spin" style={{ color: "#2563eb" }} />
+            </div>
+            <h2 style={{ fontSize: "1.3rem", fontWeight: 900, color: "#0f172a", margin: "0.35rem 0 0" }}>
+              Batch Evaluating All Class Submissions
+            </h2>
+            <p style={{ fontSize: "0.86rem", color: "#64748b", margin: 0, maxWidth: "420px", lineHeight: 1.5 }}>
+              {evalProgressMessage || "Gemini 3.8 Flash is applying high-depth chain-of-thought OCR to detect handwriting, map question boundaries, and award rubric scores."}
+            </p>
+          </div>
+
+          <div
+            style={{
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              borderRadius: "12px",
+              padding: "0.85rem 1rem",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              fontSize: "0.82rem"
+            }}
+          >
+            <span style={{ color: "#475569", fontWeight: 600 }}>
+              Elapsed Processing Time: <strong style={{ color: "#0f172a" }}>{scanElapsed}s</strong>
+            </span>
+            <span style={{ color: "#2563eb", fontWeight: 700 }}>
+              Class: {students.length} Student{students.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "center", gap: "0.75rem", paddingTop: "0.5rem" }}>
+            <button
+              type="button"
+              onClick={() => setIsEvaluatingAllMinimized(true)}
+              style={{
+                background: "#f1f5f9",
+                border: "1px solid #cbd5e1",
+                color: "#334155",
+                padding: "0.5rem 1.15rem",
+                borderRadius: "8px",
+                fontSize: "0.84rem",
+                fontWeight: 700,
+                cursor: "pointer"
+              }}
+            >
+              Minimize & Run in Background
+            </button>
           </div>
         </div>
       </div>
@@ -2011,6 +2198,8 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
             </div>
           )}
         </div>
+        {renderLiveScannerModal()}
+        {renderEvaluatingAllModal()}
       </div>
     );
   }
@@ -2021,6 +2210,7 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
   return (
     <div className="strict-evaluation-page pb-24">
       {renderLiveScannerModal()}
+      {renderEvaluatingAllModal()}
       {/* INITIAL STATE: When no exam is selected - Deadlines Overview */}
       {!selectedExamId ? (
         <div>

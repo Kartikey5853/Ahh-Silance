@@ -28,14 +28,17 @@ except ImportError:
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-# Healthy, low-latency Gemini models prioritized ahead of quota-limited 2.5-flash free tier
+# Prioritize Gemini 3.8 Flash with High Thinking for all OCR & academic evaluation tasks
 _ENV_MODEL = (os.getenv("GEMINI_MODEL") or "").strip()
+_DEFAULT_THINKING_LEVEL = (os.getenv("GEMINI_THINKING_LEVEL") or "high").strip().lower()
+
 CANDIDATE_MODELS = list(dict.fromkeys([
     m for m in [
         _ENV_MODEL if _ENV_MODEL and _ENV_MODEL != "gemini-2.5-flash" else "",
+        "gemini-3.8-flash",
         "gemini-3.5-flash-lite",
-        "gemini-flash-lite-latest",
         "gemini-flash-latest",
+        "gemini-flash-lite-latest",
         "gemini-2.5-flash",
     ] if m
 ]))
@@ -64,27 +67,56 @@ async def _call_gemini_json(
     client: Any,
     contents: List[Any],
     temperature: float = 0.1,
-    timeout_sec: float = 40.0,
+    timeout_sec: float = 75.0,
+    thinking_level: Optional[str] = None,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str], Optional[str]]:
     """
     Runs a structured JSON Gemini generation call off the FastAPI event loop via `asyncio.to_thread`
     with an explicit timeout and automatic 429/503 model failover.
+    Prioritizes Gemini 3.8 Flash on High Thinking for high-fidelity OCR, handwriting segmentation,
+    and step-by-step rubric evaluation.
     Returns `(parsed_json, model_used, last_error_message)`.
     """
     from google.genai import types
 
+    effective_thinking = (thinking_level or _DEFAULT_THINKING_LEVEL or "high").strip().lower()
     last_err_msg: Optional[str] = None
+
     for model_name in _get_active_candidate_models():
         try:
             def _invoke(m: str = model_name):
-                return client.models.generate_content(
-                    model=m,
-                    contents=contents,
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        temperature=temperature,
-                    ),
-                )
+                config_kwargs: Dict[str, Any] = {
+                    "response_mime_type": "application/json",
+                    "temperature": temperature,
+                }
+                if effective_thinking and effective_thinking in {"low", "medium", "high", "minimal"}:
+                    try:
+                        config_kwargs["thinking_config"] = types.ThinkingConfig(
+                            thinking_level=effective_thinking
+                        )
+                    except Exception as cfg_e:
+                        logger.debug(f"Could not build ThinkingConfig for {m}: {cfg_e}")
+
+                try:
+                    return client.models.generate_content(
+                        model=m,
+                        contents=contents,
+                        config=types.GenerateContentConfig(**config_kwargs),
+                    )
+                except Exception as inner_exc:
+                    # If model rejects thinking_level (e.g. legacy model fallback), retry without thinking_config
+                    err_str = str(inner_exc).lower()
+                    if "thinking" in err_str or "unsupported" in err_str or "invalid" in err_str:
+                        logger.info(f"Retrying {m} without thinking_config: {inner_exc}")
+                        return client.models.generate_content(
+                            model=m,
+                            contents=contents,
+                            config=types.GenerateContentConfig(
+                                response_mime_type="application/json",
+                                temperature=temperature,
+                            ),
+                        )
+                    raise
 
             response = await asyncio.wait_for(asyncio.to_thread(_invoke), timeout=timeout_sec)
             raw_text = getattr(response, "text", None) or ""

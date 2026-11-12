@@ -6,14 +6,14 @@
  * Automatically runs background pre-scanning on upload for instant sub-50ms evaluation.
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { FileUploadDropzone } from "../components/FileUploadDropzone";
 import { CameraCapture } from "../components/CameraCapture";
 import { DocumentViewerModal } from "../components/DocumentViewerModal";
 import { evaluateApi } from "../api/evaluateApi";
 import { resolveApiUrl } from "../api/client";
 import type { EvaluationScorecard } from "../types/evaluation";
-import { AlertCircle, ArrowRight, Zap } from "lucide-react";
+import { AlertCircle, ArrowRight, Zap, Sparkles, RefreshCw } from "lucide-react";
 
 interface DashboardPageProps {
   /** Callback fired when evaluation succeeds, passing the resulting scorecard */
@@ -48,7 +48,22 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onEvaluationComple
 
   // Submission State
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitElapsed, setSubmitElapsed] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let timer: number | null = null;
+    if (isSubmitting) {
+      timer = window.setInterval(() => {
+        setSubmitElapsed((s) => s + 1);
+      }, 1000);
+    } else {
+      setSubmitElapsed(0);
+    }
+    return () => {
+      if (timer !== null) window.clearInterval(timer);
+    };
+  }, [isSubmitting]);
 
   /**
    * Handles student sheet file selection and immediately begins background pre-scanning.
@@ -358,6 +373,85 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onEvaluationComple
           initialMode={viewerInitialMode}
           onClose={() => setViewerFile(null)}
         />
+      )}
+
+      {/* Fullscreen High-Thinking Loading Modal */}
+      {isSubmitting && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.6)",
+            backdropFilter: "blur(5px)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1.5rem"
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "520px",
+              background: "#ffffff",
+              borderRadius: "18px",
+              border: "1px solid #e2e8f0",
+              boxShadow: "0 24px 60px rgba(15, 23, 42, 0.25)",
+              padding: "2.25rem 2rem",
+              textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              gap: "1.25rem"
+            }}
+          >
+            <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.4rem", alignSelf: "center", background: "#f5f3ff", color: "#6d28d9", border: "1px solid #ddd6fe", padding: "0.28rem 0.75rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 800 }}>
+              <Sparkles size={13} /> GEMINI 3.8 FLASH • HIGH THINKING
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.5rem" }}>
+              <div style={{ width: "54px", height: "54px", borderRadius: "50%", background: "#eff6ff", border: "2px solid #bfdbfe", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <RefreshCw size={26} className="spin" style={{ color: "#2563eb" }} />
+              </div>
+              <h2 style={{ fontSize: "1.3rem", fontWeight: 900, color: "#0f172a", margin: "0.35rem 0 0" }}>
+                Evaluating Response Document
+              </h2>
+              <p style={{ fontSize: "0.85rem", color: "#64748b", margin: 0, lineHeight: 1.5, maxWidth: "420px" }}>
+                {submitElapsed < 6
+                  ? "Detecting bubble patterns, bounding coordinates, and response alignment..."
+                  : submitElapsed < 18
+                  ? "🧠 Gemini 3.8 Flash is applying high-depth chain-of-thought OCR to verify answers against the master rubric..."
+                  : "Synthesizing vector overlays and finalizing granular marks breakdown..."}
+              </p>
+            </div>
+
+            <div
+              style={{
+                background: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                borderRadius: "12px",
+                padding: "0.75rem 1rem",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                fontSize: "0.82rem"
+              }}
+            >
+              <span style={{ color: "#475569", fontWeight: 600 }}>
+                Processing elapsed: <strong style={{ color: "#0f172a" }}>{submitElapsed}s</strong>
+              </span>
+              <span style={{ color: "#2563eb", fontWeight: 700 }}>
+                {sheetFile?.name || "Uploaded Document"}
+              </span>
+            </div>
+
+            {submitElapsed >= 10 && (
+              <div style={{ fontSize: "0.75rem", color: "#6d28d9", background: "#faf5ff", border: "1px solid #e9d5ff", padding: "0.45rem 0.75rem", borderRadius: "8px", fontWeight: 600 }}>
+                Deep multimodal reasoning is active. Complex or high-resolution pages are examined thoroughly.
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

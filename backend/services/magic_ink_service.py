@@ -372,7 +372,7 @@ class MagicInkService:
             contents.append(prompt)
 
             parsed, m_used, err = await _call_gemini_json(
-                client, contents, temperature=0.0, timeout_sec=50.0
+                client, contents, temperature=0.0, timeout_sec=75.0, thinking_level="high"
             )
             if m_used:
                 model_used = m_used
@@ -503,7 +503,7 @@ class MagicInkService:
             "}"
         )
 
-        return await _call_gemini_json(client, [prompt], temperature=0.0, timeout_sec=55.0)
+        return await _call_gemini_json(client, [prompt], temperature=0.0, timeout_sec=80.0, thinking_level="high")
 
     # -----------------------------------------------------------------------
     # Deterministic Grounding, Real Page Validation & Overlay Synthesis
