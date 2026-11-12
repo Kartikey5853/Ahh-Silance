@@ -196,15 +196,84 @@ def _snap_boxes_from_pdf_blocks(file_bytes: bytes, questions_list: List[Dict[str
         doc.close()
 
 
-def _normalize_question_boxes(questions_list: List[Dict[str, Any]], page_count: int) -> List[Dict[str, Any]]:
+def _clean_question_numbering(questions_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Cleans up noisy AI-extracted question numbers:
+    - If q_no is bare letters ('a', 'b', etc.), converts to 'Q1.a', 'Q1.b', 'Q2.a', etc.
+    - If q_no is 'OR', attaches it to previous question as an internal choice alternative (e.g. 'Q3 (OR)')
+    - Ensures clean sequential or hierarchy formatting.
+    """
+    curr_main_num = 1
+    cleaned: List[Dict[str, Any]] = []
+    prev_q: Optional[Dict[str, Any]] = None
+
+    for idx, q in enumerate(questions_list):
+        raw_no = str(q.get("q_no") or "").strip()
+        raw_text = str(q.get("text") or "").strip()
+
+        # Check if this item is an OR divider or starts with OR
+        if raw_no.upper() == "OR" or raw_no.upper().startswith("OR "):
+            if len(raw_text) > 10 and raw_text.upper() != "OR":
+                q["is_or_choice"] = True
+                or_grp = prev_q.get("or_group") if prev_q else None
+                if not or_grp:
+                    or_grp = f"or-{prev_q.get('id', idx)}" if prev_q else f"or-{idx}"
+                    if prev_q:
+                        prev_q["is_or_choice"] = True
+                        prev_q["or_group"] = or_grp
+                q["or_group"] = or_grp
+                base_no = prev_q.get("q_no", f"Q{curr_main_num}") if prev_q else f"Q{curr_main_num}"
+                q["q_no"] = f"{base_no} (OR)"
+                cleaned.append(q)
+                prev_q = q
+            continue
+
+        # If it's a bare subpart letter like "a", "b", "c", "(a)", "(b)"
+        m_part = re.match(r"^\(?([a-dA-D])\)?[\.\)]?$", raw_no)
+        if m_part:
+            letter = m_part.group(1).lower()
+            if letter == "a" and prev_q and not str(prev_q.get("q_no", "")).endswith(".a"):
+                if any(k in str(prev_q.get("q_no", "")) for k in [".b", ".c", ".d"]):
+                    curr_main_num += 1
+            q["q_no"] = f"Q{curr_main_num}.{letter}"
+        elif re.match(r"^\d+$", raw_no):
+            curr_main_num = int(raw_no)
+            q["q_no"] = f"Q{curr_main_num}"
+        elif not raw_no.upper().startswith("Q"):
+            q["q_no"] = f"Q{raw_no}"
+
+        cleaned.append(q)
+        prev_q = q
+
+    return cleaned
+
+
+def _normalize_question_boxes(
+    questions_list: List[Dict[str, Any]],
+    page_count: int,
+    pages_meta: Optional[List[Dict[str, Any]]] = None
+) -> List[Dict[str, Any]]:
     """
     Validates per-question `page` (1..page_count) and `box_2d` [ymin, xmin, ymax, xmax] in 0..1000 space.
+    Detects when vision models output raw pixel coordinates (instead of 0..1000) and normalizes to 0..1000.
     Generates clean non-overlapping vertical bands per page when coordinates are missing or invalid.
     """
     safe_pages = max(1, int(page_count or 1))
     total = max(1, len(questions_list))
 
-    # First sanitize existing values and count missing boxes per page
+    # Build page dimension lookup if pages_meta available
+    page_dims: Dict[int, Tuple[float, float]] = {}
+    if pages_meta:
+        for pm in pages_meta:
+            pnum = int(pm.get("page_num", 1))
+            pw = float(pm.get("width") or 1000)
+            ph = float(pm.get("height") or 1000)
+            page_dims[pnum] = (pw, ph)
+
+    # First pass: clean question numbering
+    questions_list = _clean_question_numbering(questions_list)
+
+    # Second pass: sanitize existing values and count missing boxes per page
     page_missing_buckets: Dict[int, List[int]] = {}
     for idx, q in enumerate(questions_list):
         raw_page = q.get("page")
@@ -213,20 +282,30 @@ def _normalize_question_boxes(questions_list: List[Dict[str, Any]], page_count: 
         except (TypeError, ValueError):
             page_num = 0
         if page_num < 1 or page_num > safe_pages:
-            # Distribute evenly across available pages
             page_num = min(safe_pages, 1 + (idx * safe_pages) // total)
         q["page"] = page_num
 
+        pw, ph = page_dims.get(page_num, (1000.0, 1000.0))
         raw_box = q.get("box_2d")
         valid_box = False
+
         if isinstance(raw_box, (list, tuple)) and len(raw_box) == 4:
             try:
-                ymin, xmin, ymax, xmax = [int(round(float(v))) for v in raw_box]
-                ymin = max(0, min(970, ymin))
-                xmin = max(0, min(950, xmin))
-                ymax = max(ymin + 30, min(1000, ymax))
-                xmax = max(xmin + 60, min(1000, xmax))
-                q["box_2d"] = [ymin, xmin, ymax, xmax]
+                ymin, xmin, ymax, xmax = [float(v) for v in raw_box]
+
+                # Check if coordinates are in pixel space (e.g. ymax > 1000 or (ph < 950 and ymax <= ph * 1.05))
+                if (ymax > 1000 or xmax > 1000) or (ph < 950 and ymax <= ph * 1.05 and xmax <= pw * 1.05):
+                    ymin = (ymin / ph) * 1000.0
+                    xmin = (xmin / pw) * 1000.0
+                    ymax = (ymax / ph) * 1000.0
+                    xmax = (xmax / pw) * 1000.0
+
+                ymin_i = max(0, min(970, int(round(ymin))))
+                xmin_i = max(0, min(950, int(round(xmin))))
+                ymax_i = max(ymin_i + 30, min(1000, int(round(ymax))))
+                xmax_i = max(xmin_i + 60, min(1000, int(round(xmax))))
+
+                q["box_2d"] = [ymin_i, xmin_i, ymax_i, xmax_i]
                 valid_box = True
             except (TypeError, ValueError):
                 valid_box = False
@@ -234,7 +313,7 @@ def _normalize_question_boxes(questions_list: List[Dict[str, Any]], page_count: 
         if not valid_box:
             page_missing_buckets.setdefault(page_num, []).append(idx)
 
-    # Assign clean stacked bands for any questions missing valid Gemini bounding boxes
+    # Assign clean stacked bands for any questions missing valid bounding boxes
     for page_num, indices in page_missing_buckets.items():
         n = len(indices)
         top_margin = 95
@@ -441,7 +520,7 @@ class GeminiAcademicService:
                     if filename.lower().endswith(".pdf"):
                         await asyncio.to_thread(_snap_boxes_from_pdf_blocks, file_bytes, questions_list)
 
-                    questions_list = _normalize_question_boxes(questions_list, paper_page_count)
+                    questions_list = _normalize_question_boxes(questions_list, paper_page_count, pages_meta)
 
                     # Sum non-OR questions plus unique or_group max marks once
                     seen_or_groups: Dict[str, float] = {}

@@ -94,6 +94,38 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
     { label: "Crash Course", name: "JEE Main Final Lap Crash Course", code: "JEE-CRASH", dept: "Mock Tests & Rank Boost" },
   ];
 
+  const COLLEGE_SUBJ_PRESETS = [
+    { name: "Natural Language Processing", code: "NLP-701", credits: 4, ltp: "3-1-0", sem: "Sem 6", prog: "B.Tech Computer Science", grading: "10-Point CGPA Scale (O, A+, A, B+, B, C, P, F)" },
+    { name: "Automata Theory & Compiler Design", code: "ATCD-602", credits: 4, ltp: "3-1-0", sem: "Sem 6", prog: "B.Tech Computer Science", grading: "10-Point CGPA Scale (O, A+, A, B+, B, C, P, F)" },
+    { name: "Data Structures & Algorithms", code: "CS-201", credits: 4, ltp: "3-0-2", sem: "Sem 3", prog: "B.Tech Computer Science", grading: "10-Point CGPA Scale (O, A+, A, B+, B, C, P, F)" },
+    { name: "Operating Systems", code: "CS-401", credits: 4, ltp: "3-0-2", sem: "Sem 4", prog: "B.Tech Computer Science", grading: "10-Point CGPA Scale (O, A+, A, B+, B, C, P, F)" },
+    { name: "Database Management Systems", code: "CS-501", credits: 4, ltp: "3-0-2", sem: "Sem 5", prog: "B.Tech Computer Science", grading: "10-Point CGPA Scale (O, A+, A, B+, B, C, P, F)" },
+    { name: "Computer Networks", code: "CS-601", credits: 3, ltp: "3-0-0", sem: "Sem 6", prog: "B.Tech Computer Science", grading: "10-Point CGPA Scale (O, A+, A, B+, B, C, P, F)" },
+    { name: "Machine Learning & AI", code: "AI-701", credits: 4, ltp: "3-0-2", sem: "Sem 7", prog: "Artificial Intelligence & Data Science", grading: "10-Point CGPA Scale (O, A+, A, B+, B, C, P, F)" },
+    { name: "Software Engineering & Agile", code: "SE-502", credits: 3, ltp: "3-0-0", sem: "Sem 5", prog: "B.Tech Computer Science", grading: "10-Point CGPA Scale (O, A+, A, B+, B, C, P, F)" },
+  ];
+
+  const SCHOOL_SUBJ_PRESETS = [
+    { name: "Mathematics", code: "MATH-10", grade: "Class 10 - Term 1", board: "CBSE Board", split: "80% Theory + 20% Internal Assessment", grading: "CBSE 9-Point Scale (A1 to E)" },
+    { name: "Science", code: "SCI-10", grade: "Class 10 - Term 1", board: "CBSE Board", split: "80% Theory + 20% Practical Assessment", grading: "CBSE 9-Point Scale (A1 to E)" },
+    { name: "English Core", code: "ENG-12", grade: "Class 12 - Term 1", board: "CBSE Board", split: "80% Theory + 20% Internal Assessment", grading: "CBSE 9-Point Scale (A1 to E)" },
+    { name: "Physics", code: "PHY-12", grade: "Class 12 - Term 1", board: "CBSE Board", split: "70% Theory + 30% Practical Assessment", grading: "CBSE 9-Point Scale (A1 to E)" },
+    { name: "Chemistry", code: "CHEM-12", grade: "Class 12 - Term 1", board: "CBSE Board", split: "70% Theory + 30% Practical Assessment", grading: "CBSE 9-Point Scale (A1 to E)" },
+    { name: "Biology", code: "BIO-12", grade: "Class 12 - Term 1", board: "CBSE Board", split: "70% Theory + 30% Practical Assessment", grading: "CBSE 9-Point Scale (A1 to E)" },
+    { name: "Computer Science (Python)", code: "CS-12", grade: "Class 12 - Term 1", board: "CBSE Board", split: "70% Theory + 30% Practical Assessment", grading: "CBSE 9-Point Scale (A1 to E)" },
+    { name: "Social Science", code: "SST-10", grade: "Class 10 - Term 1", board: "CBSE Board", split: "80% Theory + 20% Internal Assessment", grading: "CBSE 9-Point Scale (A1 to E)" },
+  ];
+
+  const JEE_SUBJ_PRESETS = [
+    { name: "Physics - Mechanics & General Physics", code: "JEE-PHY-01", target: "Physics - Mechanics", exam: "JEE Main & Advanced", pattern: "+4 / -1 Negative Marking" },
+    { name: "Physics - Electrodynamics & Optics", code: "JEE-PHY-02", target: "Physics - Electrodynamics", exam: "JEE Main & Advanced", pattern: "+4 / -1 Negative Marking" },
+    { name: "Chemistry - Physical Chemistry", code: "JEE-CHEM-01", target: "Physical Chemistry", exam: "JEE Main & Advanced", pattern: "+4 / -1 Negative Marking" },
+    { name: "Chemistry - Organic Chemistry", code: "JEE-CHEM-02", target: "Organic Chemistry", exam: "JEE Main & Advanced", pattern: "+4 / -1 Negative Marking" },
+    { name: "Mathematics - Calculus & Functions", code: "JEE-MATH-01", target: "Calculus", exam: "JEE Main & Advanced", pattern: "+4 / -1 Negative Marking" },
+    { name: "Mathematics - Coordinate Geometry & Vectors", code: "JEE-MATH-02", target: "Coordinate & Vectors", exam: "JEE Main & Advanced", pattern: "+4 / -1 Negative Marking" },
+    { name: "Biology - Botany & Genetics (NEET)", code: "NEET-BIO-01", target: "Botany & Genetics", exam: "NEET-UG", pattern: "+4 / -1 Negative Marking" },
+  ];
+
   const applyOrgTypeDefaults = (type: InstitutionType) => {
     const today = new Date();
     setStartDate(today.toISOString().split("T")[0]);
@@ -104,6 +136,14 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
       const end = new Date(today);
       end.setMonth(end.getMonth() + 6);
       setEndDate(end.toISOString().split("T")[0]);
+
+      setSubjName("Natural Language Processing");
+      setSubjCode("NLP-701");
+      setSubjCredits(4);
+      setSubjSem("Sem 6");
+      setSubjLtpHours("3-1-0");
+      setSubjBoardOrProgram("B.Tech Computer Science");
+      setSubjGradingSystem("10-Point CGPA Scale (O, A+, A, B+, B, C, P, F)");
     } else if (type === "school") {
       setClassName("Class 10 - Section A");
       setClassCode("CLS-10A");
@@ -111,6 +151,14 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
       const end = new Date(today);
       end.setFullYear(end.getFullYear() + 1);
       setEndDate(end.toISOString().split("T")[0]);
+
+      setSubjName("Mathematics");
+      setSubjCode("MATH-10");
+      setSubjCredits(0);
+      setSubjGrade("Class 10 - Term 1");
+      setSubjBoardOrProgram("CBSE Board");
+      setSubjSplit("80% Theory + 20% Internal Assessment");
+      setSubjGradingSystem("CBSE 9-Point Scale (A1 to E)");
     } else {
       setClassName("Class 11 - JEE Advanced");
       setClassCode("JEE-11-ADV");
@@ -118,6 +166,13 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
       const end = new Date(today);
       end.setFullYear(end.getFullYear() + 1);
       setEndDate(end.toISOString().split("T")[0]);
+
+      setSubjName("Physics - Mechanics & Electrodynamics");
+      setSubjCode("JEE-PHY-01");
+      setSubjCredits(0);
+      setSubjJeeTarget("Physics - Mechanics");
+      setSubjBoardOrProgram("JEE Main & Advanced");
+      setSubjGradingSystem("+4 / -1 Negative Marking");
     }
   };
 
@@ -128,17 +183,24 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
     setShowClassModal(true);
   };
 
+  const handleOpenSubjModal = () => {
+    if (currentOrg) {
+      applyOrgTypeDefaults(currentOrg.type);
+    }
+    setShowSubjModal(true);
+  };
+
   // New Subject Form State (Adapts dynamically to Org Type)
   const [subjName, setSubjName] = useState("Natural Language Processing");
   const [subjCode, setSubjCode] = useState("NLP-701");
   const [subjCredits, setSubjCredits] = useState(4);
   const [subjSem, setSubjSem] = useState("Sem 6");
-  const [subjGrade] = useState("Class 12");
-  const [subjJeeTarget] = useState("Physics");
-  const [subjGradingSystem] = useState("10-Point CGPA Scale (O, A+, A, B+, B, C, P, F)");
-  const [subjSplit] = useState("80% Theory + 20% Internal Assessment");
-  const [subjBoardOrProgram] = useState("B.Tech Computer Science");
-  const [subjLtpHours] = useState("3-1-0");
+  const [subjGrade, setSubjGrade] = useState("Class 10 - Term 1");
+  const [subjJeeTarget, setSubjJeeTarget] = useState("Physics - Mechanics");
+  const [subjGradingSystem, setSubjGradingSystem] = useState("10-Point CGPA Scale (O, A+, A, B+, B, C, P, F)");
+  const [subjSplit, setSubjSplit] = useState("80% Theory + 20% Internal Assessment");
+  const [subjBoardOrProgram, setSubjBoardOrProgram] = useState("B.Tech Computer Science");
+  const [subjLtpHours, setSubjLtpHours] = useState("3-1-0");
 
   const loadHierarchy = async () => {
     try {
@@ -371,12 +433,12 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
               {currentOrg?.type === "college" ? "Add Semester" : "Add Class"}
             </button>
             <button
-              onClick={() => setShowSubjModal(true)}
+              onClick={handleOpenSubjModal}
               className="btn btn-primary"
               style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.55rem 0.95rem", fontSize: "0.85rem" }}
             >
               <Plus size={15} />
-              Add Subject
+              {currentOrg?.type === "college" ? "Add Course Subject" : currentOrg?.type === "school" ? "Add School Subject" : "Add JEE Subject"}
             </button>
           </div>
         </div>
@@ -576,7 +638,7 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
               </button>
             )}
             <button
-              onClick={() => setShowSubjModal(true)}
+              onClick={handleOpenSubjModal}
               className="btn btn-primary"
               style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}
             >
@@ -1070,111 +1132,373 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({ onNavi
       })()}
 
       {/* MODAL 3: Create Subject - 16:9 Widescreen */}
-      {showSubjModal && (
-        <div className="modal-overlay-16-9" onClick={() => setShowSubjModal(false)}>
-          <div className="modal-content-16-9" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "1050px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", height: "100%", minHeight: "540px" }}>
-              {/* Left Brand Panel */}
-              <div style={{ background: "#1e1b4b", color: "#ffffff", padding: "2.5rem 2rem", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                <div>
-                  <div style={{ width: "48px", height: "48px", borderRadius: "12px", background: "rgba(255, 255, 255, 0.15)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "1.25rem" }}>
-                    <BookOpen size={24} />
+      {showSubjModal && (() => {
+        const isCollege = currentOrg?.type === "college";
+        const isSchool = currentOrg?.type === "school";
+        const isCompetitive = currentOrg?.type === "competitive";
+        const presets = isCollege
+          ? COLLEGE_SUBJ_PRESETS
+          : isSchool
+          ? SCHOOL_SUBJ_PRESETS
+          : JEE_SUBJ_PRESETS;
+        const brandBg = isCollege ? "#1e1b4b" : isSchool ? "#0f766e" : "#7c2d12";
+
+        return (
+          <div className="modal-overlay-16-9" onClick={() => setShowSubjModal(false)}>
+            <div className="modal-content-16-9" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "1050px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", height: "100%", minHeight: "560px" }}>
+                {/* Left Brand Panel */}
+                <div style={{ background: brandBg, color: "#ffffff", padding: "2.5rem 2rem", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                  <div>
+                    <div style={{ width: "48px", height: "48px", borderRadius: "12px", background: "rgba(255, 255, 255, 0.15)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "1.25rem" }}>
+                      {isCollege ? <GraduationCap size={24} /> : isSchool ? <School size={24} /> : <Target size={24} />}
+                    </div>
+                    <div style={{ fontSize: "0.72rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", color: "rgba(255, 255, 255, 0.7)", marginBottom: "0.35rem" }}>
+                      {isCollege ? "College Curriculum" : isSchool ? "K-12 School Syllabus" : "Competitive Test Series"}
+                    </div>
+                    <h3 style={{ fontSize: "1.35rem", fontWeight: 900, letterSpacing: "-0.02em", marginBottom: "0.5rem" }}>
+                      {isCollege ? "Add Course Subject" : isSchool ? "Add School Subject" : "Add JEE Subject"}
+                    </h3>
+                    <p style={{ fontSize: "0.86rem", color: "#e2e8f0", lineHeight: 1.6 }}>
+                      {isCollege
+                        ? `Configure credit-based course curriculum, lecture-tutorial-practical (LTP) distribution, and CGPA evaluation for ${currentOrg?.name || "College"}.`
+                        : isSchool
+                        ? `Configure board-aligned syllabus, Theory vs Practical split (80/20), and term exams for ${currentOrg?.name || "School"}.`
+                        : `Configure competitive test subject, question tracks, and negative marking rules (+4 / -1) for ${currentOrg?.name || "Institute"}.`}
+                    </p>
                   </div>
-                  <h3 style={{ fontSize: "1.4rem", fontWeight: 900, letterSpacing: "-0.02em", marginBottom: "0.5rem" }}>
-                    Add Subject
-                  </h3>
-                  <p style={{ fontSize: "0.88rem", color: "#cbd5e1", lineHeight: 1.6 }}>
-                    Configure course curriculum, syllabus chapters, credits, and grading schemas linked to your active cohort.
-                  </p>
+
+                  <div style={{ background: "rgba(255, 255, 255, 0.10)", padding: "1rem", borderRadius: "10px", fontSize: "0.8rem", color: "#f1f5f9", lineHeight: 1.5 }}>
+                    {isCollege
+                      ? "🎓 University subjects link directly to course credit requirements and semester exam grading."
+                      : isSchool
+                      ? "🏫 School subjects adapt grading to CBSE/ICSE scales with internal assessment support."
+                      : "⚡ JEE subjects track MCQ OMR bubble accuracy, rankings, and -1 penalty deductions."}
+                  </div>
                 </div>
 
-                <div style={{ background: "rgba(255, 255, 255, 0.08)", padding: "1rem", borderRadius: "10px", fontSize: "0.8rem", color: "#94a3b8" }}>
-                  📚 Subjects immediately receive automated test scheduling and live Gemini evaluation rubrics.
-                </div>
-              </div>
+                {/* Right Form Panel */}
+                <div style={{ padding: "2.25rem 2.5rem", display: "flex", flexDirection: "column", justifyContent: "space-between", overflowY: "auto" }}>
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
+                      <div>
+                        <h4 style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
+                          {isCollege ? "Course Curriculum & Credit Settings" : isSchool ? "Board Curriculum & Evaluation Split" : "Competitive Track & Marking Scheme"}
+                        </h4>
+                        <div style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "0.2rem" }}>
+                          Belongs to organization: <strong>{currentOrg?.name}</strong> ({currentOrg?.type.toUpperCase()})
+                        </div>
+                      </div>
+                      <button onClick={() => setShowSubjModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }}>
+                        <X size={20} />
+                      </button>
+                    </div>
 
-              {/* Right Form Panel */}
-              <div style={{ padding: "2.5rem", display: "flex", flexDirection: "column", justifyContent: "space-between", overflowY: "auto" }}>
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
-                    <h4 style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
-                      Curriculum Specifications
-                    </h4>
-                    <button onClick={() => setShowSubjModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }}>
-                      <X size={20} />
+                    {/* Quick Selection Pills */}
+                    <div style={{ marginBottom: "1.25rem", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "0.75rem 0.9rem" }}>
+                      <div style={{ fontSize: "0.74rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "0.45rem" }}>
+                        Quick Presets ({isCollege ? "College Subjects" : isSchool ? "School Subjects" : "JEE Subjects"}):
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+                        {presets.map((p: any, idx: number) => {
+                          const isSel = subjName === p.name;
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => {
+                                setSubjName(p.name);
+                                setSubjCode(p.code);
+                                if (isCollege) {
+                                  setSubjCredits(p.credits || 4);
+                                  setSubjLtpHours(p.ltp || "3-1-0");
+                                  setSubjSem(p.sem || "Sem 6");
+                                  setSubjBoardOrProgram(p.prog || "B.Tech Computer Science");
+                                  setSubjGradingSystem(p.grading || "10-Point CGPA Scale (O, A+, A, B+, B, C, P, F)");
+                                } else if (isSchool) {
+                                  setSubjGrade(p.grade || "Class 10 - Term 1");
+                                  setSubjBoardOrProgram(p.board || "CBSE Board");
+                                  setSubjSplit(p.split || "80% Theory + 20% Internal Assessment");
+                                  setSubjGradingSystem(p.grading || "CBSE 9-Point Scale (A1 to E)");
+                                } else {
+                                  setSubjJeeTarget(p.target || "Physics - Mechanics");
+                                  setSubjBoardOrProgram(p.exam || "JEE Main & Advanced");
+                                  setSubjGradingSystem(p.pattern || "+4 / -1 Negative Marking");
+                                }
+                              }}
+                              style={{
+                                padding: "0.25rem 0.65rem",
+                                borderRadius: "6px",
+                                border: isSel ? "1.5px solid #2563eb" : "1px solid #cbd5e1",
+                                background: isSel ? "#eff6ff" : "#ffffff",
+                                color: isSel ? "#1d4ed8" : "#334155",
+                                fontSize: "0.78rem",
+                                fontWeight: isSel ? 800 : 600,
+                                cursor: "pointer"
+                              }}
+                            >
+                              {p.code ? `${p.code} - ${p.name.split(" ")[0]}` : p.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <form onSubmit={handleCreateSubject} id="add-subj-form">
+                      {/* Linked Cohort */}
+                      <div style={{ marginBottom: "1rem" }}>
+                        <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem", color: "#1e293b" }}>
+                          {isCollege ? "Target Semester *" : isSchool ? "Class / Grade Level *" : "Class / Target Batch *"}
+                        </label>
+                        <select
+                          value={selectedClassId}
+                          onChange={(e) => setSelectedClassId(e.target.value)}
+                          style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem", background: "#ffffff", fontWeight: 600 }}
+                        >
+                          {classes.length === 0 ? (
+                            <option value="">No cohorts created yet — will be general</option>
+                          ) : (
+                            classes.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name} ({c.code || "SEC"})
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      </div>
+
+                      {/* Subject Name and Code */}
+                      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: "1rem", marginBottom: "1rem" }}>
+                        <div>
+                          <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem", color: "#1e293b" }}>
+                            Subject Name *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            placeholder={isCollege ? "e.g. Natural Language Processing" : isSchool ? "e.g. Mathematics" : "e.g. Physics - Mechanics"}
+                            value={subjName}
+                            onChange={(e) => setSubjName(e.target.value)}
+                            style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem", color: "#1e293b" }}>
+                            Subject Code *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            placeholder={isCollege ? "e.g. NLP-701" : isSchool ? "e.g. MATH-10" : "e.g. JEE-PHY-01"}
+                            value={subjCode}
+                            onChange={(e) => setSubjCode(e.target.value)}
+                            style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem", textTransform: "uppercase" }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Dynamic Structure by Org Type */}
+                      {isCollege && (
+                        <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "10px", border: "1px solid #e2e8f0", marginBottom: "1rem" }}>
+                          <div style={{ fontSize: "0.78rem", fontWeight: 800, color: "#1e1b4b", marginBottom: "0.75rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                            College Degree & Credits Structure
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "0.75rem" }}>
+                            <div>
+                              <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
+                                Course Credits (Units)
+                              </label>
+                              <input
+                                type="number"
+                                min={0}
+                                max={12}
+                                value={subjCredits}
+                                onChange={(e) => setSubjCredits(Number(e.target.value))}
+                                style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#ffffff" }}
+                              />
+                            </div>
+                            <div>
+                              <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
+                                LTP Hours (Lecture-Tutorial-Practical)
+                              </label>
+                              <select
+                                value={subjLtpHours}
+                                onChange={(e) => setSubjLtpHours(e.target.value)}
+                                style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#ffffff" }}
+                              >
+                                <option value="3-1-0">3-1-0 (3 Lectures, 1 Tutorial, 0 Labs)</option>
+                                <option value="3-0-2">3-0-2 (3 Lectures, 0 Tutorials, 2 Labs)</option>
+                                <option value="4-0-0">4-0-0 (4 Pure Lecture Hours)</option>
+                                <option value="2-0-2">2-0-2 (2 Lectures, 2 Labs)</option>
+                                <option value="0-0-4">0-0-4 (Pure Lab / Practical)</option>
+                              </select>
+                            </div>
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                            <div>
+                              <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
+                                Semester Designation
+                              </label>
+                              <select
+                                value={subjSem}
+                                onChange={(e) => setSubjSem(e.target.value)}
+                                style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#ffffff" }}
+                              >
+                                {["Sem 1", "Sem 2", "Sem 3", "Sem 4", "Sem 5", "Sem 6", "Sem 7", "Sem 8"].map((s) => (
+                                  <option key={s} value={s}>{s}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
+                                Degree Program
+                              </label>
+                              <input
+                                type="text"
+                                value={subjBoardOrProgram}
+                                onChange={(e) => setSubjBoardOrProgram(e.target.value)}
+                                placeholder="e.g. B.Tech Computer Science"
+                                style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#ffffff" }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {isSchool && (
+                        <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "10px", border: "1px solid #e2e8f0", marginBottom: "1rem" }}>
+                          <div style={{ fontSize: "0.78rem", fontWeight: 800, color: "#0f766e", marginBottom: "0.75rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                            School Board Curriculum & Evaluation Split
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "0.75rem" }}>
+                            <div>
+                              <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
+                                Education Board
+                              </label>
+                              <select
+                                value={subjBoardOrProgram}
+                                onChange={(e) => setSubjBoardOrProgram(e.target.value)}
+                                style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#ffffff" }}
+                              >
+                                <option value="CBSE Board">CBSE Board</option>
+                                <option value="ICSE / ISC">ICSE / ISC</option>
+                                <option value="Cambridge IGCSE">Cambridge IGCSE</option>
+                                <option value="State Board">State Board</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
+                                Theory vs Practical Split
+                              </label>
+                              <select
+                                value={subjSplit}
+                                onChange={(e) => setSubjSplit(e.target.value)}
+                                style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#ffffff" }}
+                              >
+                                <option value="80% Theory + 20% Internal Assessment">80% Theory + 20% Internal Assessment</option>
+                                <option value="70% Theory + 30% Practical Assessment">70% Theory + 30% Practical Assessment</option>
+                                <option value="100% Theory">100% Theory Examination</option>
+                              </select>
+                            </div>
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                            <div>
+                              <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
+                                Grading System
+                              </label>
+                              <select
+                                value={subjGradingSystem}
+                                onChange={(e) => setSubjGradingSystem(e.target.value)}
+                                style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#ffffff" }}
+                              >
+                                <option value="CBSE 9-Point Scale (A1 to E)">CBSE 9-Point Scale (A1 to E)</option>
+                                <option value="ICSE Percentage Scale (1-100)">ICSE Percentage Scale (1-100)</option>
+                                <option value="State Board Marks Scale">State Board Marks Scale</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
+                                Grade & Term
+                              </label>
+                              <input
+                                type="text"
+                                value={subjGrade}
+                                onChange={(e) => setSubjGrade(e.target.value)}
+                                placeholder="e.g. Class 10 - Term 1"
+                                style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#ffffff" }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {isCompetitive && (
+                        <div style={{ background: "#f8fafc", padding: "1rem", borderRadius: "10px", border: "1px solid #e2e8f0", marginBottom: "1rem" }}>
+                          <div style={{ fontSize: "0.78rem", fontWeight: 800, color: "#7c2d12", marginBottom: "0.75rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                            JEE & Competitive Test Series Framework
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "0.75rem" }}>
+                            <div>
+                              <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
+                                Target Examination
+                              </label>
+                              <select
+                                value={subjBoardOrProgram}
+                                onChange={(e) => setSubjBoardOrProgram(e.target.value)}
+                                style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#ffffff" }}
+                              >
+                                <option value="JEE Main & Advanced">JEE Main & Advanced</option>
+                                <option value="NEET-UG">NEET-UG</option>
+                                <option value="BITSAT">BITSAT</option>
+                                <option value="Foundation & Olympiads">Foundation & Olympiads</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
+                                Marking Pattern
+                              </label>
+                              <select
+                                value={subjGradingSystem}
+                                onChange={(e) => setSubjGradingSystem(e.target.value)}
+                                style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#ffffff" }}
+                              >
+                                <option value="+4 / -1 Negative Marking">+4 / -1 Negative Marking (Standard JEE/NEET)</option>
+                                <option value="+4 / -2 Multi-Correct Advanced">+4 / -2 Multi-Correct Partial (JEE Adv)</option>
+                                <option value="+3 / -1 Single Choice">+3 / -1 Single Choice</option>
+                              </select>
+                            </div>
+                          </div>
+                          <div>
+                            <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.3rem" }}>
+                              Subject Section / Track
+                            </label>
+                            <input
+                              type="text"
+                              value={subjJeeTarget}
+                              onChange={(e) => setSubjJeeTarget(e.target.value)}
+                              placeholder="e.g. Physics - Mechanics or Chemistry - Organic"
+                              style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#ffffff" }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </form>
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", borderTop: "1px solid #e2e8f0", paddingTop: "1.25rem" }}>
+                    <button type="button" onClick={() => setShowSubjModal(false)} className="btn btn-secondary">
+                      Cancel
+                    </button>
+                    <button type="submit" form="add-subj-form" className="btn btn-primary">
+                      {isCollege ? "Save Course Subject" : isSchool ? "Save School Subject" : "Save JEE Subject"}
                     </button>
                   </div>
-
-                  <form onSubmit={handleCreateSubject} id="add-subj-form">
-                    <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: "1rem", marginBottom: "1rem" }}>
-                      <div>
-                        <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                          Subject Name *
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="e.g. Natural Language Processing"
-                          value={subjName}
-                          onChange={(e) => setSubjName(e.target.value)}
-                          style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
-                        />
-                      </div>
-                      <div>
-                        <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                          Subject Code *
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="e.g. NLP-701"
-                          value={subjCode}
-                          onChange={(e) => setSubjCode(e.target.value)}
-                          style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem", textTransform: "uppercase" }}
-                        />
-                      </div>
-                    </div>
-
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
-                      <div>
-                        <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                          Semester / Grade
-                        </label>
-                        <input
-                          type="text"
-                          value={subjSem}
-                          onChange={(e) => setSubjSem(e.target.value)}
-                          style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
-                        />
-                      </div>
-                      <div>
-                        <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                          Credits
-                        </label>
-                        <input
-                          type="number"
-                          value={subjCredits}
-                          onChange={(e) => setSubjCredits(Number(e.target.value))}
-                          style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.88rem" }}
-                        />
-                      </div>
-                    </div>
-                  </form>
-                </div>
-
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", borderTop: "1px solid #e2e8f0", paddingTop: "1.25rem" }}>
-                  <button type="button" onClick={() => setShowSubjModal(false)} className="btn btn-secondary">
-                    Cancel
-                  </button>
-                  <button type="submit" form="add-subj-form" className="btn btn-primary">
-                    Save Subject
-                  </button>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Student Profile Modal */}
       {selectedStudentForProfile && (

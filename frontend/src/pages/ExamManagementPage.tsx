@@ -43,7 +43,8 @@ import {
   Wand2,
   X,
   Minimize2,
-  Maximize2
+  Maximize2,
+  Crosshair
 } from "lucide-react";
 
 interface ExamManagementProps {
@@ -251,6 +252,84 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
 
     return () => window.clearInterval(timer);
   }, [bgAnswerKeyJobs, activeExam?.id, examDetails?.exam?.id]);
+
+  const [paperImageDims, setPaperImageDims] = useState<{ width: number; height: number } | null>(null);
+  const [drawingBoxForQId, setDrawingBoxForQId] = useState<string | null>(null);
+  const [drawStart, setDrawStart] = useState<{ xPct: number; yPct: number } | null>(null);
+  const [drawCurrent, setDrawCurrent] = useState<{ xPct: number; yPct: number } | null>(null);
+  const paperImageRef = useRef<HTMLImageElement | null>(null);
+
+  const getOverlayCoordinates = (box: number[], naturalW?: number, naturalH?: number) => {
+    if (!Array.isArray(box) || box.length !== 4) {
+      return { top: 0, left: 0, height: 10, width: 90 };
+    }
+    const [ymin, xmin, ymax, xmax] = box;
+
+    if (naturalW && naturalH) {
+      if ((ymax > 1000 || xmax > 1000) || (naturalH < 950 && ymax <= naturalH * 1.05 && xmax <= naturalW * 1.05)) {
+        const top = (ymin / naturalH) * 100;
+        const left = (xmin / naturalW) * 100;
+        const height = Math.max(2.4, ((ymax - ymin) / naturalH) * 100);
+        const width = Math.max(4, ((xmax - xmin) / naturalW) * 100);
+        return { top, left, height, width };
+      }
+    }
+
+    const top = ymin / 10;
+    const left = xmin / 10;
+    const height = Math.max(2.4, (ymax - ymin) / 10);
+    const width = Math.max(4, (xmax - xmin) / 10);
+    return { top, left, height, width };
+  };
+
+  const handlePaperMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!drawingBoxForQId || !paperImageRef.current) return;
+    e.preventDefault();
+    const rect = paperImageRef.current.getBoundingClientRect();
+    const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+    const y = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+    const xPct = Math.round((x / rect.width) * 1000);
+    const yPct = Math.round((y / rect.height) * 1000);
+    setDrawStart({ xPct, yPct });
+    setDrawCurrent({ xPct, yPct });
+  };
+
+  const handlePaperMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!drawingBoxForQId || !drawStart || !paperImageRef.current) return;
+    e.preventDefault();
+    const rect = paperImageRef.current.getBoundingClientRect();
+    const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+    const y = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+    const xPct = Math.round((x / rect.width) * 1000);
+    const yPct = Math.round((y / rect.height) * 1000);
+    setDrawCurrent({ xPct, yPct });
+  };
+
+  const handlePaperMouseUp = () => {
+    if (!drawingBoxForQId || !drawStart || !drawCurrent) {
+      setDrawStart(null);
+      setDrawCurrent(null);
+      return;
+    }
+    const ymin = Math.min(drawStart.yPct, drawCurrent.yPct);
+    const ymax = Math.max(drawStart.yPct, drawCurrent.yPct);
+    const xmin = Math.min(drawStart.xPct, drawCurrent.xPct);
+    const xmax = Math.max(drawStart.xPct, drawCurrent.xPct);
+
+    if (ymax - ymin >= 15 && xmax - xmin >= 20) {
+      setQuestions((prev) =>
+        prev.map((q) =>
+          q.id === drawingBoxForQId
+            ? { ...q, page: currentPaperPage, box_2d: [ymin, xmin, ymax, xmax] }
+            : q
+        )
+      );
+      setActiveQuestionId(drawingBoxForQId);
+    }
+    setDrawingBoxForQId(null);
+    setDrawStart(null);
+    setDrawCurrent(null);
+  };
 
   const selectAndSyncQuestion = (q: QuestionItem) => {
     const qid = q.id || null;
@@ -2426,6 +2505,32 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                                     >
                                       <Sparkles size={12} /> Refine
                                     </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setDrawingBoxForQId(q.id || null);
+                                        if (q.page && q.page !== currentPaperPage) {
+                                          setCurrentPaperPage(q.page);
+                                        }
+                                      }}
+                                      style={{
+                                        background: drawingBoxForQId === q.id ? "#2563eb" : "#ffffff",
+                                        border: `1px solid ${drawingBoxForQId === q.id ? "#2563eb" : "#cbd5e1"}`,
+                                        color: drawingBoxForQId === q.id ? "#ffffff" : "#475569",
+                                        padding: "0.24rem 0.6rem",
+                                        borderRadius: "6px",
+                                        fontSize: "0.74rem",
+                                        fontWeight: 700,
+                                        cursor: "pointer",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "0.25rem"
+                                      }}
+                                      title="Draw or adjust this question's box directly on the scanned paper"
+                                    >
+                                      <Crosshair size={12} />
+                                      {drawingBoxForQId === q.id ? "Drawing Box..." : "Target Box"}
+                                    </button>
                                   </div>
                                 </div>
 
@@ -2772,72 +2877,155 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                   );
 
                   return (
-                    <div
-                      style={{
-                        position: "relative",
-                        width: `${paperZoom * 6.5}px`,
-                        maxWidth: "none",
-                        transition: "width 0.15s ease",
-                        background: "#ffffff",
-                        borderRadius: "6px",
-                        boxShadow: "0 4px 16px rgba(15, 23, 42, 0.08)"
-                      }}
-                    >
-                      <img
-                        src={pageImageUrl}
-                        alt={`Question Paper Page ${currentPaperPage}`}
-                        onError={() => setPaperImageError(true)}
-                        style={{ width: "100%", height: "auto", display: "block", borderRadius: "6px" }}
-                      />
-
-                      {/* Spatial Question Highlight Overlays */}
-                      {showPaperOverlays && pageOverlayQuestions.length > 0 && (
-                        <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-                          {pageOverlayQuestions.map((oq, oIdx) => {
-                            const [ymin, xmin, ymax, xmax] = oq.box_2d as number[];
-                            const isSelected = activeQuestionId === oq.id;
-                            return (
-                              <div
-                                key={`${oq.id || oIdx}-ov`}
-                                onClick={() => handlePaperOverlaySelect(oq)}
-                                title={`${oq.q_no} (${oq.marks} marks) — Click to jump to question`}
-                                style={{
-                                  position: "absolute",
-                                  top: `${ymin / 10}%`,
-                                  left: `${xmin / 10}%`,
-                                  height: `${Math.max(2.4, (ymax - ymin) / 10)}%`,
-                                  width: `${Math.max(4, (xmax - xmin) / 10)}%`,
-                                  border: isSelected ? "2px solid #2563eb" : "1.5px dashed rgba(37, 99, 235, 0.55)",
-                                  background: isSelected ? "rgba(37, 99, 235, 0.14)" : "rgba(37, 99, 235, 0.04)",
-                                  borderRadius: "6px",
-                                  pointerEvents: "auto",
-                                  cursor: "pointer",
-                                  zIndex: isSelected ? 5 : 1,
-                                  transition: "all 0.15s ease"
-                                }}
-                              >
-                                <span
-                                  style={{
-                                    position: "absolute",
-                                    top: "-10px",
-                                    right: "6px",
-                                    background: isSelected ? "#1d4ed8" : "#2563eb",
-                                    color: "#ffffff",
-                                    fontSize: "0.66rem",
-                                    fontWeight: 800,
-                                    padding: "1px 6px",
-                                    borderRadius: "999px",
-                                    whiteSpace: "nowrap",
-                                    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.18)"
-                                  }}
-                                >
-                                  {oq.q_no} · {oq.marks}M
-                                </span>
-                              </div>
-                            );
-                          })}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+                      {/* Active Box Drawing Instructions Banner */}
+                      {drawingBoxForQId && (
+                        <div
+                          style={{
+                            width: `${Math.min(paperZoom * 6.5, 780)}px`,
+                            background: "#2563eb",
+                            color: "#ffffff",
+                            padding: "0.45rem 0.85rem",
+                            borderRadius: "8px",
+                            marginBottom: "0.65rem",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            fontSize: "0.8rem",
+                            fontWeight: 700,
+                            boxShadow: "0 2px 6px rgba(37, 99, 235, 0.25)"
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                            <Crosshair size={15} />
+                            <span>
+                              Click & drag rectangle on Page {currentPaperPage} for{" "}
+                              {questions.find((q) => q.id === drawingBoxForQId)?.q_no || "Question"}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDrawingBoxForQId(null);
+                              setDrawStart(null);
+                              setDrawCurrent(null);
+                            }}
+                            style={{
+                              background: "rgba(255, 255, 255, 0.22)",
+                              border: "none",
+                              color: "#ffffff",
+                              padding: "0.2rem 0.55rem",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              fontSize: "0.74rem",
+                              fontWeight: 700
+                            }}
+                          >
+                            Cancel
+                          </button>
                         </div>
                       )}
+
+                      <div
+                        onMouseDown={handlePaperMouseDown}
+                        onMouseMove={handlePaperMouseMove}
+                        onMouseUp={handlePaperMouseUp}
+                        style={{
+                          position: "relative",
+                          width: `${paperZoom * 6.5}px`,
+                          maxWidth: "none",
+                          transition: "width 0.15s ease",
+                          background: "#ffffff",
+                          borderRadius: "6px",
+                          boxShadow: "0 4px 16px rgba(15, 23, 42, 0.08)",
+                          cursor: drawingBoxForQId ? "crosshair" : "default",
+                          userSelect: drawingBoxForQId ? "none" : "auto"
+                        }}
+                      >
+                        <img
+                          ref={paperImageRef}
+                          src={pageImageUrl}
+                          alt={`Question Paper Page ${currentPaperPage}`}
+                          onLoad={(e) => {
+                            const img = e.currentTarget;
+                            setPaperImageDims({ width: img.naturalWidth, height: img.naturalHeight });
+                          }}
+                          onError={() => setPaperImageError(true)}
+                          style={{ width: "100%", height: "auto", display: "block", borderRadius: "6px" }}
+                        />
+
+                        {/* Interactive Box Drawing Live Preview */}
+                        {drawingBoxForQId && drawStart && drawCurrent && (
+                          <div
+                            style={{
+                              position: "absolute",
+                              top: `${Math.min(drawStart.yPct, drawCurrent.yPct) / 10}%`,
+                              left: `${Math.min(drawStart.xPct, drawCurrent.xPct) / 10}%`,
+                              height: `${Math.max(1, Math.abs(drawCurrent.yPct - drawStart.yPct)) / 10}%`,
+                              width: `${Math.max(1, Math.abs(drawCurrent.xPct - drawStart.xPct)) / 10}%`,
+                              border: "2px solid #2563eb",
+                              background: "rgba(37, 99, 235, 0.25)",
+                              borderRadius: "6px",
+                              pointerEvents: "none",
+                              zIndex: 40
+                            }}
+                          />
+                        )}
+
+                        {/* Spatial Question Highlight Overlays */}
+                        {showPaperOverlays && pageOverlayQuestions.length > 0 && (
+                          <div style={{ position: "absolute", inset: 0, pointerEvents: drawingBoxForQId ? "none" : "auto" }}>
+                            {pageOverlayQuestions.map((oq, oIdx) => {
+                              const coords = getOverlayCoordinates(oq.box_2d as number[], paperImageDims?.width, paperImageDims?.height);
+                              const isSelected = activeQuestionId === oq.id;
+                              const badgeOnLeft = oIdx % 2 === 0;
+                              const isNearTop = coords.top < 3.2;
+
+                              return (
+                                <div
+                                  key={`${oq.id || oIdx}-ov`}
+                                  onClick={() => handlePaperOverlaySelect(oq)}
+                                  title={`${oq.q_no} (${oq.marks} marks) — Click to jump to question`}
+                                  style={{
+                                    position: "absolute",
+                                    top: `${coords.top}%`,
+                                    left: `${coords.left}%`,
+                                    height: `${coords.height}%`,
+                                    width: `${coords.width}%`,
+                                    border: isSelected ? "2.5px solid #2563eb" : "1.5px dashed rgba(37, 99, 235, 0.65)",
+                                    background: isSelected ? "rgba(37, 99, 235, 0.16)" : "rgba(37, 99, 235, 0.05)",
+                                    borderRadius: "6px",
+                                    pointerEvents: "auto",
+                                    cursor: "pointer",
+                                    zIndex: isSelected ? 15 : 2,
+                                    transition: "all 0.15s ease",
+                                    boxShadow: isSelected ? "0 0 0 3px rgba(37, 99, 235, 0.22)" : "none"
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      position: "absolute",
+                                      top: isNearTop ? "3px" : "-10px",
+                                      ...(badgeOnLeft ? { left: "6px" } : { right: "6px" }),
+                                      background: isSelected ? "#1d4ed8" : "#2563eb",
+                                      color: "#ffffff",
+                                      fontSize: "0.68rem",
+                                      fontWeight: 800,
+                                      padding: "1px 7px",
+                                      borderRadius: "999px",
+                                      whiteSpace: "nowrap",
+                                      boxShadow: "0 1px 3px rgba(0, 0, 0, 0.22)",
+                                      zIndex: 20
+                                    }}
+                                  >
+                                    {oq.q_no} · {oq.marks}M
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   );
                 })()}

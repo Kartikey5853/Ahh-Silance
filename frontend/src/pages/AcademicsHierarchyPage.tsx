@@ -19,6 +19,38 @@ interface AcademicsHierarchyProps {
   onNavigate: (tab: any, params?: any) => void;
 }
 
+const COLLEGE_SUBJ_PRESETS = [
+  { name: "Natural Language Processing", code: "NLP-701", credits: 4, ltp: "3-1-0", sem: "Sem 6", prog: "B.Tech Computer Science", grading: "10-Point CGPA Scale (O, A+, A, B+, B, C, P, F)" },
+  { name: "Automata Theory & Compiler Design", code: "ATCD-602", credits: 4, ltp: "3-1-0", sem: "Sem 6", prog: "B.Tech Computer Science", grading: "10-Point CGPA Scale (O, A+, A, B+, B, C, P, F)" },
+  { name: "Data Structures & Algorithms", code: "CS-201", credits: 4, ltp: "3-0-2", sem: "Sem 3", prog: "B.Tech Computer Science", grading: "10-Point CGPA Scale (O, A+, A, B+, B, C, P, F)" },
+  { name: "Operating Systems", code: "CS-401", credits: 4, ltp: "3-0-2", sem: "Sem 4", prog: "B.Tech Computer Science", grading: "10-Point CGPA Scale (O, A+, A, B+, B, C, P, F)" },
+  { name: "Database Management Systems", code: "CS-501", credits: 4, ltp: "3-0-2", sem: "Sem 5", prog: "B.Tech Computer Science", grading: "10-Point CGPA Scale (O, A+, A, B+, B, C, P, F)" },
+  { name: "Computer Networks", code: "CS-601", credits: 3, ltp: "3-0-0", sem: "Sem 6", prog: "B.Tech Computer Science", grading: "10-Point CGPA Scale (O, A+, A, B+, B, C, P, F)" },
+  { name: "Machine Learning & AI", code: "AI-701", credits: 4, ltp: "3-0-2", sem: "Sem 7", prog: "Artificial Intelligence & Data Science", grading: "10-Point CGPA Scale (O, A+, A, B+, B, C, P, F)" },
+  { name: "Software Engineering & Agile", code: "SE-502", credits: 3, ltp: "3-0-0", sem: "Sem 5", prog: "B.Tech Computer Science", grading: "10-Point CGPA Scale (O, A+, A, B+, B, C, P, F)" },
+];
+
+const SCHOOL_SUBJ_PRESETS = [
+  { name: "Mathematics", code: "MATH-10", grade: "Class 10 - Term 1", board: "CBSE Board", split: "80% Theory + 20% Internal Assessment", grading: "CBSE 9-Point Scale (A1 to E)" },
+  { name: "Science", code: "SCI-10", grade: "Class 10 - Term 1", board: "CBSE Board", split: "80% Theory + 20% Practical Assessment", grading: "CBSE 9-Point Scale (A1 to E)" },
+  { name: "English Core", code: "ENG-12", grade: "Class 12 - Term 1", board: "CBSE Board", split: "80% Theory + 20% Internal Assessment", grading: "CBSE 9-Point Scale (A1 to E)" },
+  { name: "Physics", code: "PHY-12", grade: "Class 12 - Term 1", board: "CBSE Board", split: "70% Theory + 30% Practical Assessment", grading: "CBSE 9-Point Scale (A1 to E)" },
+  { name: "Chemistry", code: "CHEM-12", grade: "Class 12 - Term 1", board: "CBSE Board", split: "70% Theory + 30% Practical Assessment", grading: "CBSE 9-Point Scale (A1 to E)" },
+  { name: "Biology", code: "BIO-12", grade: "Class 12 - Term 1", board: "CBSE Board", split: "70% Theory + 30% Practical Assessment", grading: "CBSE 9-Point Scale (A1 to E)" },
+  { name: "Computer Science (Python)", code: "CS-12", grade: "Class 12 - Term 1", board: "CBSE Board", split: "70% Theory + 30% Practical Assessment", grading: "CBSE 9-Point Scale (A1 to E)" },
+  { name: "Social Science", code: "SST-10", grade: "Class 10 - Term 1", board: "CBSE Board", split: "80% Theory + 20% Internal Assessment", grading: "CBSE 9-Point Scale (A1 to E)" },
+];
+
+const JEE_SUBJ_PRESETS = [
+  { name: "Physics - Mechanics & General Physics", code: "JEE-PHY-01", target: "Physics - Mechanics", exam: "JEE Main & Advanced", pattern: "+4 / -1 Negative Marking" },
+  { name: "Physics - Electrodynamics & Optics", code: "JEE-PHY-02", target: "Physics - Electrodynamics", exam: "JEE Main & Advanced", pattern: "+4 / -1 Negative Marking" },
+  { name: "Chemistry - Physical Chemistry", code: "JEE-CHEM-01", target: "Physical Chemistry", exam: "JEE Main & Advanced", pattern: "+4 / -1 Negative Marking" },
+  { name: "Chemistry - Organic Chemistry", code: "JEE-CHEM-02", target: "Organic Chemistry", exam: "JEE Main & Advanced", pattern: "+4 / -1 Negative Marking" },
+  { name: "Mathematics - Calculus & Functions", code: "JEE-MATH-01", target: "Calculus", exam: "JEE Main & Advanced", pattern: "+4 / -1 Negative Marking" },
+  { name: "Mathematics - Coordinate Geometry & Vectors", code: "JEE-MATH-02", target: "Coordinate & Vectors", exam: "JEE Main & Advanced", pattern: "+4 / -1 Negative Marking" },
+  { name: "Biology - Botany & Genetics (NEET)", code: "NEET-BIO-01", target: "Botany & Genetics", exam: "NEET-UG", pattern: "+4 / -1 Negative Marking" },
+];
+
 export const AcademicsHierarchyPage: React.FC<AcademicsHierarchyProps> = ({ onNavigate }) => {
   const [institutions, setInstitutions] = useState<Institution[]>([]);
   const [selectedInstId, setSelectedInstId] = useState<string>("");
@@ -135,6 +167,26 @@ export const AcademicsHierarchyPage: React.FC<AcademicsHierarchyProps> = ({ onNa
       setNewSubjLtpHours("3-1-0");
     }
     setShowSubjectModal(true);
+  };
+
+  const handleApplySubjPreset = (p: any, orgType: string) => {
+    setNewSubjName(p.name);
+    setNewSubjCode(p.code);
+    if (orgType === "school") {
+      if (p.board) setNewSubjBoardOrProgram(p.board);
+      if (p.split) setNewSubjSplit(p.split);
+      if (p.grading) setNewSubjGradingSystem(p.grading);
+      if (p.grade) setNewSubjSemOrGrade(p.grade);
+    } else if (orgType === "competitive") {
+      if (p.pattern) setNewSubjGradingSystem(`${p.pattern} Scheme`);
+      if (p.exam) setNewSubjBoardOrProgram(p.exam);
+    } else {
+      if (p.credits) setNewSubjCredits(p.credits);
+      if (p.ltp) setNewSubjLtpHours(p.ltp);
+      if (p.sem) setNewSubjSemOrGrade(p.sem);
+      if (p.prog) setNewSubjBoardOrProgram(p.prog);
+      if (p.grading) setNewSubjGradingSystem(p.grading);
+    }
   };
 
   const handleModalOrgChange = async (targetOrgId: string) => {
@@ -360,7 +412,11 @@ export const AcademicsHierarchyPage: React.FC<AcademicsHierarchyProps> = ({ onNa
               style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.85rem", padding: "0.5rem 0.95rem" }}
             >
               <Plus size={15} />
-              Add Subject
+              {currentOrg?.type === "college"
+                ? "Add Course Subject"
+                : currentOrg?.type === "school"
+                ? "Add School Subject"
+                : "Add JEE Subject"}
             </button>
           )}
         </div>
@@ -509,7 +565,11 @@ export const AcademicsHierarchyPage: React.FC<AcademicsHierarchyProps> = ({ onNa
                 className="btn btn-primary"
                 style={{ padding: "0.55rem 1.25rem", fontSize: "0.85rem" }}
               >
-                Add Subject
+                {currentOrg?.type === "college"
+                  ? "Add Course Subject"
+                  : currentOrg?.type === "school"
+                  ? "Add School Subject"
+                  : "Add JEE Subject"}
               </button>
             </div>
           ) : (
@@ -794,57 +854,96 @@ export const AcademicsHierarchyPage: React.FC<AcademicsHierarchyProps> = ({ onNa
       })()}
 
       {/* Modal: Add Subject with Strict Org & Class Hierarchy */}
-      {showSubjectModal && (
-        <div className="modal-backdrop" onClick={() => setShowSubjectModal(false)}>
-          <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "560px" }}>
-            <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.25rem" }}>
-              Add Subject
-            </h3>
-            <p style={{ fontSize: "0.82rem", color: "#64748b", marginBottom: "1.25rem" }}>
-              Connect curriculum under organization hierarchy with tailored grading criteria
-            </p>
+      {showSubjectModal && (() => {
+        const targetOrg = institutions.find((i) => i.id === modalOrgId) || currentOrg;
+        const orgType = targetOrg?.type || "college";
+        const isCollege = orgType === "college";
+        const isSchool = orgType === "school";
+        const currentPresets = isCollege ? COLLEGE_SUBJ_PRESETS : isSchool ? SCHOOL_SUBJ_PRESETS : JEE_SUBJ_PRESETS;
 
-            <form onSubmit={handleCreateSubject}>
-              {/* Linked Hierarchy: Organization & Class */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
+        return (
+          <div className="modal-backdrop" onClick={() => setShowSubjectModal(false)}>
+            <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "620px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
                 <div>
-                  <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
-                    Organization *
-                  </label>
-                  <select
-                    value={modalOrgId}
-                    onChange={(e) => handleModalOrgChange(e.target.value)}
-                    style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#ffffff", fontWeight: 600 }}
-                  >
-                    {institutions.map((i) => (
-                      <option key={i.id} value={i.id}>
-                        {i.name} ({i.type.toUpperCase()})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
-                    Class / Cohort *
-                  </label>
-                  <select
-                    value={modalClassId}
-                    onChange={(e) => setModalClassId(e.target.value)}
-                    style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#ffffff", fontWeight: 500 }}
-                  >
-                    {modalClasses.length === 0 ? (
-                      <option value="">General Class</option>
-                    ) : (
-                      modalClasses.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} ({c.code})
-                        </option>
-                      ))
-                    )}
-                  </select>
+                  <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
+                    {isCollege ? "Add Course Subject (College)" : isSchool ? "Add School Subject" : "Add JEE Subject"}
+                  </h3>
+                  <p style={{ fontSize: "0.82rem", color: "#64748b", margin: "0.2rem 0 0" }}>
+                    Connect curriculum under organization hierarchy with tailored grading criteria
+                  </p>
                 </div>
               </div>
+
+              {/* Quick Presets Pills */}
+              <div style={{ marginBottom: "1rem", background: "#f8fafc", padding: "0.6rem 0.8rem", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                <div style={{ fontSize: "0.74rem", fontWeight: 700, color: "#475569", marginBottom: "0.4rem" }}>
+                  Quick Fill Presets ({orgType.toUpperCase()}):
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
+                  {currentPresets.slice(0, 6).map((preset: any) => (
+                    <button
+                      key={preset.code}
+                      type="button"
+                      onClick={() => handleApplySubjPreset(preset, orgType)}
+                      style={{
+                        padding: "0.22rem 0.55rem",
+                        borderRadius: "999px",
+                        border: "1px solid #cbd5e1",
+                        background: "#ffffff",
+                        fontSize: "0.74rem",
+                        fontWeight: 600,
+                        color: "#1e293b",
+                        cursor: "pointer"
+                      }}
+                    >
+                      {preset.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <form onSubmit={handleCreateSubject}>
+                {/* Linked Hierarchy: Organization & Class */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
+                      Organization *
+                    </label>
+                    <select
+                      value={modalOrgId}
+                      onChange={(e) => handleModalOrgChange(e.target.value)}
+                      style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#ffffff", fontWeight: 600 }}
+                    >
+                      {institutions.map((i) => (
+                        <option key={i.id} value={i.id}>
+                          {i.name} ({i.type.toUpperCase()})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
+                      {isCollege ? "Target Semester *" : isSchool ? "Class / Grade Level *" : "Class / Target Batch *"}
+                    </label>
+                    <select
+                      value={modalClassId}
+                      onChange={(e) => setModalClassId(e.target.value)}
+                      style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#ffffff", fontWeight: 500 }}
+                    >
+                      {modalClasses.length === 0 ? (
+                        <option value="">General Class</option>
+                      ) : (
+                        modalClasses.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} ({c.code})
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                </div>
 
               {/* Subject Basics */}
               <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
@@ -1103,13 +1202,14 @@ export const AcademicsHierarchyPage: React.FC<AcademicsHierarchyProps> = ({ onNa
                   Cancel
                 </button>
                 <button type="submit" className="btn btn-primary">
-                  Save Subject
+                  {isCollege ? "Save Course Subject" : isSchool ? "Save School Subject" : "Save JEE Subject"}
                 </button>
               </div>
             </form>
           </div>
         </div>
-      )}
+      );
+    })()}
     </div>
   );
 };
