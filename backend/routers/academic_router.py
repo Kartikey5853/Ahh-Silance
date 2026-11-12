@@ -175,6 +175,11 @@ class AnswerKeyUpdateRequest(BaseModel):
     answer_key_structured: Optional[List[Dict[str, Any]]] = None
 
 
+class EvaluationUpdateRequest(BaseModel):
+    breakdown: Optional[List[Dict[str, Any]]] = None
+    teacher_feedback: Optional[str] = None
+
+
 # --- Endpoints ---
 
 # 1. Profile
@@ -784,86 +789,27 @@ def delete_exam(exam_id: str):
 
 
 # 6. Strict Multimodal Evaluation
-@router.post("/exams/{exam_id}/evaluate")
-async def evaluate_student_submission(
+def _persist_evaluation_record(
+    eval_id: str,
     exam_id: str,
-    student_id: str = Form(...),
-    sheet_file: Optional[UploadFile] = File(None),
-    sheet_text: Optional[str] = Form(None),
-    gemini_api_key: Optional[str] = Form(None),
-    current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)
-):
-    """
-    Performs strict evaluation of a student's answer sheet against the
-    professor's allocated question marks and master answer key at zero temperature.
-    """
-    exam = db.get_exam(exam_id)
-    if not exam:
-        raise HTTPException(status_code=404, detail="Exam not found")
-
-    if not (exam.get("answer_key_text") or "").strip():
-        raise HTTPException(
-            status_code=400,
-            detail="Answer key is required before evaluating answer sheets. Please generate or approve the answer key first."
-        )
-
-    # Fetch student details
-    students = db.list_students(exam["subject_id"])
-    student = next((s for s in students if s["id"] == student_id), None)
-    if not student:
-        student_name = "Candidate"
-        roll_number = student_id
-    else:
-        student_name = student["name"]
-        roll_number = student["roll_number"]
-
-    # Read sheet bytes
-    if sheet_file:
-        sheet_bytes = await sheet_file.read()
-        filename = sheet_file.filename or "student_sheet.pdf"
-    elif sheet_text:
-        sheet_bytes = sheet_text.encode("utf-8")
-        filename = "student_response.txt"
-    else:
-        raise HTTPException(status_code=400, detail="Must provide either sheet_file or sheet_text")
-
-    user_key = gemini_api_key
-    if not user_key and current_user:
-        u = db.get_user_by_username(current_user.get("username", ""))
-        if u:
-            user_key = u.get("gemini_api_key")
-    if not user_key:
-        user_key = os.getenv("GEMINI_API_KEY", "").strip() or None
-
-    eval_id = f"eval-{uuid.uuid4().hex[:8]}"
-
-    # Rasterize student submission pages to high-resolution JPEG files
-    raster_info = PageStorageService.save_and_rasterize_submission(
-        eval_id=eval_id,
-        file_bytes=sheet_bytes,
-        filename=filename,
-        target_dpi=200
-    )
-
-    # Run MagicInk 3-Stage High-Precision Multimodal Evaluation
-    eval_result = await MagicInkService.evaluate_submission(
-        eval_id=eval_id,
-        exam=exam,
-        student_name=student_name,
-        roll_number=roll_number,
-        page_records=raster_info["pages"],
-        raw_text=raster_info.get("raw_text", ""),
-        user_api_key=user_key
-    )
-
-    # Normalize svg_overlays string keys for JSON persistence consistently
+    student_id: str,
+    roll_number: str,
+    student_name: str,
+    filename: str,
+    raster_info: Dict[str, Any],
+    eval_result: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Normalizes MagicInk payloads and persists an academic evaluation in SQLite."""
     magic_ink_payload = dict(eval_result.get("magic_ink") or {})
     if isinstance(magic_ink_payload.get("svg_overlays"), dict):
         magic_ink_payload["svg_overlays"] = {
             str(k): v for k, v in magic_ink_payload["svg_overlays"].items()
         }
+    if eval_result.get("source"):
+        magic_ink_payload["source"] = eval_result["source"]
+    if eval_result.get("api_warning"):
+        magic_ink_payload["api_warning"] = eval_result["api_warning"]
 
-    # Persist in SQLite with MagicInk annotations and page metadata
     record_data = {
         "id": eval_id,
         "exam_id": exam_id,
@@ -882,9 +828,192 @@ async def evaluate_student_submission(
         "magic_ink": magic_ink_payload,
         "structured_transcription": eval_result.get("structured_transcription", [])
     }
-
     saved = db.save_academic_evaluation(record_data)
+    if eval_result.get("api_warning"):
+        saved["api_warning"] = eval_result["api_warning"]
+    if eval_result.get("source"):
+        saved["source"] = eval_result["source"]
     return saved
+
+
+async def _run_evaluation_background_job(
+    job_id: str,
+    eval_id: str,
+    exam: Dict[str, Any],
+    student_id: str,
+    student_name: str,
+    roll_number: str,
+    filename: str,
+    raster_info: Dict[str, Any],
+    user_key: Optional[str],
+) -> None:
+    def _on_stage(stage: str, msg: str) -> None:
+        if job_id in _BACKGROUND_JOBS:
+            _BACKGROUND_JOBS[job_id].update({
+                "stage": stage,
+                "message": msg,
+            })
+
+    try:
+        eval_result = await MagicInkService.evaluate_submission(
+            eval_id=eval_id,
+            exam=exam,
+            student_name=student_name,
+            roll_number=roll_number,
+            page_records=raster_info["pages"],
+            raw_text=raster_info.get("raw_text", ""),
+            user_api_key=user_key,
+            on_stage_update=_on_stage,
+        )
+        saved = _persist_evaluation_record(
+            eval_id=eval_id,
+            exam_id=exam["id"],
+            student_id=student_id,
+            roll_number=roll_number,
+            student_name=student_name,
+            filename=filename,
+            raster_info=raster_info,
+            eval_result=eval_result,
+        )
+        _BACKGROUND_JOBS[job_id].update({
+            "status": "completed",
+            "stage": "completed",
+            "message": "Evaluation scorecard and overlays ready.",
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "result": saved,
+        })
+    except Exception as exc:
+        _BACKGROUND_JOBS[job_id].update({
+            "status": "failed",
+            "stage": "failed",
+            "message": str(exc),
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "error": str(exc),
+        })
+
+
+def _run_evaluation_background_thread(
+    job_id: str,
+    eval_id: str,
+    exam: Dict[str, Any],
+    student_id: str,
+    student_name: str,
+    roll_number: str,
+    filename: str,
+    raster_info: Dict[str, Any],
+    user_key: Optional[str],
+) -> None:
+    """Runs 2-prompt multimodal evaluation on an isolated daemon thread event loop."""
+    asyncio.run(
+        _run_evaluation_background_job(
+            job_id, eval_id, exam, student_id, student_name, roll_number, filename, raster_info, user_key
+        )
+    )
+
+
+@router.post("/exams/{exam_id}/evaluate")
+async def evaluate_student_submission(
+    exam_id: str,
+    student_id: str = Form(...),
+    sheet_file: Optional[UploadFile] = File(None),
+    sheet_text: Optional[str] = Form(None),
+    gemini_api_key: Optional[str] = Form(None),
+    background: bool = Query(False),
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)
+):
+    """
+    Performs strict 2-prompt multimodal evaluation of a student's answer sheet against the
+    professor's allocated question marks and master answer key at zero temperature.
+    When `background=true`, rasterizes pages immediately and returns `job_id` + `eval_id`
+    so the UI can stream uploaded PDF pages + live scanning stages without blocking.
+    """
+    exam = db.get_exam(exam_id)
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+
+    if not (exam.get("answer_key_text") or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Answer key is required before evaluating answer sheets. Please generate or approve the answer key first."
+        )
+
+    students = db.list_students(exam["subject_id"])
+    student = next((s for s in students if s["id"] == student_id), None)
+    if not student:
+        student_name = "Candidate"
+        roll_number = student_id
+    else:
+        student_name = student["name"]
+        roll_number = student["roll_number"]
+
+    if sheet_file:
+        sheet_bytes = await sheet_file.read()
+        filename = sheet_file.filename or "student_sheet.pdf"
+    elif sheet_text:
+        sheet_bytes = sheet_text.encode("utf-8")
+        filename = "student_response.txt"
+    else:
+        raise HTTPException(status_code=400, detail="Must provide either sheet_file or sheet_text")
+
+    user_key = _resolve_gemini_key(gemini_api_key, current_user)
+    eval_id = f"eval-{uuid.uuid4().hex[:8]}"
+
+    # Rasterize student submission pages to high-resolution JPEG files + persist raw original file
+    raster_info = PageStorageService.save_and_rasterize_submission(
+        eval_id=eval_id,
+        file_bytes=sheet_bytes,
+        filename=filename,
+        target_dpi=200
+    )
+
+    if background:
+        job_id = f"job-{uuid.uuid4().hex[:10]}"
+        _BACKGROUND_JOBS[job_id] = {
+            "job_id": job_id,
+            "exam_id": exam_id,
+            "eval_id": eval_id,
+            "kind": "evaluation",
+            "status": "running",
+            "stage": "rasterized",
+            "message": f"Rasterized {raster_info['page_count']} page(s). Starting Prompt 1 spatial OCR...",
+            "page_count": raster_info["page_count"],
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "result": None,
+            "error": None,
+        }
+        worker = threading.Thread(
+            target=_run_evaluation_background_thread,
+            args=(job_id, eval_id, exam, student_id, student_name, roll_number, filename, raster_info, user_key),
+            daemon=True,
+        )
+        worker.start()
+        return {
+            "status": "accepted",
+            "job_id": job_id,
+            "exam_id": exam_id,
+            "eval_id": eval_id,
+            "page_count": raster_info["page_count"],
+        }
+
+    eval_result = await MagicInkService.evaluate_submission(
+        eval_id=eval_id,
+        exam=exam,
+        student_name=student_name,
+        roll_number=roll_number,
+        page_records=raster_info["pages"],
+        raw_text=raster_info.get("raw_text", ""),
+        user_api_key=user_key
+    )
+    return _persist_evaluation_record(
+        eval_id=eval_id,
+        exam_id=exam_id,
+        student_id=student_id,
+        roll_number=roll_number,
+        student_name=student_name,
+        filename=filename,
+        raster_info=raster_info,
+        eval_result=eval_result,
+    )
 
 
 @router.post("/exams/{exam_id}/evaluate-all")
@@ -986,6 +1115,30 @@ def get_evaluation(eval_id: str):
     if not result:
         raise HTTPException(status_code=404, detail="Evaluation record not found")
     return result
+
+
+@router.put("/evaluations/{eval_id}")
+def update_evaluation(eval_id: str, req: EvaluationUpdateRequest):
+    """Persists professor edits (double-tap markdown OCR/feedback or rubric score adjustments)."""
+    updates = req.model_dump(exclude_none=True)
+    updated = db.update_academic_evaluation(eval_id, updates)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Evaluation record not found")
+    return updated
+
+
+@router.get("/evaluations/{eval_id}/file")
+def get_evaluation_original_file(eval_id: str):
+    """Streams the originally uploaded PDF/image submission inline for browser viewing/download."""
+    resolved = PageStorageService.get_original_submission_path(eval_id)
+    if not resolved:
+        raise HTTPException(status_code=404, detail=f"Original uploaded file not found for evaluation {eval_id}")
+    file_path, media_type = resolved
+    return FileResponse(
+        file_path,
+        media_type=media_type,
+        headers={"Content-Disposition": f'inline; filename="{os.path.basename(file_path)}"'},
+    )
 
 
 @router.get("/evaluations/{eval_id}/pages/{page_num}")

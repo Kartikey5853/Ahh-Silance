@@ -960,6 +960,63 @@ class SQLiteDatabase:
                 results.append(d)
             return results
 
+    def update_academic_evaluation(self, eval_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Updates inline-edited breakdown fields or teacher feedback and recalculates total score."""
+        existing = self.get_academic_evaluation(eval_id)
+        if not existing:
+            return None
+
+        breakdown = updates.get("breakdown") if updates.get("breakdown") is not None else existing.get("breakdown", [])
+        teacher_feedback = updates.get("teacher_feedback") if updates.get("teacher_feedback") is not None else existing.get("teacher_feedback", "")
+        max_score = float(existing.get("max_score") or 20.0)
+        exam = self.get_exam(existing.get("exam_id", "")) or {}
+        eq_by_qno = {str(q.get("q_no") or "").strip().lower(): q for q in (exam.get("questions") or [])}
+        or_best: Dict[str, float] = {}
+        non_or_sum = 0.0
+        for b in breakdown:
+            q_key = str(b.get("q_no") or "").strip().lower()
+            eq = eq_by_qno.get(q_key) or {}
+            og = str(eq.get("or_group") or "").strip()
+            marks_val = float(b.get("awarded_marks") or 0.0)
+            if eq.get("is_or_choice") and og:
+                or_best[og] = max(or_best.get(og, 0.0), marks_val)
+            else:
+                non_or_sum += marks_val
+        total_score = round(non_or_sum + sum(or_best.values()), 1)
+        percentage = round((total_score / max_score) * 100.0, 1) if max_score > 0 else 0.0
+
+        if updates.get("grade") is not None:
+            grade = str(updates["grade"])
+        elif percentage >= 90:
+            grade = "Outstanding (A+)"
+        elif percentage >= 80:
+            grade = "Excellent (A)"
+        elif percentage >= 70:
+            grade = "Very Good (B+)"
+        elif percentage >= 60:
+            grade = "Good (B)"
+        elif percentage >= 40:
+            grade = "Pass (C)"
+        else:
+            grade = "Fail (F)"
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE academic_evaluations
+                SET breakdown_json = ?,
+                    teacher_feedback = ?,
+                    total_score = ?,
+                    percentage = ?,
+                    grade = ?
+                WHERE id = ?
+                """,
+                (json.dumps(breakdown), teacher_feedback, total_score, percentage, grade, eval_id),
+            )
+            conn.commit()
+        return self.get_academic_evaluation(eval_id)
+
     # --- Legacy Master Key & Scorecard operations ---
 
     def save_master_key(self, exam_id: str, key_data: Dict[str, Any]) -> None:

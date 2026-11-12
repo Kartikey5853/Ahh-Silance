@@ -72,6 +72,16 @@ class PageStorageService:
         pages_meta: List[Dict[str, Any]] = []
         extracted_text_chunks: List[str] = []
 
+        # Persist raw uploaded submission file for direct PDF / scan viewing
+        if file_bytes and lower_name.endswith((".pdf", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff")):
+            ext = os.path.splitext(lower_name)[1] or ".pdf"
+            raw_save_path = os.path.join(eval_dir, f"original_submission{ext}")
+            try:
+                with open(raw_save_path, "wb") as f_raw:
+                    f_raw.write(file_bytes)
+            except Exception as e:
+                logger.warning(f"Failed saving raw submission {filename} for {eval_id}: {e}")
+
         # 1. Multi-Page PDF Handling
         if lower_name.endswith(".pdf"):
             try:
@@ -179,6 +189,27 @@ class PageStorageService:
             cand_path = os.path.join(eval_dir, candidate)
             if os.path.isfile(cand_path):
                 return cand_path
+        return None
+
+    @classmethod
+    def get_original_submission_path(cls, eval_id: str) -> Optional[Tuple[str, str]]:
+        """Returns `(abs_path, media_type)` for the originally uploaded PDF/image if saved."""
+        eval_dir = os.path.join(cls._get_base_uploads_dir(), eval_id)
+        if not os.path.isdir(eval_dir):
+            return None
+        ext_mime = [
+            (".pdf", "application/pdf"),
+            (".png", "image/png"),
+            (".jpg", "image/jpeg"),
+            (".jpeg", "image/jpeg"),
+            (".webp", "image/webp"),
+            (".bmp", "image/bmp"),
+            (".tiff", "image/tiff"),
+        ]
+        for ext, mime in ext_mime:
+            cand = os.path.join(eval_dir, f"original_submission{ext}")
+            if os.path.isfile(cand):
+                return cand, mime
         return None
 
     @classmethod
