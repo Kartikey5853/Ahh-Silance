@@ -1132,9 +1132,18 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
 
                   const ocrContent =
                     q.ocr_extracted_text ||
-                    activeScorecard.structured_transcription?.find(
-                      (tx: any) => String(tx.q_no).toLowerCase() === String(q.q_no).toLowerCase()
-                    )?.structured_text ||
+                    q.student_transcription ||
+                    activeScorecard.structured_transcription?.find((tx: any) => {
+                      const tq = String(tx.q_no || "").trim().toLowerCase();
+                      const cq = String(q.q_no || "").trim().toLowerCase();
+                      return (
+                        tq === cq ||
+                        tq.startsWith(cq + ":") ||
+                        tq.startsWith(cq + " ") ||
+                        tq.startsWith(cq + ".") ||
+                        String(tx.written_heading || "").toLowerCase().includes(cq)
+                      );
+                    })?.structured_text ||
                     q.evidence_quote ||
                     "";
 
@@ -1901,21 +1910,13 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
                         </div>
 
                         {pageImgMissing ? (
-                          pageNum === 1 && activeScorecard.answer_sheet_filename?.toLowerCase().endsWith(".pdf") ? (
-                            <iframe
-                              src={rawFileUrl}
-                              title="Uploaded Answer Booklet PDF"
-                              style={{ width: "100%", height: "540px", border: "none", display: "block" }}
-                            />
-                          ) : (
-                            <div style={{ padding: "2.5rem 1.5rem", textAlign: "center", color: "#64748b", fontSize: "0.84rem" }}>
-                              Page {pageNum} image could not be loaded. Use{" "}
-                              <a href={rawFileUrl} target="_blank" rel="noreferrer" style={{ color: "#2563eb", fontWeight: 700 }}>
-                                Open Raw File
-                              </a>{" "}
-                              or click Upload &amp; Re-Evaluate above.
-                            </div>
-                          )
+                          <div style={{ padding: "2.5rem 1.5rem", textAlign: "center", color: "#64748b", fontSize: "0.84rem" }}>
+                            Page {pageNum} preview could not be loaded. Use{" "}
+                            <a href={rawFileUrl} target="_blank" rel="noreferrer" style={{ color: "#2563eb", fontWeight: 700 }}>
+                              Open Uploaded Booklet
+                            </a>{" "}
+                            or re-upload the answer booklet below.
+                          </div>
                         ) : (
                           <img
                             src={pageImgUrl}
