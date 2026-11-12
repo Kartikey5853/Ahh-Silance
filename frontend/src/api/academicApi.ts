@@ -17,6 +17,7 @@ import type {
   ExamDetailsResponse,
   AnswerKeyStructuredItem,
   AcademicEvaluation,
+  EvaluationBreakdownItem,
   QuestionItem,
   ExamScanResponse,
   RefineQuestionResponse,
@@ -311,6 +312,43 @@ export const academicApi = {
       headers: { "Content-Type": "multipart/form-data" },
       timeout: 180000
     });
+    return res.data;
+  },
+
+  evaluateStudentAsync: async (
+    examId: string,
+    studentId: string,
+    file?: File | null,
+    text?: string,
+    apiKey?: string
+  ): Promise<{ status: string; job_id: string; exam_id: string; eval_id: string; page_count: number }> => {
+    const formData = new FormData();
+    formData.append("student_id", studentId);
+    if (file) {
+      formData.append("sheet_file", file);
+    }
+    if (text) {
+      formData.append("sheet_text", text);
+    }
+    if (apiKey) {
+      formData.append("gemini_api_key", apiKey);
+    }
+    const res = await apiClient.post<{ status: string; job_id: string; exam_id: string; eval_id: string; page_count: number }>(
+      `/academic/exams/${examId}/evaluate?background=true`,
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+        timeout: 60000,
+      }
+    );
+    return res.data;
+  },
+
+  updateEvaluation: async (
+    evalId: string,
+    payload: { breakdown?: EvaluationBreakdownItem[]; teacher_feedback?: string }
+  ): Promise<AcademicEvaluation> => {
+    const res = await apiClient.put<AcademicEvaluation>(`/academic/evaluations/${evalId}`, payload);
     return res.data;
   },
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { resolveApiUrl } from "../api/client";
+import { DoubleTapMarkdownEditor } from "./DoubleTapMarkdownEditor";
 import { MarkdownQuestionView } from "./MarkdownQuestionView";
 import type { AnswerKeyStructuredItem, Exam, Subject } from "../types/academic";
 import {
@@ -74,7 +75,7 @@ export const AnswerKeyFullscreenWorkspace: React.FC<AnswerKeyFullscreenWorkspace
   onClose
 }) => {
   const [editorMode, setEditorMode] = useState<"structured" | "manual">("structured");
-  const [isEditingStructured, setIsEditingStructured] = useState<boolean>(true);
+  const [isEditingStructured, setIsEditingStructured] = useState<boolean>(false);
   const [expandAll, setExpandAll] = useState<boolean>(true);
   const [activeIdx, setActiveIdx] = useState<number>(0);
   const [paperZoom, setPaperZoom] = useState<number>(85);
@@ -448,23 +449,18 @@ export const AnswerKeyFullscreenWorkspace: React.FC<AnswerKeyFullscreenWorkspace
                   Sync from Cards
                 </button>
               </div>
-              <textarea
+              <DoubleTapMarkdownEditor
                 value={answerKeyText}
-                onChange={(e) => onChangeAnswerKeyText(e.target.value)}
-                placeholder="Paste or type your complete Master Answer Key here, organized by Q1, Q2..."
+                onChange={onChangeAnswerKeyText}
+                minRows={16}
+                maxRows={32}
+                placeholder="Paste or type your complete Master Answer Key here in Markdown/LaTeX, organized by Q1, Q2..."
+                emptyHint="No Master Answer Key text entered yet — double-tap anywhere here to type or paste Markdown, or click Sync from Cards."
                 style={{
                   flex: 1,
-                  minHeight: "520px",
-                  width: "100%",
-                  padding: "1rem",
-                  borderRadius: "10px",
-                  border: "1px solid #cbd5e1",
-                  background: "#ffffff",
-                  color: "#0f172a",
-                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-                  fontSize: "0.86rem",
-                  lineHeight: 1.6,
-                  resize: "none"
+                  minHeight: "420px",
+                  overflowY: "auto",
+                  padding: "1rem 1.15rem",
                 }}
               />
             </div>
@@ -502,7 +498,7 @@ export const AnswerKeyFullscreenWorkspace: React.FC<AnswerKeyFullscreenWorkspace
                       gap: "0.25rem"
                     }}
                   >
-                    <Edit3 size={12} /> {isEditingStructured ? "Editing Enabled" : "Preview Only"}
+                    <Edit3 size={12} /> {isEditingStructured ? "Bulk Text Edit On" : "Double-Tap Markdown"}
                   </button>
                   <button
                     type="button"
@@ -598,9 +594,15 @@ export const AnswerKeyFullscreenWorkspace: React.FC<AnswerKeyFullscreenWorkspace
                             }}
                           />
                         ) : (
-                          <div style={{ fontSize: "0.85rem", color: "#0f172a", whiteSpace: "pre-wrap", lineHeight: 1.55 }}>
-                            {item.model_answer || "No model answer entered yet."}
-                          </div>
+                          <DoubleTapMarkdownEditor
+                            value={item.model_answer || ""}
+                            onChange={(nextVal) => handleUpdateItem(idx, { model_answer: nextVal })}
+                            compact
+                            minRows={3}
+                            maxRows={14}
+                            placeholder="Write expected solution steps in Markdown..."
+                            emptyHint="No model answer entered yet — double-tap to write."
+                          />
                         )}
                       </div>
 

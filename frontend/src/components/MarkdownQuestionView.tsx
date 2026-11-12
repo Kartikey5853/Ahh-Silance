@@ -3,9 +3,20 @@ import React from "react";
 interface MarkdownQuestionViewProps {
   text: string;
   compact?: boolean;
+  emptyHint?: string;
 }
 
 const MATH_SYMBOLS: Array<[RegExp, string]> = [
+  [/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, "($1)/($2)"],
+  [/\\sqrt\{([^{}]+)\}/g, "√($1)"],
+  [/\\text\{([^{}]+)\}/g, "$1"],
+  [/\\mathrm\{([^{}]+)\}/g, "$1"],
+  [/\\mathbf\{([^{}]+)\}/g, "$1"],
+  [/\\pi\b/g, "π"],
+  [/\\sigma\b/g, "σ"],
+  [/\\mu\b/g, "μ"],
+  [/\\omega\b/g, "ω"],
+  [/\\Omega\b/g, "Ω"],
   [/\\to\b/g, "→"],
   [/\\rightarrow\b/g, "→"],
   [/\\leftarrow\b/g, "←"],
@@ -173,12 +184,16 @@ function parseTableCells(line: string): string[] {
  * inline code/grammar tokens, fenced code blocks, bullet/numbered lists, blockquotes,
  * mathematical notation, and Markdown tables.
  */
-export const MarkdownQuestionView: React.FC<MarkdownQuestionViewProps> = ({ text, compact = false }) => {
+export const MarkdownQuestionView: React.FC<MarkdownQuestionViewProps> = ({
+  text,
+  compact = false,
+  emptyHint = "Empty — double-tap to edit.",
+}) => {
   const content = (text || "").trim();
   if (!content) {
     return (
       <div style={{ color: "#94a3b8", fontStyle: "italic", fontSize: compact ? "0.86rem" : "0.92rem" }}>
-        Empty question statement — double-click or double-tap to write question text.
+        {emptyHint}
       </div>
     );
   }
@@ -290,8 +305,14 @@ export const MarkdownQuestionView: React.FC<MarkdownQuestionViewProps> = ({ text
       continue;
     }
 
-    // 3. Heading
-    const headingMatch = trimmed.match(/^(#{1,3})\s+(.*)$/);
+    // 3. Heading or Horizontal Rule
+    if (/^---+$/.test(trimmed)) {
+      blocks.push(<hr key={`hr-${i}`} style={{ border: "none", borderTop: "1px solid #e2e8f0", margin: "0.55rem 0" }} />);
+      i += 1;
+      continue;
+    }
+
+    const headingMatch = trimmed.match(/^(#{1,4})\s+(.*)$/);
     if (headingMatch) {
       const level = headingMatch[1].length;
       blocks.push(
@@ -300,8 +321,8 @@ export const MarkdownQuestionView: React.FC<MarkdownQuestionViewProps> = ({ text
           style={{
             fontWeight: 700,
             color: "#0f172a",
-            fontSize: level === 1 ? "1.02rem" : level === 2 ? "0.96rem" : "0.92rem",
-            margin: "0.25rem 0",
+            fontSize: level === 1 ? "1.02rem" : level === 2 ? "0.96rem" : "0.91rem",
+            margin: "0.28rem 0 0.18rem",
           }}
         >
           {renderInlineMarkdown(headingMatch[2], `h-${i}`)}

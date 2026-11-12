@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { DoubleTapMarkdownEditor } from "./DoubleTapMarkdownEditor";
 import { MarkdownQuestionView } from "./MarkdownQuestionView";
 import type { Exam, ExamDetailsResponse } from "../types/academic";
 import {
@@ -302,7 +303,13 @@ export const ExamDetailWorkspace: React.FC<ExamDetailWorkspaceProps> = ({
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  if (tab.id === "answer_key") {
+                    onOpenFullscreenAnswerKey(exam);
+                    return;
+                  }
+                  setActiveTab(tab.id);
+                }}
                 style={{
                   padding: "0.9rem 0",
                   border: "none",
@@ -476,22 +483,13 @@ export const ExamDetailWorkspace: React.FC<ExamDetailWorkspaceProps> = ({
                 </div>
               )}
 
-              <textarea
-                rows={12}
+              <DoubleTapMarkdownEditor
                 value={manualKeyDraft}
-                onChange={(e) => setManualKeyDraft(e.target.value)}
+                onChange={setManualKeyDraft}
+                minRows={10}
+                maxRows={22}
                 placeholder="Type or paste the official Master Answer Key & marking rubric here (or click Generate Answer Key above)..."
-                style={{
-                  width: "100%",
-                  padding: "0.9rem 1rem",
-                  borderRadius: "10px",
-                  border: "1px solid #cbd5e1",
-                  background: "#ffffff",
-                  color: "#0f172a",
-                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-                  fontSize: "0.85rem",
-                  lineHeight: 1.55
-                }}
+                emptyHint="No Master Answer Key entered yet — double-tap to write Markdown, or open Fullscreen Answer Key Studio."
               />
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>

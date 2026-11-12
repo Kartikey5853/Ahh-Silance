@@ -244,8 +244,12 @@ export interface ExamDetailsResponse {
 export interface BackgroundJobStatus {
   job_id: string;
   exam_id?: string;
+  eval_id?: string;
   kind?: string;
   status: "running" | "completed" | "failed";
+  stage?: string;
+  message?: string;
+  page_count?: number;
   started_at?: string;
   completed_at?: string;
   result?: any;
@@ -256,13 +260,27 @@ export interface RubricCheckItem {
   criterion: string;
   awarded: number;
   max: number;
-  status: "MET" | "PARTIAL" | "UNMET";
+  status: "MET" | "PARTIAL" | "UNMET" | "MISSED";
+  evidence?: string;
+}
+
+export interface AnswerRegionItem {
+  page: number;
+  box_2d: [number, number, number, number];
+  start_marker?: string;
+  end_marker?: string;
+  is_start?: boolean;
+  is_end?: boolean;
 }
 
 export interface EvaluationBreakdownItem {
   q_no: string;
-  page?: number;
-  status?: "CORRECT" | "PARTIAL" | "INCORRECT" | "UNATTEMPTED" | string;
+  page?: number | null;
+  start_page?: number | null;
+  end_page?: number | null;
+  answer_regions?: AnswerRegionItem[];
+  omitted?: boolean;
+  status?: "CORRECT" | "PARTIAL" | "INCORRECT" | "UNATTEMPTED" | "OMITTED" | string;
   question_text?: string;
   ocr_extracted_text?: string;
   max_marks: number;
@@ -290,6 +308,8 @@ export interface AcademicEvaluation {
   pages_dir?: string;
   magic_ink?: any;
   structured_transcription?: any;
+  api_warning?: string;
+  source?: string;
   breakdown: EvaluationBreakdownItem[];
   teacher_feedback: string;
   created_at: string;
