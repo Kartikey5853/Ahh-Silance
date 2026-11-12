@@ -265,20 +265,20 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
     }
     const [ymin, xmin, ymax, xmax] = box;
 
-    if (naturalW && naturalH) {
-      if ((ymax > 1000 || xmax > 1000) || (naturalH < 950 && ymax <= naturalH * 1.05 && xmax <= naturalW * 1.05)) {
-        const top = (ymin / naturalH) * 100;
-        const left = (xmin / naturalW) * 100;
-        const height = Math.max(2.4, ((ymax - ymin) / naturalH) * 100);
-        const width = Math.max(4, ((xmax - xmin) / naturalW) * 100);
-        return { top, left, height, width };
-      }
+    // Detect if coordinates are in raw image pixels (e.g. if xmax or ymax > 1000)
+    if (naturalW && naturalH && (ymax > 1000 || xmax > 1000)) {
+      const top = Math.max(0, Math.min(100, (ymin / naturalH) * 100));
+      const left = Math.max(0, Math.min(100, (xmin / naturalW) * 100));
+      const height = Math.max(2.4, Math.min(100 - top, ((ymax - ymin) / naturalH) * 100));
+      const width = Math.max(4, Math.min(100 - left, ((xmax - xmin) / naturalW) * 100));
+      return { top, left, height, width };
     }
 
-    const top = ymin / 10;
-    const left = xmin / 10;
-    const height = Math.max(2.4, (ymax - ymin) / 10);
-    const width = Math.max(4, (xmax - xmin) / 10);
+    // Standard 0..1000 normalized coordinate space
+    const top = Math.max(0, Math.min(100, ymin / 10));
+    const left = Math.max(0, Math.min(100, xmin / 10));
+    const height = Math.max(2.4, Math.min(100 - top, (ymax - ymin) / 10));
+    const width = Math.max(4, Math.min(100 - left, (xmax - xmin) / 10));
     return { top, left, height, width };
   };
 
@@ -2777,7 +2777,83 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                     </div>
                   )}
 
-                  <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "#64748b" }}>{paperZoom}%</span>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.2rem",
+                      background: "#f8fafc",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "8px",
+                      padding: "0.15rem 0.35rem"
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setPaperZoom((z) => Math.max(40, z - 15))}
+                      title="Zoom Out"
+                      style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontWeight: 800, padding: "0.1rem 0.35rem" }}
+                    >
+                      −
+                    </button>
+                    <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "#334155", minWidth: "36px", textAlign: "center" }}>
+                      {paperZoom}%
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPaperZoom((z) => Math.min(200, z + 15))}
+                      title="Zoom In"
+                      style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontWeight: 800, padding: "0.1rem 0.35rem" }}
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowPaperOverlays((v) => !v)}
+                    title={showPaperOverlays ? "Hide question overlays" : "Show question overlays"}
+                    style={{
+                      background: showPaperOverlays ? "#eff6ff" : "#f8fafc",
+                      border: `1px solid ${showPaperOverlays ? "#bfdbfe" : "#e2e8f0"}`,
+                      color: showPaperOverlays ? "#2563eb" : "#64748b",
+                      borderRadius: "8px",
+                      padding: "0.22rem 0.55rem",
+                      fontSize: "0.74rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.3rem"
+                    }}
+                  >
+                    <Eye size={13} />
+                    {showPaperOverlays ? "Overlays On" : "Overlays Off"}
+                  </button>
+
+                  {activeQuestionId && (
+                    <button
+                      type="button"
+                      onClick={() => setDrawingBoxForQId(activeQuestionId)}
+                      title="Click and drag on the paper to redraw the bounding box for the active question"
+                      style={{
+                        background: drawingBoxForQId === activeQuestionId ? "#2563eb" : "#ffffff",
+                        border: `1px solid ${drawingBoxForQId === activeQuestionId ? "#2563eb" : "#cbd5e1"}`,
+                        color: drawingBoxForQId === activeQuestionId ? "#ffffff" : "#2563eb",
+                        borderRadius: "8px",
+                        padding: "0.22rem 0.6rem",
+                        fontSize: "0.74rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.3rem"
+                      }}
+                    >
+                      <Crosshair size={13} />
+                      {drawingBoxForQId === activeQuestionId ? "Drawing..." : "Redraw Box"}
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -3015,10 +3091,35 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                                       borderRadius: "999px",
                                       whiteSpace: "nowrap",
                                       boxShadow: "0 1px 3px rgba(0, 0, 0, 0.22)",
-                                      zIndex: 20
+                                      zIndex: 20,
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "0.3rem"
                                     }}
                                   >
-                                    {oq.q_no} · {oq.marks}M
+                                    <span>{oq.q_no} · {oq.marks}M</span>
+                                    {isSelected && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setDrawingBoxForQId(oq.id || null);
+                                        }}
+                                        title="Redraw box for this question"
+                                        style={{
+                                          background: "rgba(255, 255, 255, 0.28)",
+                                          border: "none",
+                                          color: "#ffffff",
+                                          borderRadius: "4px",
+                                          padding: "0.05rem 0.35rem",
+                                          cursor: "pointer",
+                                          fontSize: "0.62rem",
+                                          fontWeight: 700
+                                        }}
+                                      >
+                                        Redraw
+                                      </button>
+                                    )}
                                   </span>
                                 </div>
                               );

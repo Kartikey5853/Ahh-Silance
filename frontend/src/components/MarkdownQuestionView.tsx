@@ -1,9 +1,32 @@
 import React from "react";
+import katex from "katex";
 
 interface MarkdownQuestionViewProps {
   text: string;
   compact?: boolean;
   emptyHint?: string;
+}
+
+function renderKaTeX(latex: string, displayMode: boolean): React.ReactNode {
+  try {
+    const html = katex.renderToString(latex, {
+      displayMode,
+      throwOnError: false,
+      output: "htmlAndMathml",
+    });
+    return (
+      <span
+        dangerouslySetInnerHTML={{ __html: html }}
+        style={{
+          display: displayMode ? "block" : "inline-block",
+          margin: displayMode ? "0.45rem 0" : "0 0.15rem",
+          verticalAlign: displayMode ? "baseline" : "-0.15em",
+        }}
+      />
+    );
+  } catch (err) {
+    return <span style={{ fontStyle: "italic", color: "#1e293b" }}>{latex}</span>;
+  }
 }
 
 const MATH_SYMBOLS: Array<[RegExp, string]> = [
@@ -79,40 +102,17 @@ function renderInlineMarkdown(line: string, keyPrefix: string): React.ReactNode[
     const k = `${keyPrefix}-${partIdx++}`;
 
     if (token.startsWith("$$") && token.endsWith("$$")) {
-      const inner = prettifyMath(token.slice(2, -2).trim());
+      const inner = token.slice(2, -2).trim();
       nodes.push(
-        <span
-          key={k}
-          style={{
-            display: "inline-block",
-            padding: "0.15rem 0.5rem",
-            margin: "0 0.15rem",
-            background: "#f8fafc",
-            border: "1px solid #e2e8f0",
-            borderRadius: "6px",
-            fontFamily: "Georgia, 'Times New Roman', serif",
-            fontStyle: "italic",
-            color: "#0f172a",
-          }}
-        >
-          {inner}
+        <span key={k} style={{ display: "inline-block", margin: "0.2rem 0.15rem" }}>
+          {renderKaTeX(inner, true)}
         </span>
       );
     } else if (token.startsWith("$") && token.endsWith("$")) {
-      const inner = prettifyMath(token.slice(1, -1).trim());
+      const inner = token.slice(1, -1).trim();
       nodes.push(
-        <span
-          key={k}
-          style={{
-            fontFamily: "Georgia, 'Times New Roman', serif",
-            fontStyle: "italic",
-            color: "#1e293b",
-            background: "#f8fafc",
-            padding: "0 0.25rem",
-            borderRadius: "4px",
-          }}
-        >
-          {inner}
+        <span key={k} style={{ display: "inline-block", margin: "0 0.1rem" }}>
+          {renderKaTeX(inner, false)}
         </span>
       );
     } else if (token.startsWith("`") && token.endsWith("`")) {

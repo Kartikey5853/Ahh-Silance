@@ -180,6 +180,7 @@ def _snap_boxes_from_pdf_blocks(file_bytes: bytes, questions_list: List[Dict[str
     """
     For native digital PDFs containing embedded vector text, refines Gemini bounding boxes using
     millimeter-exact PyMuPDF text block rectangles. Modifies `questions_list` in-place when matched.
+    Ensures complete multi-line question enclosing (including grammar rules, equations, and code).
     """
     try:
         doc = fitz.open(stream=file_bytes, filetype="pdf")
@@ -214,9 +215,14 @@ def _snap_boxes_from_pdf_blocks(file_bytes: bytes, questions_list: List[Dict[str
                         best_score = hits
                         matched_rects = [(bx0, by0, bx1, by1)]
                     elif hits == best_score:
-                        # Include closely stacked continuation block of the same question
-                        prev = matched_rects[-1]
-                        if abs(by0 - prev[3]) < ph * 0.08:
+                        matched_rects.append((bx0, by0, bx1, by1))
+                elif matched_rects:
+                    # Include closely stacked continuation blocks (grammar rules, equations, subparts)
+                    prev = matched_rects[-1]
+                    if by0 >= prev[1] and (by0 - prev[3]) < ph * 0.09:
+                        # Check if this block belongs to question text
+                        b_words = [w for w in re.findall(r"[a-z0-9]{2,}", btext)]
+                        if any(bw in raw_txt for bw in b_words[:5]):
                             matched_rects.append((bx0, by0, bx1, by1))
 
             if matched_rects:
@@ -224,12 +230,11 @@ def _snap_boxes_from_pdf_blocks(file_bytes: bytes, questions_list: List[Dict[str
                 y0 = min(r[1] for r in matched_rects)
                 x1 = max(r[2] for r in matched_rects)
                 y1 = max(r[3] for r in matched_rects)
-                q["box_2d"] = [
-                    max(0, min(975, int(round((y0 / ph) * 1000)) - 6)),
-                    max(0, min(950, int(round((x0 / pw) * 1000)) - 8)),
-                    max(24, min(1000, int(round((y1 / ph) * 1000)) + 8)),
-                    max(50, min(1000, int(round((x1 / pw) * 1000)) + 10)),
-                ]
+                ymin_c = max(0, min(970, int(round((y0 / ph) * 1000)) - 6))
+                xmin_c = max(0, min(940, int(round((x0 / pw) * 1000)) - 8))
+                ymax_c = max(ymin_c + 50, min(1000, int(round((y1 / ph) * 1000)) + 12))
+                xmax_c = max(xmin_c + 150, min(1000, int(round((x1 / pw) * 1000)) + 10))
+                q["box_2d"] = [ymin_c, xmin_c, ymax_c, xmax_c]
     finally:
         doc.close()
 
@@ -331,17 +336,17 @@ def _normalize_question_boxes(
             try:
                 ymin, xmin, ymax, xmax = [float(v) for v in raw_box]
 
-                # Check if coordinates are in pixel space (e.g. ymax > 1000 or (ph < 950 and ymax <= ph * 1.05))
-                if (ymax > 1000 or xmax > 1000) or (ph < 950 and ymax <= ph * 1.05 and xmax <= pw * 1.05):
+                # Check if coordinates are in raw pixel space (e.g. ymax > 1000 or xmax > 1000)
+                if (ymax > 1000 or xmax > 1000):
                     ymin = (ymin / ph) * 1000.0
                     xmin = (xmin / pw) * 1000.0
                     ymax = (ymax / ph) * 1000.0
                     xmax = (xmax / pw) * 1000.0
 
                 ymin_i = max(0, min(970, int(round(ymin))))
-                xmin_i = max(0, min(950, int(round(xmin))))
-                ymax_i = max(ymin_i + 30, min(1000, int(round(ymax))))
-                xmax_i = max(xmin_i + 60, min(1000, int(round(xmax))))
+                xmin_i = max(0, min(940, int(round(xmin))))
+                ymax_i = max(ymin_i + 45, min(1000, int(round(ymax))))
+                xmax_i = max(xmin_i + 120, min(1000, int(round(xmax))))
 
                 q["box_2d"] = [ymin_i, xmin_i, ymax_i, xmax_i]
                 valid_box = True
@@ -362,6 +367,24 @@ def _normalize_question_boxes(
             y1 = min(910, top_margin + local_i * slot_h)
             y2 = min(975, y1 + max(40, slot_h - 10))
             questions_list[q_idx]["box_2d"] = [y1, 55, y2, 945]
+
+    # Post-pass: ensure vertically stacked questions on same page comfortably cover multi-line contents
+    page_q_map: Dict[int, List[int]] = {}
+    for idx, q in enumerate(questions_list):
+        page_q_map.setdefault(q["page"], []).append(idx)
+
+    for p_num, indices in page_q_map.items():
+        if len(indices) <= 1:
+            continue
+        indices_sorted = sorted(indices, key=lambda i: questions_list[i]["box_2d"][0])
+        for k in range(len(indices_sorted) - 1):
+            curr_i = indices_sorted[k]
+            next_i = indices_sorted[k + 1]
+            c_box = questions_list[curr_i]["box_2d"]
+            n_box = questions_list[next_i]["box_2d"]
+            # If current box is squished (< 48 height) and next box starts below it, expand current box to cover content
+            if (c_box[2] - c_box[0]) < 48 and n_box[0] > c_box[0] + 45:
+                c_box[2] = min(n_box[0] - 6, c_box[0] + 85)
 
     return questions_list
 
@@ -489,12 +512,13 @@ class GeminiAcademicService:
                     "and extract EVERY question accurately into a clean Digital Question Paper.\n"
                     "Important extraction rules:\n"
                     "1. NEVER split a single question across multiple items! Multi-line grammar productions (e.g. `S -> (L) | a`, `L -> L,S | S`), equations, code snippets, sub-bullets, or tables belonging to one question MUST stay inside that single question's `text`.\n"
-                    "2. NEVER create a standalone question for the separator word `OR` or headers/table borders! When two consecutive questions (or units) have `OR` between them, extract ONLY the actual questions and assign BOTH choices the SAME `or_group` string (e.g. `\"or-1\"`) and `is_or_choice: true`.\n"
-                    "3. Preserve the exact marks, numbering (`q_no`, e.g. `Q1.a`, `Q1.b`, `Q2`), and sections. Compute `header.max_marks` summing non-OR questions plus each unique `or_group` only once.\n"
-                    "4. Format each question `text` using clean Markdown (**bold** emphasis, `- ` bullets, inline backticks `` `S -> (L) | a` `` or fenced blocks for grammars/code).\n"
-                    "5. Notice the light-blue horizontal ruler lines labeled `100`..`900` on the page image margins representing `y` from `0..1000`. Use them to output accurate spatial coordinates:\n"
+                    "2. UNIT & SUBPART NUMBERING: When an exam groups questions by Units or table rows with subparts like (a), (b), ALWAYS prefix them with the question/unit number: `Q1.a`, `Q1.b`, `Q2.a`, `Q2.b`, `Q3.a`, `Q3.b`. NEVER output bare single letters like `\"q_no\": \"a\"` or `\"q_no\": \"b\"`.\n"
+                    "3. INTERNAL 'OR' CHOICES: The word `OR` is an internal choice divider between questions, NEVER a standalone question! When two questions (or units) have `OR` between them, extract ONLY the actual question statements, assign BOTH choices the SAME `or_group` string (e.g. `\"or-1\"`), `is_or_choice: true`, and label the alternative choice with `(OR)` (e.g. `\"q_no\": \"Q3.b (OR)\"`). NEVER output `\"q_no\": \"OR\"` or create a question for the word OR!\n"
+                    "4. Preserve the exact marks, numbering (`q_no`), and sections. Compute `header.max_marks` summing non-OR questions plus each unique `or_group` only once.\n"
+                    "5. Format each question `text` using clean Markdown (**bold** emphasis, `- ` bullets, inline backticks `` `S -> (L) | a` `` or fenced blocks for grammars/code, LaTeX math `$..$` or `$$..$$` for equations).\n"
+                    "6. SPATIAL OVERLAYS (0..1000): Use the light-blue horizontal ruler lines labeled `100`..`900` on the page margins (`0..1000` space) to output accurate coordinates:\n"
                     "   - `page`: 1-based page number (1 to " + str(paper_page_count) + ").\n"
-                    "   - `box_2d`: `[ymin, xmin, ymax, xmax]` integer coordinates in `0..1000` tightly enclosing ALL lines of that complete question.\n"
+                    "   - `box_2d`: `[ymin, xmin, ymax, xmax]` integer coordinates in `0..1000`. The box MUST FULLY ENCLOSE the ENTIRE question statement, including its grammar rules, equations, code, and all subparts (not just a single line of text).\n"
                     "Return ONLY valid JSON with this exact schema:\n"
                     "{\n"
                     '  "header": {\n'
