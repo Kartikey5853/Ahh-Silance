@@ -1,19 +1,20 @@
 /**
- * Root Application Component for ACE College Faculty Evaluation Console.
+ * Root Application Component for Niera Faculty Console.
  * 
  * Features:
- * - Real JWT authentication gate with LoginPage
- * - Real SQLite database interactions (zero mock data)
- * - Professor workflow at ACE College of Engineering
- * - Subject creation (Natural Language Processing)
- * - One-by-one student enrollment (Ram, Sham, Gyan)
- * - Fixed bottom dock anchored during page scroll
+ * - Persistent Left Dock Sidebar Navigation
+ * - Streamlined 3-Step Quick Check Exam Wizard
+ * - Google Classroom Minimalist Dashboard
+ * - Side-by-side Magic Ink Evaluation Workspace
+ * - Comprehensive Marks Register & Roster with Organization Details
+ * - Real JWT authentication and SQLite database interactions
  */
 
 import React, { useState, useEffect } from "react";
 import { LoginPage } from "./pages/LoginPage";
 import { Navbar } from "./components/Navbar";
-import { BottomDock, type NavTab } from "./components/BottomDock";
+import { LeftDock, type NavTab } from "./components/LeftDock";
+import { QuickCheckExamWizard } from "./components/QuickCheckExamWizard";
 import { AcademicDashboardPage } from "./pages/AcademicDashboardPage";
 import { AcademicsHierarchyPage } from "./pages/AcademicsHierarchyPage";
 import { StudentsRosterPage } from "./pages/StudentsRosterPage";
@@ -29,6 +30,7 @@ export const App: React.FC = () => {
   const [userName, setUserName] = useState<string>("Faculty");
   const [activeTab, setActiveTab] = useState<NavTab>("dashboard");
   const [navigationParams, setNavigationParams] = useState<any>({});
+  const [showQuickCheck, setShowQuickCheck] = useState<boolean>(false);
 
   useEffect(() => {
     const token = localStorage.getItem("auth_token");
@@ -36,7 +38,8 @@ export const App: React.FC = () => {
       setIsAuthenticated(false);
       return;
     }
-    academicApi.getProfile()
+    academicApi
+      .getProfile()
       .then((p) => {
         setIsAuthenticated(true);
         setUserName(p.full_name || p.username);
@@ -49,7 +52,8 @@ export const App: React.FC = () => {
 
   const handleLoginSuccess = () => {
     setIsAuthenticated(true);
-    academicApi.getProfile()
+    academicApi
+      .getProfile()
       .then((p) => setUserName(p.full_name || p.username))
       .catch(() => {});
     setActiveTab("dashboard");
@@ -74,63 +78,105 @@ export const App: React.FC = () => {
   }
 
   return (
-    <div className="app-container" style={{ position: "relative", minHeight: "100vh", backgroundColor: "#f8fafc" }}>
-      <Navbar
+    <div
+      className="niera-app-container"
+      style={{
+        display: "flex",
+        minHeight: "100vh",
+        backgroundColor: "#f8fafc",
+        position: "relative"
+      }}
+    >
+      {/* Left Dock Sidebar Navigation */}
+      <LeftDock
         activeTab={activeTab}
-        onSelectTab={handleNavigate}
+        onTabChange={handleNavigate}
         onLogout={handleLogout}
         userName={userName}
+        onOpenQuickCheck={() => setShowQuickCheck(true)}
       />
 
-      <main className="main-content" style={{ paddingBottom: "7rem" }}>
-        {activeTab === "dashboard" && (
-          <AcademicDashboardPage onNavigate={handleNavigate} />
-        )}
+      {/* Main Content Workspace Layout */}
+      <div
+        className="niera-layout-content"
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: "flex",
+          flexDirection: "column"
+        }}
+      >
+        <Navbar
+          activeTab={activeTab}
+          onSelectTab={handleNavigate}
+          onLogout={handleLogout}
+          userName={userName}
+          onOpenQuickCheck={() => setShowQuickCheck(true)}
+        />
 
-        {activeTab === "subject-detail" && (
-          <SubjectDetailPage
-            subjectId={navigationParams.subjectId}
-            onNavigate={handleNavigate}
-            onBack={() => handleNavigate("dashboard")}
-          />
-        )}
+        <main
+          className="niera-page-body"
+          style={{
+            flex: 1,
+            padding: "1.75rem 2rem 5rem 2rem",
+            maxWidth: "1600px",
+            width: "100%",
+            margin: "0 auto"
+          }}
+        >
+          {activeTab === "dashboard" && (
+            <AcademicDashboardPage
+              onNavigate={handleNavigate}
+              onOpenQuickCheck={() => setShowQuickCheck(true)}
+            />
+          )}
 
-        {activeTab === "academics" && (
-          <AcademicsHierarchyPage onNavigate={handleNavigate} />
-        )}
+          {activeTab === "subject-detail" && (
+            <SubjectDetailPage
+              subjectId={navigationParams.subjectId}
+              onNavigate={handleNavigate}
+              onBack={() => handleNavigate("dashboard")}
+            />
+          )}
 
-        {activeTab === "students" && (
-          <StudentsRosterPage
-            initialSubjectId={navigationParams.subjectId}
-            onNavigate={handleNavigate}
-          />
-        )}
+          {activeTab === "academics" && (
+            <AcademicsHierarchyPage onNavigate={handleNavigate} />
+          )}
 
-        {activeTab === "exams" && (
-          <ExamManagementPage
-            initialSubjectId={navigationParams.subjectId}
-            onNavigate={handleNavigate}
-          />
-        )}
+          {activeTab === "students" && (
+            <StudentsRosterPage
+              initialSubjectId={navigationParams.subjectId}
+              onNavigate={handleNavigate}
+            />
+          )}
 
-        {activeTab === "evaluation" && (
-          <StrictEvaluationPage
-            initialExamId={navigationParams.examId}
-            initialStudentId={navigationParams.studentId}
-            initialEvalId={navigationParams.evalId}
-            onNavigate={handleNavigate}
-          />
-        )}
+          {activeTab === "exams" && (
+            <ExamManagementPage
+              initialSubjectId={navigationParams.subjectId}
+              onNavigate={handleNavigate}
+            />
+          )}
 
-        {activeTab === "profile" && (
-          <TeacherProfilePage onLogout={handleLogout} />
-        )}
-      </main>
+          {activeTab === "evaluation" && (
+            <StrictEvaluationPage
+              initialExamId={navigationParams.examId}
+              initialStudentId={navigationParams.studentId}
+              initialEvalId={navigationParams.evalId}
+              onNavigate={handleNavigate}
+            />
+          )}
 
-      {/* Fixed Bottom Dock (Anchored during page scroll) */}
-      <BottomDock
-        activeTab={activeTab}
-        onTabChange={(tab) => handleNavigate(tab)}
+          {activeTab === "profile" && (
+            <TeacherProfilePage onLogout={handleLogout} />
+          )}
+        </main>
+      </div>
+
+      {/* Effortless 3-Step Quick Check Exam Wizard Modal */}
+      <QuickCheckExamWizard
+        isOpen={showQuickCheck}
+        onClose={() => setShowQuickCheck(false)}
+        onNavigate={handleNavigate}
       />
     </div>
   );

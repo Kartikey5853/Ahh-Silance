@@ -1,17 +1,20 @@
 /**
- * Clean Academic Sign-In & Registration Portal.
+ * Clean Academic Sign-In & Registration Portal with Organization Setup.
  * 
  * Allows new users to create their own account from scratch or log into existing accounts.
- * Connects directly to SQLite authentication endpoints.
+ * Connects directly to SQLite authentication endpoints and auto-configures organization.
  */
 
 import React, { useState } from "react";
 import { authApi } from "../api/authApi";
+import { academicApi } from "../api/academicApi";
 import type { AuthResponse } from "../types/auth";
+import type { InstitutionType } from "../types/academic";
 import {
   Lock,
   User,
-  ArrowRight
+  ArrowRight,
+  Building2
 } from "lucide-react";
 
 interface LoginPageProps {
@@ -30,7 +33,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [regPassword, setRegPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState("Professor");
+  const [role, setRole] = useState("Teacher / Professor");
+
+  // Organization Fields (As requested: configured on Register page)
+  const [orgName, setOrgName] = useState("Delhi Public School");
+  const [orgType, setOrgType] = useState<InstitutionType>("school");
+  const [orgCode, setOrgCode] = useState("DPS-2026");
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -84,6 +92,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     setIsLoading(true);
 
     try {
+      // 1. Register User
       const response = await authApi.register({
         username: regUsername.trim(),
         password: regPassword.trim(),
@@ -93,6 +102,21 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       });
       localStorage.setItem("auth_token", response.access_token);
       localStorage.setItem("auth_user", JSON.stringify(response));
+
+      // 2. Automatically create & configure Organization on Register!
+      try {
+        const inst = await academicApi.createInstitution({
+          name: orgName.trim() || "My Academic Institution",
+          type: orgType,
+          code: orgCode.trim() || "INST"
+        });
+        if (inst && inst.id) {
+          await academicApi.updateProfile({ institution_id: inst.id });
+        }
+      } catch (instErr) {
+        console.warn("Auto institution setup fallback:", instErr);
+      }
+
       setSuccessMessage("Account created successfully! Loading your dashboard...");
       setTimeout(() => {
         onLoginSuccess(response);
@@ -108,6 +132,20 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     }
   };
 
+  const applySchoolPreset = () => {
+    setOrgName("Delhi Public School");
+    setOrgType("school");
+    setOrgCode("DPS-CBSE");
+    setRole("Senior School Teacher");
+  };
+
+  const applyCollegePreset = () => {
+    setOrgName("ACE College of Engineering");
+    setOrgType("college");
+    setOrgCode("ACE-ENG");
+    setRole("Associate Professor");
+  };
+
   return (
     <div
       style={{
@@ -116,25 +154,28 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         flexDirection: "column",
         justifyContent: "center",
         alignItems: "center",
-        backgroundImage: "linear-gradient(rgba(248, 250, 252, 0.82), rgba(248, 250, 252, 0.88)), url('/login-bg.jpg')",
+        backgroundImage: "linear-gradient(rgba(248, 250, 252, 0.88), rgba(248, 250, 252, 0.94)), url('/login-bg.jpg')",
         backgroundSize: "cover",
         backgroundPosition: "center",
         backgroundRepeat: "no-repeat",
         padding: "1.5rem"
       }}
     >
-      <div style={{ maxWidth: "420px", width: "100%" }}>
+      <div style={{ maxWidth: "440px", width: "100%" }}>
         {/* Brand Header */}
         <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.85rem", marginBottom: "0.4rem" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem", marginBottom: "0.35rem" }}>
             <img
               src="/niera-logo.png"
               alt="Niera Logo"
-              style={{ width: "52px", height: "52px", objectFit: "contain" }}
+              style={{ width: "48px", height: "48px", objectFit: "contain" }}
+              onError={(e) => {
+                (e.target as HTMLElement).style.display = "none";
+              }}
             />
             <h1
               style={{
-                fontSize: "2.35rem",
+                fontSize: "2.25rem",
                 fontWeight: 800,
                 letterSpacing: "-0.03em",
                 color: "#0f172a",
@@ -144,8 +185,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               Niera
             </h1>
           </div>
-          <p style={{ fontSize: "0.9rem", color: "#475569", fontWeight: 500, margin: 0 }}>
-            Academic Examination & Evaluation System
+          <p style={{ fontSize: "0.88rem", color: "#64748b", fontWeight: 500, margin: 0 }}>
+            Effortless AI Exam Paper Checking & Marks Registers
           </p>
         </div>
 
@@ -203,12 +244,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         {/* Main Card */}
         <div
           style={{
-            background: "rgba(255, 255, 255, 0.95)",
+            background: "rgba(255, 255, 255, 0.96)",
             backdropFilter: "blur(12px)",
             border: "1px solid rgba(226, 232, 240, 0.8)",
             borderRadius: "16px",
             padding: "1.75rem",
-            boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04)"
+            boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.08)"
           }}
         >
           {errorMessage && (
@@ -245,6 +286,42 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
           {activeTab === "login" ? (
             <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              {/* Quick Fill Preset */}
+              <div
+                style={{
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                  padding: "0.55rem 0.75rem",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between"
+                }}
+              >
+                <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
+                  Demo faculty login: <strong>test</strong> / <strong>test123</strong>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoginUsername("test");
+                    setLoginPassword("test123");
+                  }}
+                  style={{
+                    background: "#eff6ff",
+                    border: "1px solid #bfdbfe",
+                    color: "#1d4ed8",
+                    padding: "0.2rem 0.5rem",
+                    borderRadius: "4px",
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                    cursor: "pointer"
+                  }}
+                >
+                  Auto-fill
+                </button>
+              </div>
+
               <div>
                 <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
                   Username
@@ -262,7 +339,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                       padding: "0.6rem 0.85rem 0.6rem 2.4rem",
                       borderRadius: "8px",
                       border: "1px solid #cbd5e1",
-                      fontSize: "0.9rem"
+                      fontSize: "0.88rem"
                     }}
                   />
                 </div>
@@ -285,7 +362,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                       padding: "0.6rem 0.85rem 0.6rem 2.4rem",
                       borderRadius: "8px",
                       border: "1px solid #cbd5e1",
-                      fontSize: "0.9rem"
+                      fontSize: "0.88rem"
                     }}
                   />
                 </div>
@@ -297,7 +374,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 style={{
                   width: "100%",
                   padding: "0.75rem",
-                  background: "#0f172a",
+                  background: "#2563eb",
                   color: "#ffffff",
                   border: "none",
                   borderRadius: "8px",
@@ -308,27 +385,72 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  gap: "0.5rem"
+                  gap: "0.5rem",
+                  boxShadow: "0 2px 6px rgba(37, 99, 235, 0.3)"
                 }}
               >
-                {isLoading ? "Signing In..." : "Sign In"}
+                {isLoading ? "Signing In..." : "Sign In to Niera"}
                 <ArrowRight size={16} />
               </button>
             </form>
           ) : (
             <form onSubmit={handleRegister} style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+              {/* Quick Preset Buttons */}
+              <div>
+                <div style={{ fontSize: "0.74rem", fontWeight: 700, color: "#64748b", marginBottom: "0.35rem" }}>
+                  1-Click Organization Setup:
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.45rem" }}>
+                  <button
+                    type="button"
+                    onClick={applySchoolPreset}
+                    style={{
+                      background: orgType === "school" ? "#eff6ff" : "#f8fafc",
+                      border: `1px solid ${orgType === "school" ? "#2563eb" : "#cbd5e1"}`,
+                      borderRadius: "6px",
+                      padding: "0.35rem 0.45rem",
+                      fontSize: "0.74rem",
+                      fontWeight: 700,
+                      color: orgType === "school" ? "#1d4ed8" : "#475569",
+                      cursor: "pointer",
+                      textAlign: "center"
+                    }}
+                  >
+                    🏫 School (CBSE)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={applyCollegePreset}
+                    style={{
+                      background: orgType === "college" ? "#eff6ff" : "#f8fafc",
+                      border: `1px solid ${orgType === "college" ? "#2563eb" : "#cbd5e1"}`,
+                      borderRadius: "6px",
+                      padding: "0.35rem 0.45rem",
+                      fontSize: "0.74rem",
+                      fontWeight: 700,
+                      color: orgType === "college" ? "#1d4ed8" : "#475569",
+                      cursor: "pointer",
+                      textAlign: "center"
+                    }}
+                  >
+                    🎓 College (B.Tech)
+                  </button>
+                </div>
+              </div>
+
+              {/* Organization Name Field (Configured on Register) */}
               <div>
                 <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#334155", marginBottom: "0.3rem" }}>
-                  Username <span style={{ color: "#ef4444" }}>*</span>
+                  School or College Name <span style={{ color: "#ef4444" }}>*</span>
                 </label>
                 <div style={{ position: "relative" }}>
-                  <User size={16} style={{ position: "absolute", left: "0.85rem", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
+                  <Building2 size={16} style={{ position: "absolute", left: "0.85rem", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
                   <input
                     type="text"
-                    value={regUsername}
-                    onChange={(e) => setRegUsername(e.target.value)}
-                    placeholder="e.g. dr_sharma"
                     required
+                    value={orgName}
+                    onChange={(e) => setOrgName(e.target.value)}
+                    placeholder="e.g. Delhi Public School"
                     style={{
                       width: "100%",
                       padding: "0.55rem 0.85rem 0.55rem 2.4rem",
@@ -338,90 +460,84 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                     }}
                   />
                 </div>
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#334155", marginBottom: "0.3rem" }}>
-                  Password <span style={{ color: "#ef4444" }}>*</span>
-                </label>
-                <div style={{ position: "relative" }}>
-                  <Lock size={16} style={{ position: "absolute", left: "0.85rem", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
-                  <input
-                    type="password"
-                    value={regPassword}
-                    onChange={(e) => setRegPassword(e.target.value)}
-                    placeholder="At least 4 characters"
-                    required
-                    style={{
-                      width: "100%",
-                      padding: "0.55rem 0.85rem 0.55rem 2.4rem",
-                      borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
-                      fontSize: "0.88rem"
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#334155", marginBottom: "0.3rem" }}>
-                  Full Name / Title
-                </label>
-                <input
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="e.g. Dr. Rajesh Sharma"
-                  style={{
-                    width: "100%",
-                    padding: "0.55rem 0.85rem",
-                    borderRadius: "8px",
-                    border: "1px solid #cbd5e1",
-                    fontSize: "0.88rem"
-                  }}
-                />
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
                 <div>
                   <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#334155", marginBottom: "0.3rem" }}>
-                    Role
+                    Username <span style={{ color: "#ef4444" }}>*</span>
                   </label>
-                  <select
-                    value={role}
-                    onChange={(e) => setRole(e.target.value)}
+                  <input
+                    type="text"
+                    value={regUsername}
+                    onChange={(e) => setRegUsername(e.target.value)}
+                    placeholder="username"
+                    required
                     style={{
                       width: "100%",
-                      padding: "0.55rem 0.85rem",
+                      padding: "0.55rem 0.75rem",
                       borderRadius: "8px",
                       border: "1px solid #cbd5e1",
-                      fontSize: "0.88rem",
-                      background: "#ffffff"
+                      fontSize: "0.85rem"
                     }}
-                  >
-                    <option value="Professor">Professor</option>
-                    <option value="Associate Professor">Associate Professor</option>
-                    <option value="School Teacher">School Teacher</option>
-                    <option value="JEE / Competitive Faculty">JEE Faculty</option>
-                    <option value="Examiner / Evaluator">Examiner</option>
-                  </select>
+                  />
                 </div>
 
                 <div>
                   <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#334155", marginBottom: "0.3rem" }}>
-                    Email
+                    Password <span style={{ color: "#ef4444" }}>*</span>
+                  </label>
+                  <input
+                    type="password"
+                    value={regPassword}
+                    onChange={(e) => setRegPassword(e.target.value)}
+                    placeholder="min 4 chars"
+                    required
+                    style={{
+                      width: "100%",
+                      padding: "0.55rem 0.75rem",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      fontSize: "0.85rem"
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: "0.75rem" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#334155", marginBottom: "0.3rem" }}>
+                    Your Full Name / Teacher Title
+                  </label>
+                  <input
+                    type="text"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="e.g. Dr. Rajesh Sharma"
+                    style={{
+                      width: "100%",
+                      padding: "0.55rem 0.75rem",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      fontSize: "0.85rem"
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#334155", marginBottom: "0.3rem" }}>
+                    Email (Optional)
                   </label>
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="prof@univ.edu"
+                    placeholder="teacher@school.edu"
                     style={{
                       width: "100%",
-                      padding: "0.55rem 0.85rem",
+                      padding: "0.55rem 0.75rem",
                       borderRadius: "8px",
                       border: "1px solid #cbd5e1",
-                      fontSize: "0.88rem"
+                      fontSize: "0.85rem"
                     }}
                   />
                 </div>
@@ -433,21 +549,22 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 style={{
                   width: "100%",
                   padding: "0.75rem",
-                  background: "#0f172a",
+                  background: "#2563eb",
                   color: "#ffffff",
                   border: "none",
                   borderRadius: "8px",
                   fontWeight: 700,
                   fontSize: "0.95rem",
                   cursor: "pointer",
-                  marginTop: "0.5rem",
+                  marginTop: "0.4rem",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  gap: "0.5rem"
+                  gap: "0.5rem",
+                  boxShadow: "0 2px 6px rgba(37, 99, 235, 0.3)"
                 }}
               >
-                {isLoading ? "Creating Account..." : "Create Account"}
+                {isLoading ? "Creating Account..." : "Create Account & Start"}
                 <ArrowRight size={16} />
               </button>
             </form>

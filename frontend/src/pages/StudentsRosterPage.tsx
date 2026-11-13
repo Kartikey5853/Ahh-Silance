@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from "react";
 import { academicApi } from "../api/academicApi";
-import type { Subject, Student, ClassItem, InstitutionType } from "../types/academic";
+import type { Subject, Student, ClassItem, Institution, InstitutionType, Exam, AcademicEvaluation } from "../types/academic";
 import { StudentProfileModal } from "../components/StudentProfileModal";
 import {
   UserPlus,
   Trash2,
   Search,
   Users,
-  RefreshCw,
   X,
-  Filter,
-  FolderGit2,
-  ArrowLeft,
-  ChevronRight
+  Building2,
+  Download,
+  Printer,
+  FileSpreadsheet,
+  Award
 } from "lucide-react";
 
 interface StudentsRosterProps {
@@ -20,19 +20,40 @@ interface StudentsRosterProps {
   onNavigate: (tab: any, params?: any) => void;
 }
 
+interface ConsolidatedStudentGroup {
+  primary: Student;
+  rows: Student[];
+  enrolledSubjects: Subject[];
+  sections: string[];
+}
+
 export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
   initialSubjectId,
   onNavigate
 }) => {
+  // Active Tab: "register" (Marksheet) or "roster" (Students Directory)
+  const [activeTab, setActiveTab] = useState<"register" | "roster">("register");
+
+  // Hierarchy Data
+  const [currentOrg, setCurrentOrg] = useState<Institution | null>(null);
   const [classes, setClasses] = useState<ClassItem[]>([]);
-  const [selectedClassId, setSelectedClassId] = useState<string>("");
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [selectedSubjectId, setSelectedSubjectId] = useState<string>(initialSubjectId || "");
+  const [exams, setExams] = useState<Exam[]>([]);
+  const [selectedExamId, setSelectedExamId] = useState<string>("");
+  const [evaluations, setEvaluations] = useState<AcademicEvaluation[]>([]);
+
+  // Students Data
   const [students, setStudents] = useState<Student[]>([]);
-  const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStudentForProfile, setSelectedStudentForProfile] = useState<Student | null>(null);
-  const [activeOrgType, setActiveOrgType] = useState<InstitutionType>("college");
+
+  // Organization Modal State (Preserving complete existing organization features)
+  const [showOrgModal, setShowOrgModal] = useState(false);
+  const [orgType, setOrgType] = useState<InstitutionType>("school");
+  const [orgName, setOrgName] = useState("");
+  const [orgCode, setOrgCode] = useState("");
+  const [schoolBoard, setSchoolBoard] = useState("CBSE");
+  const [departmentName, setDepartmentName] = useState("Computer Science & Engineering");
 
   // Add Student Modal State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -46,129 +67,114 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
 
   const loadInitialData = async () => {
     try {
-      const [classList, subjList, instList, profData] = await Promise.all([
-        academicApi.listClasses(),
-        academicApi.listSubjects(),
+      const [classList, subjList, instList, examList, evalList] = await Promise.all([
+        academicApi.listClasses().catch(() => []),
+        academicApi.listSubjects().catch(() => []),
         academicApi.listInstitutions().catch(() => []),
-        academicApi.getProfile().catch(() => null)
+        academicApi.listExams().catch(() => []),
+        academicApi.listEvaluations().catch(() => [])
       ]);
-      setClasses(classList);
-      setSubjects(subjList);
+
+      setClasses(classList || []);
+      setSubjects(subjList || []);
+      setExams(examList || []);
+      setEvaluations(evalList || []);
 
       if (instList && instList.length > 0) {
-        const found = instList.find(
-          (i) => i.id === (profData?.institution_id || classList[0]?.institution_id)
-        ) || instList[0];
-        if (found) setActiveOrgType(found.type);
+        setCurrentOrg(instList[0]);
+        setOrgType(instList[0].type);
+        setOrgName(instList[0].name);
+        setOrgCode(instList[0].code || "");
       }
 
-      if (classList.length > 0) {
-        setModalClassId(classList[0].id);
+      if (examList && examList.length > 0) {
+        setSelectedExamId(examList[0].id);
       }
-      if (subjList.length > 0) {
-        setModalSubjectId(subjList[0].id);
-        if (initialSubjectId && subjList.some((s) => s.id === initialSubjectId)) {
-          setSelectedSubjectId(initialSubjectId);
-        }
-      }
+
+      const studList = await academicApi.listAllStudents().catch(() => []);
+      setStudents(studList || []);
     } catch (err) {
-      console.error("Failed to load classes and subjects:", err);
+      console.error("Failed to load initial register data:", err);
     }
   };
 
   useEffect(() => {
     loadInitialData();
-  }, [initialSubjectId]);
-
-  const loadStudents = async () => {
-    setLoading(true);
-    try {
-      const data = await academicApi.listAllStudents(
-        selectedClassId || undefined,
-        selectedSubjectId || undefined
-      );
-      setStudents(data);
-    } catch (err) {
-      console.error("Failed to load students:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadStudents();
-  }, [selectedClassId, selectedSubjectId]);
+  }, []);
 
   const handleOpenAddModal = (presetClassId?: string) => {
-    setAddError(null);
+    setModalClassId(presetClassId || (classes[0]?.id ?? ""));
+    setModalSubjectId(initialSubjectId || (subjects[0]?.id ?? ""));
     setStudentName("");
     setRollNumber("");
     setSection("A");
-    if (presetClassId) {
-      setModalClassId(presetClassId);
-    } else if (classes.length > 0) {
-      setModalClassId(classes[0].id);
-    }
-    if (subjects.length > 0) {
-      setModalSubjectId(subjects[0].id);
-    }
+    setAddError(null);
     setShowAddModal(true);
   };
 
   const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!studentName.trim() || !rollNumber.trim()) {
-      setAddError("Please provide both student name and roll number.");
+      setAddError("Student name and roll number are required.");
       return;
     }
-    const targetSubjectId = modalSubjectId || selectedSubjectId;
+    const targetSubjectId = modalSubjectId || initialSubjectId || (subjects[0]?.id ?? "");
     if (!targetSubjectId) {
-      setAddError("Please select a subject to enroll the student.");
+      setAddError("Please select an enrolled subject.");
       return;
     }
-
-    setIsAdding(true);
-    setAddError(null);
 
     try {
-      await academicApi.addStudent(targetSubjectId, {
+      setIsAdding(true);
+      setAddError(null);
+      const newStudent = await academicApi.addStudent(targetSubjectId, {
         name: studentName.trim(),
         roll_number: rollNumber.trim().toUpperCase(),
         section: section.trim() || "A",
-        class_id: modalClassId || selectedClassId || undefined
+        class_id: modalClassId || undefined,
+        attendance_percentage: 85.0,
+        cgpa_or_percentage: 0.0
       });
-
+      setStudents((prev) => [newStudent, ...prev]);
       setShowAddModal(false);
-      setStudentName("");
-      setRollNumber("");
-      await loadStudents();
     } catch (err: any) {
-      setAddError(err?.response?.data?.detail || "Failed to add student. Ensure roll number is unique.");
+      setAddError(err?.response?.data?.detail || "Failed to add student.");
     } finally {
       setIsAdding(false);
     }
   };
 
   const handleDeleteGroup = async (rowsToDelete: Student[], name: string) => {
-    const suffix = rowsToDelete.length > 1 ? ` (across ${rowsToDelete.length} enrolled subjects)` : "";
-    if (!window.confirm(`Are you sure you want to remove ${name}${suffix} from this roster?`)) return;
+    if (!confirm(`Remove student ${name}?`)) return;
     try {
       for (const row of rowsToDelete) {
         await academicApi.deleteStudent(row.id);
       }
-      await loadStudents();
+      const deletedIds = new Set(rowsToDelete.map((r) => r.id));
+      setStudents((prev) => prev.filter((s) => !deletedIds.has(s.id)));
     } catch (err) {
-      alert("Failed to delete student.");
+      alert("Error removing student.");
     }
   };
 
-  interface ConsolidatedStudentGroup {
-    primary: Student;
-    rows: Student[];
-    enrolledSubjects: Subject[];
-    sections: string[];
-  }
+  const handleSaveOrganization = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!orgName.trim()) return;
 
+    try {
+      const created = await academicApi.createInstitution({
+        name: orgName.trim(),
+        type: orgType,
+        code: orgCode.trim()
+      });
+      setCurrentOrg(created);
+      setShowOrgModal(false);
+    } catch (err) {
+      alert("Failed to save organization.");
+    }
+  };
+
+  // Consolidate Students
   const consolidateStudents = (rows: Student[]): ConsolidatedStudentGroup[] => {
     const byRoll = new Map<string, ConsolidatedStudentGroup>();
     rows.forEach((stud) => {
@@ -199,770 +205,797 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
     return Array.from(byRoll.values());
   };
 
-  const filteredStudents = students.filter((s) => {
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return true;
-    return (
-      s.name.toLowerCase().includes(q) ||
-      s.roll_number.toLowerCase().includes(q) ||
-      (s.email && s.email.toLowerCase().includes(q))
-    );
+  const consolidatedList = consolidateStudents(students);
+  const activeExam = exams.find((e) => e.id === selectedExamId) || exams[0];
+
+  const examEvaluations = evaluations.filter((ev) => ev.exam_id === activeExam?.id);
+  const evalByStudentId = new Map<string, AcademicEvaluation>();
+  examEvaluations.forEach((ev) => {
+    evalByStudentId.set(ev.student_id, ev);
   });
 
-  // Group students by Class, consolidating multi-subject enrollments by roll_number
-  const classMap = new Map<string, Student[]>();
-  const unassignedStudents: Student[] = [];
+  // Export to Excel / CSV
+  const handleExportCsv = () => {
+    if (!activeExam) return;
+    const headers = ["Roll No", "Student Name", "Section", "Score", "Max Marks", "Percentage", "Status"];
+    const rows = consolidatedList.map((g) => {
+      const ev = evalByStudentId.get(g.primary.id);
+      const score = ev ? ev.total_score : 0;
+      const pct = ev ? ev.percentage.toFixed(1) : "0.0";
+      const status = ev ? (ev.total_score >= activeExam.passing_marks ? "PASS" : "NEEDS IMPROVEMENT") : "PENDING";
+      return [g.primary.roll_number, `"${g.primary.name}"`, g.sections.join(",") || "A", score, activeExam.max_marks, `${pct}%`, status];
+    });
 
-  classes.forEach((c) => {
-    classMap.set(c.id, []);
-  });
-
-  filteredStudents.forEach((stud) => {
-    if (stud.class_id && classMap.has(stud.class_id)) {
-      classMap.get(stud.class_id)!.push(stud);
-    } else {
-      unassignedStudents.push(stud);
-    }
-  });
-
-  const uniqueTotalStudents = consolidateStudents(filteredStudents).length;
-  const unassignedGroups = consolidateStudents(unassignedStudents);
-  const isCollege = activeOrgType === "college";
-  const classLabel = isCollege ? "Semester" : "Class";
-  const classPluralLabel = isCollege ? "Semesters" : "Classes";
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Marks_Register_${activeExam.title.replace(/\s+/g, "_")}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
-    <div className="students-roster-page pb-28">
-      {/* Header Bar */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem", marginBottom: "1.5rem" }}>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-            <h1 style={{ fontSize: "1.85rem", fontWeight: 900, color: "#0f172a", letterSpacing: "-0.03em", margin: 0 }}>
-              Students & Cohorts
-            </h1>
-            <span
-              style={{
-                background: "#e0e7ff",
-                color: "#3730a3",
-                fontSize: "0.78rem",
-                fontWeight: 700,
-                padding: "0.25rem 0.65rem",
-                borderRadius: "9999px"
-              }}
-            >
-              {uniqueTotalStudents} {uniqueTotalStudents === 1 ? "Student" : "Students"} Total
-            </span>
-          </div>
-          <p style={{ color: "#64748b", fontSize: "0.88rem", marginTop: "0.3rem", margin: 0 }}>
-            Students clustered by classes and cohorts. Click any student to review full evaluation performance.
-          </p>
-        </div>
-
-        <button
-          onClick={() => handleOpenAddModal()}
-          className="btn btn-primary"
-          style={{ display: "flex", alignItems: "center", gap: "0.45rem", padding: "0.6rem 1.1rem", fontSize: "0.88rem", borderRadius: "8px" }}
-        >
-          <UserPlus size={16} />
-          Add Student
-        </button>
-      </div>
-
-      {/* Filter and Search Bar */}
+    <div className="students-roster-page" style={{ maxWidth: "1280px", margin: "0 auto", paddingBottom: "4rem" }}>
+      {/* ================= 1. ORGANIZATION MANAGEMENT BAR ================= */}
       <div
         style={{
           background: "#ffffff",
           border: "1px solid #e2e8f0",
-          borderRadius: "12px",
-          padding: "0.75rem 1rem",
+          borderRadius: "14px",
+          padding: "1rem 1.25rem",
           marginBottom: "1.5rem",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           flexWrap: "wrap",
-          gap: "0.75rem",
-          boxShadow: "0 1px 3px rgba(0, 0, 0, 0.03)"
+          gap: "1rem",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.02)"
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flex: 1, minWidth: "260px" }}>
-          <div style={{ position: "relative", width: "100%", maxWidth: "340px" }}>
-            <Search
-              size={16}
-              style={{ position: "absolute", left: "0.75rem", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }}
-            />
-            <input
-              type="text"
-              placeholder="Search student name or roll number..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "0.5rem 0.75rem 0.5rem 2.25rem",
-                borderRadius: "8px",
-                border: "1px solid #cbd5e1",
-                fontSize: "0.85rem",
-                outline: "none"
-              }}
-            />
+        <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
+          <div
+            style={{
+              width: "40px",
+              height: "40px",
+              borderRadius: "10px",
+              background: "#eff6ff",
+              color: "#2563eb",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center"
+            }}
+          >
+            <Building2 size={20} />
           </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-            <Filter size={14} style={{ color: "#64748b" }} />
-            <select
-              value={selectedClassId}
-              onChange={(e) => setSelectedClassId(e.target.value)}
-              style={{
-                padding: "0.5rem 0.75rem",
-                borderRadius: "8px",
-                border: "1px solid #cbd5e1",
-                fontSize: "0.85rem",
-                background: "#ffffff",
-                color: "#1e293b",
-                fontWeight: 500
-              }}
-            >
-              <option value="">{classLabel}: All Boxes Menu</option>
-              {classes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
           <div>
-            <select
-              value={selectedSubjectId}
-              onChange={(e) => setSelectedSubjectId(e.target.value)}
-              style={{
-                padding: "0.5rem 0.75rem",
-                borderRadius: "8px",
-                border: "1px solid #cbd5e1",
-                fontSize: "0.85rem",
-                background: "#ffffff",
-                color: "#1e293b",
-                fontWeight: 500
-              }}
-            >
-              <option value="">Subject: All Subjects</option>
-              {subjects.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({s.code})
-                </option>
-              ))}
-            </select>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+              <span style={{ fontSize: "1rem", fontWeight: 800, color: "#0f172a" }}>
+                {currentOrg?.name || "Academic Institution"}
+              </span>
+              <span
+                style={{
+                  background: "#f1f5f9",
+                  color: "#475569",
+                  fontSize: "0.72rem",
+                  fontWeight: 700,
+                  padding: "0.15rem 0.45rem",
+                  borderRadius: "4px"
+                }}
+              >
+                {currentOrg?.type === "college"
+                  ? "College / University"
+                  : currentOrg?.type === "school"
+                  ? "School (CBSE)"
+                  : "Competitive / JEE"}
+              </span>
+            </div>
+            <div style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "2px" }}>
+              Institutional Code: {currentOrg?.code || "INST-01"} • Academic Session: 2026-2027
+            </div>
           </div>
         </div>
 
         <button
-          onClick={loadStudents}
-          title="Refresh List"
+          type="button"
+          onClick={() => setShowOrgModal(true)}
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.35rem",
-            padding: "0.5rem 0.75rem",
             background: "#f8fafc",
             border: "1px solid #cbd5e1",
+            color: "#334155",
             borderRadius: "8px",
-            color: "#475569",
-            fontSize: "0.85rem",
+            padding: "0.45rem 0.85rem",
+            fontSize: "0.82rem",
+            fontWeight: 700,
             cursor: "pointer",
-            fontWeight: 500
+            display: "flex",
+            alignItems: "center",
+            gap: "0.35rem"
           }}
         >
-          <RefreshCw size={14} className={loading ? "spin" : ""} />
-          Refresh
+          <Building2 size={14} />
+          <span>Change Organization</span>
         </button>
       </div>
 
-      {/* STATE A: CLASS BOX MENU ONLY (Click any tile to open its student list) */}
-      {!loading && !selectedClassId && (
-        classes.length === 0 && unassignedStudents.length === 0 ? (
-          <div style={{ background: "#ffffff", border: "2px dashed #cbd5e1", borderRadius: "16px", padding: "4rem 2rem", textAlign: "center" }}>
-            <Users size={48} style={{ color: "#94a3b8", margin: "0 auto 1rem" }} />
-            <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.4rem" }}>
-              No {classPluralLabel} or Students Found
-            </h3>
-            <p style={{ color: "#64748b", fontSize: "0.9rem", maxWidth: "460px", margin: "0 auto 1.5rem" }}>
-              Create your first academic {classLabel.toLowerCase()} in Dashboard, then enroll students to track evaluations.
-            </p>
-            <button onClick={() => onNavigate("dashboard")} className="btn btn-primary">
-              Go to Dashboard
-            </button>
-          </div>
-        ) : (
-          <div style={{ marginBottom: "1.75rem" }}>
-            <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.85rem" }}>
-              {classLabel} Boxes — Select a {classLabel.toLowerCase()} tile to open students
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1.1rem" }}>
-              {classes.map((cls) => {
-                const count = consolidateStudents(classMap.get(cls.id) || []).length;
-                return (
-                  <div
-                    key={cls.id}
-                    onClick={() => setSelectedClassId(cls.id)}
-                    style={{
-                      background: "#ffffff",
-                      border: "1px solid #e2e8f0",
-                      borderRadius: "16px",
-                      padding: "1.25rem 1.35rem",
-                      cursor: "pointer",
-                      transition: "all 0.15s ease",
-                      boxShadow: "0 2px 8px rgba(0, 0, 0, 0.03)",
-                      display: "flex",
-                      flexDirection: "column",
-                      justifyContent: "space-between",
-                      gap: "1rem"
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = "#2563eb";
-                      e.currentTarget.style.boxShadow = "0 6px 18px rgba(37, 99, 235, 0.12)";
-                      e.currentTarget.style.transform = "translateY(-2px)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = "#e2e8f0";
-                      e.currentTarget.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.03)";
-                      e.currentTarget.style.transform = "translateY(0)";
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.75rem" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                        <div style={{ padding: "0.6rem", background: "#eff6ff", color: "#2563eb", borderRadius: "10px", flexShrink: 0 }}>
-                          <FolderGit2 size={20} />
-                        </div>
-                        <div>
-                          <div style={{ fontSize: "1.02rem", fontWeight: 800, color: "#0f172a" }}>
-                            {cls.name}
-                          </div>
-                          <div style={{ fontSize: "0.78rem", fontWeight: 600, color: "#64748b", marginTop: "0.15rem" }}>
-                            {cls.department || "General"} • {cls.code || "Cohort"}
-                          </div>
-                        </div>
-                      </div>
-                      <span style={{ fontSize: "0.76rem", fontWeight: 700, background: "#f1f5f9", color: "#334155", padding: "0.2rem 0.6rem", borderRadius: "9999px", whiteSpace: "nowrap" }}>
-                        {count} {count === 1 ? "Student" : "Students"}
-                      </span>
-                    </div>
+      {/* ================= 2. TAB SWITCHER ================= */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: "1.25rem",
+          flexWrap: "wrap",
+          gap: "1rem"
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            background: "#e2e8f0",
+            padding: "0.25rem",
+            borderRadius: "10px"
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setActiveTab("register")}
+            style={{
+              background: activeTab === "register" ? "#ffffff" : "transparent",
+              color: activeTab === "register" ? "#0f172a" : "#64748b",
+              border: "none",
+              borderRadius: "8px",
+              padding: "0.5rem 1rem",
+              fontSize: "0.85rem",
+              fontWeight: 700,
+              cursor: "pointer",
+              boxShadow: activeTab === "register" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.45rem"
+            }}
+          >
+            <Award size={15} />
+            <span>Marks Register (Award List)</span>
+          </button>
 
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #f1f5f9", paddingTop: "0.75rem", fontSize: "0.78rem" }}>
-                      <span style={{ color: "#94a3b8", fontWeight: 600 }}>
-                        {cls.academic_year || "2026-2027"}
-                      </span>
-                      <span style={{ color: "#2563eb", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "0.2rem" }}>
-                        Open {classLabel} <ChevronRight size={14} />
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {unassignedGroups.length > 0 && (
-                <div
-                  onClick={() => setSelectedClassId("__unassigned__")}
-                  style={{
-                    background: "#ffffff",
-                    border: "1px solid #e2e8f0",
-                    borderRadius: "16px",
-                    padding: "1.25rem 1.35rem",
-                    cursor: "pointer",
-                    transition: "all 0.15s ease",
-                    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.03)",
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "space-between",
-                    gap: "1rem"
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                      <div style={{ padding: "0.6rem", background: "#f1f5f9", color: "#475569", borderRadius: "10px" }}>
-                        <Users size={20} />
-                      </div>
-                      <div>
-                        <div style={{ fontSize: "1.02rem", fontWeight: 800, color: "#0f172a" }}>
-                          Unassigned Students
-                        </div>
-                        <div style={{ fontSize: "0.78rem", fontWeight: 600, color: "#64748b", marginTop: "0.15rem" }}>
-                          Not linked to a {classLabel.toLowerCase()} cohort
-                        </div>
-                      </div>
-                    </div>
-                    <span style={{ fontSize: "0.76rem", fontWeight: 700, background: "#f1f5f9", color: "#334155", padding: "0.2rem 0.6rem", borderRadius: "9999px" }}>
-                      {unassignedGroups.length} {unassignedGroups.length === 1 ? "Student" : "Students"}
-                    </span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "flex-end", borderTop: "1px solid #f1f5f9", paddingTop: "0.75rem", fontSize: "0.78rem", color: "#2563eb", fontWeight: 700 }}>
-                    Open List <ChevronRight size={14} />
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )
-      )}
-
-      {/* Loading Indicator */}
-      {loading && (
-        <div style={{ textAlign: "center", padding: "4rem", color: "#64748b" }}>
-          Loading student rosters...
+          <button
+            type="button"
+            onClick={() => setActiveTab("roster")}
+            style={{
+              background: activeTab === "roster" ? "#ffffff" : "transparent",
+              color: activeTab === "roster" ? "#0f172a" : "#64748b",
+              border: "none",
+              borderRadius: "8px",
+              padding: "0.5rem 1rem",
+              fontSize: "0.85rem",
+              fontWeight: 700,
+              cursor: "pointer",
+              boxShadow: activeTab === "roster" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.45rem"
+            }}
+          >
+            <Users size={15} />
+            <span>Student Directory ({consolidatedList.length})</span>
+          </button>
         </div>
-      )}
 
-      {/* STATE B: OPENED CLASS BOX WITH CLICKABLE STUDENT LIST (NO ATTENDANCE) */}
-      {!loading && selectedClassId && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-          <div>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
+          {activeTab === "register" ? (
+            <>
+              <button
+                type="button"
+                onClick={handleExportCsv}
+                style={{
+                  background: "#16a34a",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "8px",
+                  padding: "0.5rem 0.85rem",
+                  fontSize: "0.82rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.35rem",
+                  boxShadow: "0 2px 6px rgba(22, 163, 74, 0.25)"
+                }}
+              >
+                <Download size={14} />
+                <span>Export to Excel</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => window.print()}
+                style={{
+                  background: "#f1f5f9",
+                  border: "1px solid #cbd5e1",
+                  color: "#334155",
+                  borderRadius: "8px",
+                  padding: "0.5rem 0.85rem",
+                  fontSize: "0.82rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.35rem"
+                }}
+              >
+                <Printer size={14} />
+                <span>Print Marksheet</span>
+              </button>
+            </>
+          ) : (
             <button
-              onClick={() => setSelectedClassId("")}
+              type="button"
+              onClick={() => handleOpenAddModal()}
               style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.45rem",
-                background: "#ffffff",
-                border: "1px solid #cbd5e1",
+                background: "#2563eb",
+                color: "#ffffff",
+                border: "none",
                 borderRadius: "8px",
-                padding: "0.45rem 0.9rem",
-                fontSize: "0.84rem",
+                padding: "0.5rem 1rem",
+                fontSize: "0.85rem",
                 fontWeight: 700,
-                color: "#1e293b",
-                cursor: "pointer"
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.35rem"
               }}
             >
-              <ArrowLeft size={15} /> Back to All {classLabel} Boxes
+              <UserPlus size={15} />
+              <span>+ Add Student</span>
             </button>
+          )}
+        </div>
+      </div>
+
+      {/* ================= TAB 1: MARKS REGISTER ================= */}
+      {activeTab === "register" && (
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            borderRadius: "14px",
+            padding: "1.5rem",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.02)"
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingBottom: "1.25rem",
+              borderBottom: "1px solid #e2e8f0",
+              marginBottom: "1.25rem",
+              flexWrap: "wrap",
+              gap: "1rem"
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
+              <FileSpreadsheet size={18} style={{ color: "#2563eb" }} />
+              <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#334155" }}>
+                Select Exam Paper:
+              </span>
+              <select
+                value={selectedExamId}
+                onChange={(e) => setSelectedExamId(e.target.value)}
+                style={{
+                  padding: "0.45rem 0.85rem",
+                  borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                  fontSize: "0.88rem",
+                  fontWeight: 600,
+                  background: "#ffffff"
+                }}
+              >
+                {exams.map((ex) => (
+                  <option key={ex.id} value={ex.id}>
+                    {ex.title} (Max: {ex.max_marks} Marks)
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {activeExam && (
+              <div style={{ display: "flex", alignItems: "center", gap: "1rem", fontSize: "0.82rem", color: "#64748b" }}>
+                <span>Max Marks: <strong>{activeExam.max_marks}</strong></span>
+                <span>Passing Marks: <strong>{activeExam.passing_marks}</strong></span>
+                <span>Copies Checked: <strong>{examEvaluations.length} / {consolidatedList.length}</strong></span>
+              </div>
+            )}
           </div>
 
-          {selectedClassId !== "__unassigned__" ? (
-            classes
-              .filter((cls) => cls.id === selectedClassId)
-              .map((cls) => {
-                const classStudents = classMap.get(cls.id) || [];
-                const classGroups = consolidateStudents(classStudents);
-                return (
-                  <div
-                    key={cls.id}
-                    style={{
-                      background: "#ffffff",
-                      border: "1px solid #e2e8f0",
-                      borderRadius: "16px",
-                      overflow: "hidden",
-                      boxShadow: "0 1px 4px rgba(0, 0, 0, 0.04)"
-                    }}
-                  >
-                    {/* Class Box Header */}
-                    <div
-                      style={{
-                        padding: "1.1rem 1.5rem",
-                        background: "#f8fafc",
-                        borderBottom: "1px solid #e2e8f0",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        flexWrap: "wrap",
-                        gap: "0.75rem"
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                        <div style={{ padding: "0.5rem", background: "#1e1b4b", color: "#ffffff", borderRadius: "10px" }}>
-                          <FolderGit2 size={18} />
-                        </div>
-                        <div>
-                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                            <h2 style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
-                              {cls.name}
-                            </h2>
-                            {cls.code && (
-                              <span style={{ fontSize: "0.75rem", fontWeight: 700, background: "#e2e8f0", color: "#334155", padding: "0.15rem 0.5rem", borderRadius: "4px" }}>
-                                {cls.code}
-                              </span>
-                            )}
-                            <span style={{ fontSize: "0.75rem", fontWeight: 700, background: "#e0f2fe", color: "#0369a1", padding: "0.15rem 0.55rem", borderRadius: "9999px" }}>
-                              {classGroups.length} {classGroups.length === 1 ? "Student" : "Students"}
-                            </span>
-                          </div>
-                          <div style={{ fontSize: "0.8rem", color: "#64748b", marginTop: "0.2rem" }}>
-                            Department: {cls.department || "General"} • Academic Year: {cls.academic_year || "2026-2027"}
-                            {cls.start_date ? ` • Sem: ${cls.start_date} to ${cls.end_date || "Upcoming"}` : ""}
-                          </div>
-                        </div>
-                      </div>
+          {consolidatedList.length > 0 ? (
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc", borderBottom: "2px solid #e2e8f0", textAlign: "left" }}>
+                    <th style={{ padding: "0.75rem 1rem", fontWeight: 700, color: "#475569", width: "100px" }}>Roll No</th>
+                    <th style={{ padding: "0.75rem 1rem", fontWeight: 700, color: "#475569" }}>Student Name</th>
+                    <th style={{ padding: "0.75rem 1rem", fontWeight: 700, color: "#475569", width: "90px" }}>Section</th>
+                    <th style={{ padding: "0.75rem 1rem", fontWeight: 700, color: "#475569", width: "120px" }}>Total Marks</th>
+                    <th style={{ padding: "0.75rem 1rem", fontWeight: 700, color: "#475569", width: "110px" }}>Percentage</th>
+                    <th style={{ padding: "0.75rem 1rem", fontWeight: 700, color: "#475569", width: "130px" }}>Result</th>
+                    <th style={{ padding: "0.75rem 1rem", fontWeight: 700, color: "#475569", textAlign: "right" }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {consolidatedList.map((g) => {
+                    const ev = evalByStudentId.get(g.primary.id);
+                    const isEvaluated = Boolean(ev);
+                    const score = ev ? ev.total_score : 0;
+                    const maxM = activeExam?.max_marks || 50;
+                    const passM = activeExam?.passing_marks || 20;
+                    const pct = ev ? ev.percentage : 0;
+                    const isPass = score >= passM;
 
-                      <button
-                        onClick={() => handleOpenAddModal(cls.id)}
-                        className="btn btn-secondary"
-                        style={{ fontSize: "0.82rem", display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem" }}
+                    return (
+                      <tr
+                        key={g.primary.id}
+                        style={{
+                          borderBottom: "1px solid #f1f5f9",
+                          transition: "background 0.15s ease"
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                       >
-                        <UserPlus size={14} /> Add Student to this {classLabel}
-                      </button>
-                    </div>
-
-                    {/* Students List in this Class (Deduplicated by roll_number; click row for full details) */}
-                    {classGroups.length === 0 ? (
-                      <div style={{ padding: "2.5rem 1.5rem", textAlign: "center", color: "#64748b", fontSize: "0.88rem" }}>
-                        No students enrolled in <strong>{cls.name}</strong> yet.
-                      </div>
-                    ) : (
-                      <div style={{ overflowX: "auto" }}>
-                        <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-                          <thead>
-                            <tr style={{ background: "#ffffff", borderBottom: "1px solid #e2e8f0" }}>
-                              <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", width: "50px" }}>#</th>
-                              <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Student Name</th>
-                              <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Roll Number</th>
-                              <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Section</th>
-                              <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Enrolled Subjects</th>
-                              <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>CGPA / Record</th>
-                              <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", textAlign: "right" }}>Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {classGroups.map((group, idx) => {
-                              const stud = group.primary;
-                              const semCount = Array.isArray(stud.semester_records) ? stud.semester_records.length : 0;
-                              return (
-                                <tr
-                                  key={stud.id}
-                                  onClick={() => setSelectedStudentForProfile(stud)}
-                                  style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s ease", cursor: "pointer" }}
-                                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f8fafc")}
-                                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ffffff")}
-                                >
-                                  <td style={{ padding: "0.85rem 1.25rem", fontSize: "0.82rem", color: "#94a3b8", fontWeight: 600 }}>
-                                    {idx + 1}
-                                  </td>
-                                  <td style={{ padding: "0.85rem 1.25rem" }}>
-                                    <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.92rem" }}>
-                                      {stud.name}
-                                    </div>
-                                    <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
-                                      {stud.email || "Click row for full profile & semester CGPA"}
-                                    </div>
-                                  </td>
-                                  <td style={{ padding: "0.85rem 1.25rem" }}>
-                                    <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#1e293b", fontSize: "0.85rem", background: "#f1f5f9", padding: "0.2rem 0.55rem", borderRadius: "6px" }}>
-                                      {stud.roll_number}
-                                    </span>
-                                  </td>
-                                  <td style={{ padding: "0.85rem 1.25rem" }}>
-                                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
-                                      {(group.sections.length > 0 ? group.sections : [stud.section || "A"]).map((sec) => (
-                                        <span key={sec} style={{ background: "#e2e8f0", color: "#334155", padding: "0.15rem 0.5rem", borderRadius: "4px", fontSize: "0.75rem", fontWeight: 600 }}>
-                                          Section {sec}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </td>
-                                  <td style={{ padding: "0.85rem 1.25rem" }}>
-                                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
-                                      {group.enrolledSubjects.length > 0 ? (
-                                        group.enrolledSubjects.map((subj) => (
-                                          <span
-                                            key={subj.id}
-                                            style={{
-                                              display: "inline-flex",
-                                              alignItems: "center",
-                                              gap: "0.3rem",
-                                              background: "#eff6ff",
-                                              border: "1px solid #bfdbfe",
-                                              color: "#1e3a8a",
-                                              padding: "0.18rem 0.55rem",
-                                              borderRadius: "9999px",
-                                              fontSize: "0.75rem",
-                                              fontWeight: 700
-                                            }}
-                                            title={subj.name}
-                                          >
-                                            <span>{subj.code}</span>
-                                            <span style={{ fontWeight: 500, color: "#3b82f6" }}>·</span>
-                                            <span style={{ fontWeight: 600, maxWidth: "150px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                              {subj.name}
-                                            </span>
-                                          </span>
-                                        ))
-                                      ) : (
-                                        <span style={{ fontSize: "0.8rem", color: "#64748b" }}>General</span>
-                                      )}
-                                    </div>
-                                  </td>
-                                  <td style={{ padding: "0.85rem 1.25rem" }}>
-                                    <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#0f172a" }}>
-                                      {stud.cgpa_or_percentage && stud.cgpa_or_percentage > 0
-                                        ? `CGPA ${stud.cgpa_or_percentage.toFixed(2)}`
-                                        : "Not set"}
-                                    </div>
-                                    <div style={{ fontSize: "0.72rem", color: "#64748b" }}>
-                                      {semCount > 0 ? `${semCount} sem record${semCount > 1 ? "s" : ""}` : "Add sem history"}
-                                    </div>
-                                  </td>
-                                  <td style={{ padding: "0.85rem 1.25rem", textAlign: "right" }}>
-                                    <div style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setSelectedStudentForProfile(stud);
-                                        }}
-                                        className="btn btn-secondary"
-                                        style={{ fontSize: "0.78rem", padding: "0.35rem 0.75rem" }}
-                                      >
-                                        View Details
-                                      </button>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleDeleteGroup(group.rows, stud.name);
-                                        }}
-                                        title="Delete Student"
-                                        style={{ padding: "0.35rem", background: "none", border: "none", color: "#ef4444", cursor: "pointer" }}
-                                      >
-                                        <Trash2 size={15} />
-                                      </button>
-                                    </div>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-          ) : (
-            <div
-              style={{
-                background: "#ffffff",
-                border: "1px solid #e2e8f0",
-                borderRadius: "16px",
-                overflow: "hidden",
-                boxShadow: "0 1px 4px rgba(0, 0, 0, 0.04)"
-              }}
-            >
-              <div style={{ padding: "1.1rem 1.5rem", background: "#f8fafc", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <h2 style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
-                    Unassigned Enrolled Students
-                  </h2>
-                  <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
-                    Students not linked to an explicit cohort
-                  </div>
-                </div>
-                <span style={{ fontSize: "0.75rem", fontWeight: 700, background: "#e2e8f0", color: "#334155", padding: "0.2rem 0.6rem", borderRadius: "9999px" }}>
-                  {unassignedGroups.length} {unassignedGroups.length === 1 ? "Student" : "Students"}
-                </span>
-              </div>
-
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-                  <thead>
-                    <tr style={{ background: "#ffffff", borderBottom: "1px solid #e2e8f0" }}>
-                      <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", width: "50px" }}>#</th>
-                      <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Student Name</th>
-                      <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Roll Number</th>
-                      <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Section</th>
-                      <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Enrolled Subjects</th>
-                      <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", textAlign: "right" }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {unassignedGroups.map((group, idx) => {
-                      const stud = group.primary;
-                      return (
-                        <tr
-                          key={stud.id}
-                          onClick={() => setSelectedStudentForProfile(stud)}
-                          style={{ borderBottom: "1px solid #f1f5f9", cursor: "pointer" }}
-                        >
-                          <td style={{ padding: "0.85rem 1.25rem", fontSize: "0.82rem", color: "#94a3b8", fontWeight: 600 }}>{idx + 1}</td>
-                          <td style={{ padding: "0.85rem 1.25rem" }}>
-                            <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.92rem" }}>
-                              {stud.name}
-                            </div>
-                          </td>
-                          <td style={{ padding: "0.85rem 1.25rem" }}>
-                            <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#1e293b", fontSize: "0.85rem", background: "#f1f5f9", padding: "0.2rem 0.55rem", borderRadius: "6px" }}>
-                              {stud.roll_number}
-                            </span>
-                          </td>
-                          <td style={{ padding: "0.85rem 1.25rem" }}>Section {group.sections.join(", ") || stud.section || "A"}</td>
-                          <td style={{ padding: "0.85rem 1.25rem" }}>
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
-                              {group.enrolledSubjects.map((s) => (
-                                <span key={s.id} style={{ background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", padding: "0.15rem 0.5rem", borderRadius: "9999px", fontSize: "0.74rem", fontWeight: 700 }}>
-                                  {s.code} · {s.name}
-                                </span>
-                              ))}
-                            </div>
-                          </td>
-                          <td style={{ padding: "0.85rem 1.25rem", textAlign: "right" }}>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedStudentForProfile(stud);
+                        <td style={{ padding: "0.75rem 1rem", fontWeight: 700, color: "#0f172a" }}>
+                          {g.primary.roll_number}
+                        </td>
+                        <td style={{ padding: "0.75rem 1rem" }}>
+                          <div style={{ fontWeight: 600, color: "#0f172a" }}>{g.primary.name}</div>
+                          <div style={{ fontSize: "0.74rem", color: "#64748b" }}>
+                            {g.enrolledSubjects.map((s) => s.name).join(", ") || "General"}
+                          </div>
+                        </td>
+                        <td style={{ padding: "0.75rem 1rem", color: "#64748b" }}>
+                          {g.sections.join(", ") || "A"}
+                        </td>
+                        <td style={{ padding: "0.75rem 1rem", fontWeight: 700 }}>
+                          {isEvaluated ? (
+                            <span style={{ color: "#0f172a" }}>{score} / {maxM}</span>
+                          ) : (
+                            <span style={{ color: "#94a3b8" }}>-- / {maxM}</span>
+                          )}
+                        </td>
+                        <td style={{ padding: "0.75rem 1rem" }}>
+                          {isEvaluated ? (
+                            <span style={{ fontWeight: 600, color: "#334155" }}>{pct.toFixed(1)}%</span>
+                          ) : (
+                            <span style={{ color: "#94a3b8" }}>--</span>
+                          )}
+                        </td>
+                        <td style={{ padding: "0.75rem 1rem" }}>
+                          {isEvaluated ? (
+                            <span
+                              style={{
+                                background: isPass ? "#f0fdf4" : "#fef2f2",
+                                color: isPass ? "#166534" : "#dc2626",
+                                border: `1px solid ${isPass ? "#bbf7d0" : "#fecaca"}`,
+                                padding: "0.2rem 0.55rem",
+                                borderRadius: "9999px",
+                                fontSize: "0.72rem",
+                                fontWeight: 700
                               }}
-                              className="btn btn-secondary"
-                              style={{ fontSize: "0.78rem" }}
                             >
-                              View Details
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                              {isPass ? "PASS" : "RETEST"}
+                            </span>
+                          ) : (
+                            <span
+                              style={{
+                                background: "#f8fafc",
+                                color: "#64748b",
+                                padding: "0.2rem 0.55rem",
+                                borderRadius: "9999px",
+                                fontSize: "0.72rem",
+                                fontWeight: 600
+                              }}
+                            >
+                              NOT CHECKED
+                            </span>
+                          )}
+                        </td>
+                        <td style={{ padding: "0.75rem 1rem", textAlign: "right" }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (activeExam) {
+                                onNavigate("evaluation", {
+                                  examId: activeExam.id,
+                                  studentId: g.primary.id,
+                                  evalId: ev?.id
+                                });
+                              }
+                            }}
+                            style={{
+                              background: isEvaluated ? "#eff6ff" : "#2563eb",
+                              color: isEvaluated ? "#1d4ed8" : "#ffffff",
+                              border: isEvaluated ? "1px solid #bfdbfe" : "none",
+                              borderRadius: "6px",
+                              padding: "0.35rem 0.75rem",
+                              fontSize: "0.78rem",
+                              fontWeight: 700,
+                              cursor: "pointer"
+                            }}
+                          >
+                            {isEvaluated ? "View Copy" : "Grade Paper"}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div style={{ textAlign: "center", padding: "3rem 1rem", color: "#64748b" }}>
+              <Users size={36} style={{ color: "#cbd5e1", margin: "0 auto 0.75rem" }} />
+              <div style={{ fontWeight: 700, color: "#0f172a" }}>No students enrolled yet</div>
+              <div style={{ fontSize: "0.85rem", marginTop: "0.25rem" }}>
+                Switch to the "Student Directory" tab to add students to this class.
               </div>
             </div>
           )}
         </div>
       )}
 
-      {/* 16:9 WIDESCREEN ADD STUDENT MODAL */}
-      {showAddModal && (
-        <div className="modal-overlay-16-9" onClick={() => setShowAddModal(false)}>
-          <div className="modal-content-16-9" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "980px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", height: "100%", minHeight: "520px" }}>
-              {/* Left Brand/Info Panel */}
-              <div style={{ background: "#1e1b4b", color: "#ffffff", padding: "2.5rem 2rem", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                <div>
-                  <div style={{ width: "48px", height: "48px", borderRadius: "12px", background: "rgba(255, 255, 255, 0.15)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "1.25rem" }}>
-                    <UserPlus size={24} />
-                  </div>
-                  <h3 style={{ fontSize: "1.4rem", fontWeight: 900, letterSpacing: "-0.02em", marginBottom: "0.5rem" }}>
-                    Enroll Student
-                  </h3>
-                  <p style={{ fontSize: "0.88rem", color: "#cbd5e1", lineHeight: 1.6 }}>
-                    Register a student under an academic class and curriculum subject. Once enrolled, you can attach and evaluate their handwritten answer sheets.
-                  </p>
-                </div>
-
-                <div style={{ background: "rgba(255, 255, 255, 0.08)", padding: "1rem", borderRadius: "10px", fontSize: "0.8rem", color: "#94a3b8" }}>
-                  💡 Unique student roll numbers are automatically indexed across evaluations and grade reports.
-                </div>
-              </div>
-
-              {/* Right Form Fields Panel */}
-              <div style={{ padding: "2.5rem", display: "flex", flexDirection: "column", justifyContent: "space-between", overflowY: "auto" }}>
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
-                    <h4 style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
-                      Student Details & Cohort Allocation
-                    </h4>
-                    <button onClick={() => setShowAddModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }}>
-                      <X size={20} />
-                    </button>
-                  </div>
-
-                  {addError && (
-                    <div style={{ padding: "0.75rem 1rem", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "8px", color: "#dc2626", fontSize: "0.85rem", marginBottom: "1.25rem" }}>
-                      {addError}
-                    </div>
-                  )}
-
-                  <form onSubmit={handleAddStudent} id="add-student-form">
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1.25rem" }}>
-                      <div>
-                        <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
-                          Full Name *
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="e.g. Ram Sharma"
-                          value={studentName}
-                          onChange={(e) => setStudentName(e.target.value)}
-                          style={{ width: "100%", padding: "0.6rem 0.85rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.9rem" }}
-                        />
-                      </div>
-
-                      <div>
-                        <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
-                          Roll / Registration Number *
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          placeholder="e.g. 21CS045"
-                          value={rollNumber}
-                          onChange={(e) => setRollNumber(e.target.value)}
-                          style={{ width: "100%", padding: "0.6rem 0.85rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.9rem", textTransform: "uppercase" }}
-                        />
-                      </div>
-                    </div>
-
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1.25rem" }}>
-                      <div>
-                        <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
-                          {classLabel} / Cohort *
-                        </label>
-                        <select
-                          value={modalClassId}
-                          onChange={(e) => setModalClassId(e.target.value)}
-                          style={{ width: "100%", padding: "0.6rem 0.85rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.9rem", background: "#ffffff" }}
-                        >
-                          {classes.map((c) => (
-                            <option key={c.id} value={c.id}>{c.name} ({c.code || "SEC"})</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
-                          Section / Batch
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. A"
-                          value={section}
-                          onChange={(e) => setSection(e.target.value)}
-                          style={{ width: "100%", padding: "0.6rem 0.85rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.9rem" }}
-                        />
-                      </div>
-                    </div>
-
-                    <div style={{ marginBottom: "1.5rem" }}>
-                      <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
-                        Enroll in Subject *
-                      </label>
-                      <select
-                        value={modalSubjectId}
-                        onChange={(e) => setModalSubjectId(e.target.value)}
-                        style={{ width: "100%", padding: "0.6rem 0.85rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.9rem", background: "#ffffff" }}
-                      >
-                        {subjects.map((s) => (
-                          <option key={s.id} value={s.id}>{s.name} ({s.code}) - {s.semester_or_grade}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </form>
-                </div>
-
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", borderTop: "1px solid #e2e8f0", paddingTop: "1.25rem" }}>
-                  <button type="button" onClick={() => setShowAddModal(false)} className="btn btn-secondary">
-                    Cancel
-                  </button>
-                  <button type="submit" form="add-student-form" disabled={isAdding} className="btn btn-primary">
-                    {isAdding ? "Adding..." : "Confirm & Enroll"}
-                  </button>
-                </div>
-              </div>
+      {/* ================= TAB 2: STUDENT DIRECTORY ================= */}
+      {activeTab === "roster" && (
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            borderRadius: "14px",
+            padding: "1.5rem",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.02)"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1.25rem" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.45rem",
+                background: "#f8fafc",
+                border: "1px solid #cbd5e1",
+                borderRadius: "8px",
+                padding: "0.45rem 0.75rem",
+                flex: 1
+              }}
+            >
+              <Search size={16} style={{ color: "#94a3b8" }} />
+              <input
+                type="text"
+                placeholder="Search students by name or roll number..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  border: "none",
+                  outline: "none",
+                  background: "transparent",
+                  fontSize: "0.88rem",
+                  width: "100%"
+                }}
+              />
             </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1rem" }}>
+            {consolidatedList.map((g) => (
+              <div
+                key={g.primary.id}
+                style={{
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "10px",
+                  padding: "1rem",
+                  background: "#ffffff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  transition: "border-color 0.15s ease"
+                }}
+              >
+                <div
+                  onClick={() => setSelectedStudentForProfile(g.primary)}
+                  style={{ cursor: "pointer", flex: 1 }}
+                >
+                  <div style={{ fontWeight: 700, fontSize: "0.92rem", color: "#0f172a" }}>
+                    {g.primary.name}
+                  </div>
+                  <div style={{ fontSize: "0.76rem", color: "#64748b", marginTop: "2px" }}>
+                    Roll: <strong>{g.primary.roll_number}</strong> • Sec: {g.sections.join(", ") || "A"}
+                  </div>
+                  <div style={{ fontSize: "0.72rem", color: "#2563eb", marginTop: "4px" }}>
+                    {g.enrolledSubjects.map((s) => s.name).join(", ") || "Enrolled"}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleDeleteGroup(g.rows, g.primary.name)}
+                  title="Remove student"
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "#94a3b8",
+                    cursor: "pointer",
+                    padding: "0.35rem"
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "#dc2626")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "#94a3b8")}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* 16:9 Student Profile Modal */}
+      {/* ================= MODAL: ORGANIZATION CONFIGURATION ================= */}
+      {showOrgModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.5)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 220,
+            padding: "1rem"
+          }}
+        >
+          <div
+            style={{
+              background: "#ffffff",
+              borderRadius: "14px",
+              maxWidth: "540px",
+              width: "100%",
+              padding: "1.75rem",
+              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)"
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
+              <h3 style={{ fontSize: "1.2rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
+                Manage Academic Organization
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowOrgModal(false)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b" }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveOrganization}>
+              <div style={{ marginBottom: "1rem" }}>
+                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.35rem" }}>
+                  Institution Model
+                </label>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem" }}>
+                  {[
+                    { id: "school", label: "School", desc: "CBSE / ICSE" },
+                    { id: "college", label: "College", desc: "Credits & Sems" },
+                    { id: "competitive", label: "Coaching", desc: "JEE / NEET" }
+                  ].map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setOrgType(t.id as any)}
+                      style={{
+                        border: orgType === t.id ? "2px solid #2563eb" : "1px solid #cbd5e1",
+                        background: orgType === t.id ? "#eff6ff" : "#ffffff",
+                        padding: "0.6rem 0.5rem",
+                        borderRadius: "8px",
+                        textAlign: "center",
+                        cursor: "pointer"
+                      }}
+                    >
+                      <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#0f172a" }}>{t.label}</div>
+                      <div style={{ fontSize: "0.68rem", color: "#64748b" }}>{t.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "0.85rem" }}>
+                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                  Organization / School Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={orgName}
+                  onChange={(e) => setOrgName(e.target.value)}
+                  placeholder="e.g. Delhi Public School, R.K. Puram"
+                  style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1.25rem" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                    Institution Code
+                  </label>
+                  <input
+                    type="text"
+                    value={orgCode}
+                    onChange={(e) => setOrgCode(e.target.value)}
+                    placeholder="e.g. DPS-DELHI"
+                    style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                    Board / Department
+                  </label>
+                  <input
+                    type="text"
+                    value={orgType === "school" ? schoolBoard : departmentName}
+                    onChange={(e) => (orgType === "school" ? setSchoolBoard(e.target.value) : setDepartmentName(e.target.value))}
+                    style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowOrgModal(false)}
+                  style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", padding: "0.5rem 1rem", borderRadius: "8px", fontSize: "0.85rem", fontWeight: 600, cursor: "pointer" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{ background: "#2563eb", color: "#ffffff", border: "none", padding: "0.5rem 1.25rem", borderRadius: "8px", fontSize: "0.85rem", fontWeight: 700, cursor: "pointer" }}
+                >
+                  Save Organization
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: ADD STUDENT ================= */}
+      {showAddModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.5)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 220,
+            padding: "1rem"
+          }}
+        >
+          <div
+            style={{
+              background: "#ffffff",
+              borderRadius: "14px",
+              maxWidth: "480px",
+              width: "100%",
+              padding: "1.75rem",
+              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)"
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
+              <h3 style={{ fontSize: "1.2rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
+                Enroll New Student
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAddModal(false)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b" }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddStudent}>
+              <div style={{ marginBottom: "0.85rem" }}>
+                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                  Student Full Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Rahul Sharma"
+                  value={studentName}
+                  onChange={(e) => setStudentName(e.target.value)}
+                  style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: "0.75rem", marginBottom: "0.85rem" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                    Roll Number *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 101, 102"
+                    value={rollNumber}
+                    onChange={(e) => setRollNumber(e.target.value)}
+                    style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                    Section
+                  </label>
+                  <input
+                    type="text"
+                    value={section}
+                    onChange={(e) => setSection(e.target.value)}
+                    style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "1.25rem" }}>
+                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                  Enrolled Subject *
+                </label>
+                <select
+                  value={modalSubjectId}
+                  onChange={(e) => setModalSubjectId(e.target.value)}
+                  style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#ffffff" }}
+                >
+                  {subjects.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.code || "SUB"})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {addError && (
+                <div style={{ color: "#dc2626", fontSize: "0.82rem", marginBottom: "1rem" }}>
+                  {addError}
+                </div>
+              )}
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", padding: "0.5rem 1rem", borderRadius: "8px", fontSize: "0.85rem", fontWeight: 600, cursor: "pointer" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isAdding}
+                  style={{ background: "#2563eb", color: "#ffffff", border: "none", padding: "0.5rem 1.25rem", borderRadius: "8px", fontSize: "0.85rem", fontWeight: 700, cursor: "pointer" }}
+                >
+                  {isAdding ? "Adding..." : "Enroll Student"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Student Profile Modal */}
       {selectedStudentForProfile && (
         <StudentProfileModal
           student={selectedStudentForProfile}
           onClose={() => setSelectedStudentForProfile(null)}
-          onNavigateToEvaluation={(evalId) => {
-            setSelectedStudentForProfile(null);
-            onNavigate("evaluation", { evalId });
-          }}
-          onStudentUpdated={() => loadStudents()}
         />
       )}
     </div>
