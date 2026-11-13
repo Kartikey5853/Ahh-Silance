@@ -3,10 +3,9 @@
  * 
  * Features:
  * - Persistent Left Dock Sidebar Navigation
- * - Streamlined 3-Step Quick Check Exam Wizard
  * - Google Classroom Minimalist Dashboard
- * - Side-by-side Magic Ink Evaluation Workspace
- * - Comprehensive Marks Register & Roster with Organization Details
+ * - Side-by-side Question Paper Split Screen & Magic Ink Evaluation
+ * - Comprehensive Marks Register & Settings with Organization
  * - Real JWT authentication and SQLite database interactions
  */
 
@@ -14,7 +13,6 @@ import React, { useState, useEffect } from "react";
 import { LoginPage } from "./pages/LoginPage";
 import { Navbar } from "./components/Navbar";
 import { LeftDock, type NavTab } from "./components/LeftDock";
-import { QuickCheckExamWizard } from "./components/QuickCheckExamWizard";
 import { AcademicDashboardPage } from "./pages/AcademicDashboardPage";
 import { AcademicsHierarchyPage } from "./pages/AcademicsHierarchyPage";
 import { StudentsRosterPage } from "./pages/StudentsRosterPage";
@@ -30,7 +28,6 @@ export const App: React.FC = () => {
   const [userName, setUserName] = useState<string>("Faculty");
   const [activeTab, setActiveTab] = useState<NavTab>("dashboard");
   const [navigationParams, setNavigationParams] = useState<any>({});
-  const [showQuickCheck, setShowQuickCheck] = useState<boolean>(false);
 
   useEffect(() => {
     const token = localStorage.getItem("auth_token");
@@ -67,12 +64,13 @@ export const App: React.FC = () => {
   const handleNavigate = (tab: NavTab, params?: any) => {
     if (params) {
       setNavigationParams(params);
+    } else {
+      setNavigationParams({});
     }
     setActiveTab(tab);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // If not logged in, show the clean LoginPage
   if (!isAuthenticated) {
     return <LoginPage onLoginSuccess={handleLoginSuccess} />;
   }
@@ -87,13 +85,13 @@ export const App: React.FC = () => {
         position: "relative"
       }}
     >
-      {/* Left Dock Sidebar Navigation */}
+      {/* Persistent Left Dock Sidebar Navigation */}
       <LeftDock
         activeTab={activeTab}
         onTabChange={handleNavigate}
         onLogout={handleLogout}
         userName={userName}
-        onOpenQuickCheck={() => setShowQuickCheck(true)}
+        onOpenQuickCheck={() => handleNavigate("exams", { mode: "create" })}
       />
 
       {/* Main Content Workspace Layout */}
@@ -111,14 +109,13 @@ export const App: React.FC = () => {
           onSelectTab={handleNavigate}
           onLogout={handleLogout}
           userName={userName}
-          onOpenQuickCheck={() => setShowQuickCheck(true)}
         />
 
         <main
           className="niera-page-body"
           style={{
             flex: 1,
-            padding: "1.75rem 2rem 5rem 2rem",
+            padding: "1.5rem 2rem 5rem 2rem",
             maxWidth: "1600px",
             width: "100%",
             margin: "0 auto"
@@ -127,7 +124,6 @@ export const App: React.FC = () => {
           {activeTab === "dashboard" && (
             <AcademicDashboardPage
               onNavigate={handleNavigate}
-              onOpenQuickCheck={() => setShowQuickCheck(true)}
             />
           )}
 
@@ -153,6 +149,7 @@ export const App: React.FC = () => {
           {activeTab === "exams" && (
             <ExamManagementPage
               initialSubjectId={navigationParams.subjectId}
+              initialMode={navigationParams.mode}
               onNavigate={handleNavigate}
             />
           )}
@@ -171,13 +168,6 @@ export const App: React.FC = () => {
           )}
         </main>
       </div>
-
-      {/* Effortless 3-Step Quick Check Exam Wizard Modal */}
-      <QuickCheckExamWizard
-        isOpen={showQuickCheck}
-        onClose={() => setShowQuickCheck(false)}
-        onNavigate={handleNavigate}
-      />
     </div>
   );
 };

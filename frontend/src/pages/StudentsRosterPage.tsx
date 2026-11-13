@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { academicApi } from "../api/academicApi";
-import type { Subject, Student, ClassItem, Institution, InstitutionType, Exam, AcademicEvaluation } from "../types/academic";
+import type { Subject, Student, ClassItem, Exam, AcademicEvaluation } from "../types/academic";
 import { StudentProfileModal } from "../components/StudentProfileModal";
 import {
   UserPlus,
@@ -8,7 +8,6 @@ import {
   Search,
   Users,
   X,
-  Building2,
   Download,
   Printer,
   FileSpreadsheet,
@@ -35,7 +34,6 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
   const [activeTab, setActiveTab] = useState<"register" | "roster">("register");
 
   // Hierarchy Data
-  const [currentOrg, setCurrentOrg] = useState<Institution | null>(null);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
@@ -46,14 +44,6 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
   const [students, setStudents] = useState<Student[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStudentForProfile, setSelectedStudentForProfile] = useState<Student | null>(null);
-
-  // Organization Modal State (Preserving complete existing organization features)
-  const [showOrgModal, setShowOrgModal] = useState(false);
-  const [orgType, setOrgType] = useState<InstitutionType>("school");
-  const [orgName, setOrgName] = useState("");
-  const [orgCode, setOrgCode] = useState("");
-  const [schoolBoard, setSchoolBoard] = useState("CBSE");
-  const [departmentName, setDepartmentName] = useState("Computer Science & Engineering");
 
   // Add Student Modal State
   const [showAddModal, setShowAddModal] = useState(false);
@@ -67,10 +57,9 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
 
   const loadInitialData = async () => {
     try {
-      const [classList, subjList, instList, examList, evalList] = await Promise.all([
+      const [classList, subjList, examList, evalList] = await Promise.all([
         academicApi.listClasses().catch(() => []),
         academicApi.listSubjects().catch(() => []),
-        academicApi.listInstitutions().catch(() => []),
         academicApi.listExams().catch(() => []),
         academicApi.listEvaluations().catch(() => [])
       ]);
@@ -80,13 +69,6 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
       setExams(examList || []);
       setEvaluations(evalList || []);
 
-      if (instList && instList.length > 0) {
-        setCurrentOrg(instList[0]);
-        setOrgType(instList[0].type);
-        setOrgName(instList[0].name);
-        setOrgCode(instList[0].code || "");
-      }
-
       if (examList && examList.length > 0) {
         setSelectedExamId(examList[0].id);
       }
@@ -94,7 +76,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
       const studList = await academicApi.listAllStudents().catch(() => []);
       setStudents(studList || []);
     } catch (err) {
-      console.error("Failed to load initial register data:", err);
+      console.error("Failed to load register data:", err);
     }
   };
 
@@ -157,24 +139,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
     }
   };
 
-  const handleSaveOrganization = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!orgName.trim()) return;
-
-    try {
-      const created = await academicApi.createInstitution({
-        name: orgName.trim(),
-        type: orgType,
-        code: orgCode.trim()
-      });
-      setCurrentOrg(created);
-      setShowOrgModal(false);
-    } catch (err) {
-      alert("Failed to save organization.");
-    }
-  };
-
-  // Consolidate Students
+  // Consolidate Students by Roll Number
   const consolidateStudents = (rows: Student[]): ConsolidatedStudentGroup[] => {
     const byRoll = new Map<string, ConsolidatedStudentGroup>();
     rows.forEach((stud) => {
@@ -238,88 +203,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
 
   return (
     <div className="students-roster-page" style={{ maxWidth: "1280px", margin: "0 auto", paddingBottom: "4rem" }}>
-      {/* ================= 1. ORGANIZATION MANAGEMENT BAR ================= */}
-      <div
-        style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
-          borderRadius: "14px",
-          padding: "1rem 1.25rem",
-          marginBottom: "1.5rem",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-          gap: "1rem",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.02)"
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
-          <div
-            style={{
-              width: "40px",
-              height: "40px",
-              borderRadius: "10px",
-              background: "#eff6ff",
-              color: "#2563eb",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center"
-            }}
-          >
-            <Building2 size={20} />
-          </div>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-              <span style={{ fontSize: "1rem", fontWeight: 800, color: "#0f172a" }}>
-                {currentOrg?.name || "Academic Institution"}
-              </span>
-              <span
-                style={{
-                  background: "#f1f5f9",
-                  color: "#475569",
-                  fontSize: "0.72rem",
-                  fontWeight: 700,
-                  padding: "0.15rem 0.45rem",
-                  borderRadius: "4px"
-                }}
-              >
-                {currentOrg?.type === "college"
-                  ? "College / University"
-                  : currentOrg?.type === "school"
-                  ? "School (CBSE)"
-                  : "Competitive / JEE"}
-              </span>
-            </div>
-            <div style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "2px" }}>
-              Institutional Code: {currentOrg?.code || "INST-01"} • Academic Session: 2026-2027
-            </div>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setShowOrgModal(true)}
-          style={{
-            background: "#f8fafc",
-            border: "1px solid #cbd5e1",
-            color: "#334155",
-            borderRadius: "8px",
-            padding: "0.45rem 0.85rem",
-            fontSize: "0.82rem",
-            fontWeight: 700,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: "0.35rem"
-          }}
-        >
-          <Building2 size={14} />
-          <span>Change Organization</span>
-        </button>
-      </div>
-
-      {/* ================= 2. TAB SWITCHER ================= */}
+      {/* Tab Switcher Header */}
       <div
         style={{
           display: "flex",
@@ -357,7 +241,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
             }}
           >
             <Award size={15} />
-            <span>Marks Register (Award List)</span>
+            <span>Marks Register</span>
           </button>
 
           <button
@@ -379,10 +263,11 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
             }}
           >
             <Users size={15} />
-            <span>Student Directory ({consolidatedList.length})</span>
+            <span>Students Enrolled ({consolidatedList.length})</span>
           </button>
         </div>
 
+        {/* Action Buttons */}
         <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
           {activeTab === "register" ? (
             <>
@@ -400,12 +285,11 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
-                  gap: "0.35rem",
-                  boxShadow: "0 2px 6px rgba(22, 163, 74, 0.25)"
+                  gap: "0.35rem"
                 }}
               >
                 <Download size={14} />
-                <span>Export to Excel</span>
+                <span>Export Excel</span>
               </button>
 
               <button
@@ -426,7 +310,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                 }}
               >
                 <Printer size={14} />
-                <span>Print Marksheet</span>
+                <span>Print</span>
               </button>
             </>
           ) : (
@@ -465,6 +349,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
             boxShadow: "0 1px 3px rgba(0,0,0,0.02)"
           }}
         >
+          {/* Exam Filter Dropdown */}
           <div
             style={{
               display: "flex",
@@ -506,11 +391,12 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
               <div style={{ display: "flex", alignItems: "center", gap: "1rem", fontSize: "0.82rem", color: "#64748b" }}>
                 <span>Max Marks: <strong>{activeExam.max_marks}</strong></span>
                 <span>Passing Marks: <strong>{activeExam.passing_marks}</strong></span>
-                <span>Copies Checked: <strong>{examEvaluations.length} / {consolidatedList.length}</strong></span>
+                <span>Copies Evaluated: <strong>{examEvaluations.length} / {consolidatedList.length}</strong></span>
               </div>
             )}
           </div>
 
+          {/* Marksheet Table */}
           {consolidatedList.length > 0 ? (
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
@@ -597,7 +483,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                                 fontWeight: 600
                               }}
                             >
-                              NOT CHECKED
+                              PENDING
                             </span>
                           )}
                         </td>
@@ -638,7 +524,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
               <Users size={36} style={{ color: "#cbd5e1", margin: "0 auto 0.75rem" }} />
               <div style={{ fontWeight: 700, color: "#0f172a" }}>No students enrolled yet</div>
               <div style={{ fontSize: "0.85rem", marginTop: "0.25rem" }}>
-                Switch to the "Student Directory" tab to add students to this class.
+                Switch to the "Students Enrolled" tab to enroll students.
               </div>
             </div>
           )}
@@ -697,8 +583,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                   background: "#ffffff",
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "space-between",
-                  transition: "border-color 0.15s ease"
+                  justifyContent: "space-between"
                 }}
               >
                 <div
@@ -738,136 +623,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
         </div>
       )}
 
-      {/* ================= MODAL: ORGANIZATION CONFIGURATION ================= */}
-      {showOrgModal && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15, 23, 42, 0.5)",
-            backdropFilter: "blur(4px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 220,
-            padding: "1rem"
-          }}
-        >
-          <div
-            style={{
-              background: "#ffffff",
-              borderRadius: "14px",
-              maxWidth: "540px",
-              width: "100%",
-              padding: "1.75rem",
-              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)"
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
-              <h3 style={{ fontSize: "1.2rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
-                Manage Academic Organization
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowOrgModal(false)}
-                style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b" }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveOrganization}>
-              <div style={{ marginBottom: "1rem" }}>
-                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.35rem" }}>
-                  Institution Model
-                </label>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem" }}>
-                  {[
-                    { id: "school", label: "School", desc: "CBSE / ICSE" },
-                    { id: "college", label: "College", desc: "Credits & Sems" },
-                    { id: "competitive", label: "Coaching", desc: "JEE / NEET" }
-                  ].map((t) => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => setOrgType(t.id as any)}
-                      style={{
-                        border: orgType === t.id ? "2px solid #2563eb" : "1px solid #cbd5e1",
-                        background: orgType === t.id ? "#eff6ff" : "#ffffff",
-                        padding: "0.6rem 0.5rem",
-                        borderRadius: "8px",
-                        textAlign: "center",
-                        cursor: "pointer"
-                      }}
-                    >
-                      <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#0f172a" }}>{t.label}</div>
-                      <div style={{ fontSize: "0.68rem", color: "#64748b" }}>{t.desc}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ marginBottom: "0.85rem" }}>
-                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                  Organization / School Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={orgName}
-                  onChange={(e) => setOrgName(e.target.value)}
-                  placeholder="e.g. Delhi Public School, R.K. Puram"
-                  style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
-                />
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1.25rem" }}>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                    Institution Code
-                  </label>
-                  <input
-                    type="text"
-                    value={orgCode}
-                    onChange={(e) => setOrgCode(e.target.value)}
-                    placeholder="e.g. DPS-DELHI"
-                    style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                    Board / Department
-                  </label>
-                  <input
-                    type="text"
-                    value={orgType === "school" ? schoolBoard : departmentName}
-                    onChange={(e) => (orgType === "school" ? setSchoolBoard(e.target.value) : setDepartmentName(e.target.value))}
-                    style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-                <button
-                  type="button"
-                  onClick={() => setShowOrgModal(false)}
-                  style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", padding: "0.5rem 1rem", borderRadius: "8px", fontSize: "0.85rem", fontWeight: 600, cursor: "pointer" }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  style={{ background: "#2563eb", color: "#ffffff", border: "none", padding: "0.5rem 1.25rem", borderRadius: "8px", fontSize: "0.85rem", fontWeight: 700, cursor: "pointer" }}
-                >
-                  Save Organization
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ================= MODAL: ADD STUDENT ================= */}
+      {/* MODAL: ADD STUDENT */}
       {showAddModal && (
         <div
           style={{

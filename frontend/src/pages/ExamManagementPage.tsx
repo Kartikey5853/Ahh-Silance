@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { academicApi } from "../api/academicApi";
 import { resolveApiUrl } from "../api/client";
 import { MarkdownQuestionView } from "../components/MarkdownQuestionView";
+import { DoubleTapMarkdownEditor } from "../components/DoubleTapMarkdownEditor";
 import { ExamDetailWorkspace } from "../components/ExamDetailWorkspace";
 import { AnswerKeyFullscreenWorkspace } from "../components/AnswerKeyFullscreenWorkspace";
 import type {
@@ -11,6 +12,7 @@ import type {
   AnswerKeyStructuredItem,
   QuestionItem,
   ClassItem,
+  Institution,
   DigitalPaperHeader,
   RefineQuestionSuggestion
 } from "../types/academic";
@@ -38,7 +40,6 @@ import {
   ChevronLeft,
   ChevronRight,
   FolderGit2,
-  MoreVertical,
   Edit3,
   Wand2,
   X,
@@ -49,18 +50,23 @@ import {
 
 interface ExamManagementProps {
   initialSubjectId?: string;
+  initialMode?: "list" | "detail" | "create" | "answer-key-review";
   onNavigate: (tab: any, params?: any) => void;
 }
 
 export const ExamManagementPage: React.FC<ExamManagementProps> = ({
   initialSubjectId,
+  initialMode,
   onNavigate
 }) => {
   // View mode: "list" | "detail" | "create" (3-step editor / review) | "answer-key-review"
-  const [viewMode, setViewMode] = useState<"list" | "detail" | "create" | "answer-key-review">("list");
+  const [viewMode, setViewMode] = useState<"list" | "detail" | "create" | "answer-key-review">(
+    initialMode || "list"
+  );
   // Modular Flow Steps: 1 = Upload PDF, 2 = Confirm Meta & Structure, 3 = Split Review & Edit
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(initialMode === "create" ? 1 : 1);
 
+  const [institutions, setInstitutions] = useState<Institution[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string>("");
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -115,7 +121,6 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
   const [showAnswerSheetModal, setShowAnswerSheetModal] = useState(false);
   const [sheetModalExam, setSheetModalExam] = useState<Exam | null>(null);
   const [uploadedAnswerFiles, setUploadedAnswerFiles] = useState<File[]>([]);
-  const [uploadActiveTab, setUploadActiveTab] = useState<"upload" | "students">("upload");
 
   // Digital Paper Header
   const [digitalHeader, setDigitalHeader] = useState<DigitalPaperHeader>({
@@ -168,11 +173,13 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
 
   useEffect(() => {
     Promise.all([
-      academicApi.listClasses(),
-      academicApi.listSubjects()
-    ]).then(([classList, subjList]) => {
+      academicApi.listClasses().catch(() => []),
+      academicApi.listSubjects().catch(() => []),
+      academicApi.listInstitutions().catch(() => [])
+    ]).then(([classList, subjList, instList]) => {
       setClasses(classList);
       setSubjects(subjList);
+      setInstitutions(instList);
 
       if (classList.length > 0) {
         setSelectedClassId(classList[0].id);
@@ -183,8 +190,12 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
       } else {
         setSelectedSubjectId("");
       }
+
+      if (initialMode === "create") {
+        handleStartUploadNewExam(classList[0]?.id, initialSubjectId || "");
+      }
     });
-  }, [initialSubjectId]);
+  }, [initialSubjectId, initialMode]);
 
   const loadExams = async () => {
     setLoading(true);
@@ -500,12 +511,75 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
     setStep(3);
   };
 
+  const currentSubj = subjects.find((s) => s.id === selectedSubjectId);
+  const currentInst = institutions.find((i) => i.id === currentSubj?.institution_id) || institutions[0];
+  const isSchool = Boolean(
+    currentInst?.type === "school" ||
+    currentSubj?.institution_type === "school" ||
+    (currentSubj?.name?.toLowerCase().includes("class") || false) ||
+    (currentSubj?.semester_or_grade?.toLowerCase().includes("class") || false)
+  );
+
+  const SCHOOL_PRESETS = [
+    { marks: 5, type: "Class Test", label: "5M · Class Test" },
+    { marks: 20, type: "Unit Test", label: "20M · Unit Test" },
+    { marks: 40, type: "Mid-Term Exam", label: "40M · Mid-Term" },
+    { marks: 80, type: "Annual Exam", label: "80M · Annual Exam" }
+  ];
+
+  const COLLEGE_PRESETS = [
+    { marks: 10, type: "Quiz / CIA", label: "10M · Quiz / CIA" },
+    { marks: 25, type: "Mid-Sem Exam", label: "25M · Mid-Sem" },
+    { marks: 60, type: "End-Sem Exam", label: "60M · End-Sem" },
+    { marks: 100, type: "Semester Final", label: "100M · Final SEE" }
+  ];
+
+  const activePresets = isSchool ? SCHOOL_PRESETS : COLLEGE_PRESETS;
+
+  const getSuggestedExamTitle = (marks: number, subjName: string, forSchool: boolean) => {
+    const sName = subjName || (forSchool ? "General Science" : "Course");
+    if (forSchool) {
+      if (marks <= 10) return `${sName} Class Test (${marks} Marks)`;
+      if (marks <= 25) return `${sName} Unit Test (${marks} Marks)`;
+      if (marks <= 50) return `${sName} Half-Yearly Exam (${marks} Marks)`;
+      return `${sName} Annual Board Exam (${marks} Marks)`;
+    } else {
+      if (marks <= 15) return `${sName} Quiz & CIA Assessment (${marks} Marks)`;
+      if (marks <= 35) return `${sName} Mid-Semester Examination (${marks} Marks)`;
+      if (marks <= 75) return `${sName} End-Semester Examination (${marks} Marks)`;
+      return `${sName} Semester End Final Examination (${marks} Marks)`;
+    }
+  };
+
+  const applyExamPreset = (preset: { marks: number; type: string }) => {
+    const sName = currentSubj ? currentSubj.name : (isSchool ? "Class 10 Science" : "Course");
+    setExamType(preset.type);
+    setExamTitle(getSuggestedExamTitle(preset.marks, sName, isSchool));
+    setPassingMarks(Math.round(preset.marks * 0.35));
+    setDigitalHeader((prev) => ({
+      ...prev,
+      max_marks: preset.marks,
+      title: `${sName.toUpperCase()} ${preset.type.toUpperCase()}`
+    }));
+  };
+
   const handleStartUploadNewExam = (presetClassId?: string, presetSubjectId?: string) => {
     setActiveExam(null);
-    setExamTitle("B.Tech Semester End Examination");
-    setExamType("Semester Exam");
+    const targetSubjId = presetSubjectId || selectedSubjectId;
+    const targetSubj = subjects.find((s) => s.id === targetSubjId);
+    const instIsSchool = Boolean(
+      currentInst?.type === "school" ||
+      targetSubj?.institution_type === "school" ||
+      (targetSubj?.name?.toLowerCase().includes("class") || false)
+    );
+    const sName = targetSubj ? targetSubj.name : (instIsSchool ? "Science" : "Core Engineering");
+    const initialMarks = instIsSchool ? 20 : 25;
+    const initialType = instIsSchool ? "Unit Test" : "Mid-Sem Exam";
+
+    setExamTitle(getSuggestedExamTitle(initialMarks, sName, instIsSchool));
+    setExamType(initialType);
     setTargetSection("");
-    setPassingMarks(24.0);
+    setPassingMarks(Math.round(initialMarks * 0.35));
     setCollapsedQuestionKeys({});
     setAllQuestionsCollapsed(false);
     setRefineModalIdx(null);
@@ -530,7 +604,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
     setStep(1);
   };
 
-  const handlePaperUpload = async (e: React.ChangeEvent<HTMLInputElement>, stayOnStep3 = false) => {
+  const handlePaperUpload = async (e: React.ChangeEvent<HTMLInputElement>, _stayOnStep3 = false) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
@@ -551,7 +625,8 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
       const qs = res.questions.map((q, idx) => ({
         ...q,
         id: q.id || `q-${idx + 1}`,
-        marks: Number(q.marks) || (q.section === "Part A" ? 1.0 : 10.0)
+        marks: Number(q.marks) || (q.section === "Part A" ? 1.0 : 5.0),
+        rubric: q.rubric || `Award up to ${Number(q.marks) || 5} marks for accurate step-by-step reasoning, formula usage, and final answer.`
       }));
 
       setPaperId(res.paper_id || "");
@@ -574,14 +649,82 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
         });
       }
 
-      setStep(stayOnStep3 ? 3 : 2);
+      // Automatically construct initial AI rubrics text if empty
+      if (qs.length > 0) {
+        const generatedRubricText = qs
+          .map(
+            (q) =>
+              `### ${q.q_no} (${q.marks} Marks)\n- **Topic / Core Concept**: ${q.section || "General"}\n- **Marking Breakdown**:\n  - Step 1: Definition / Conceptual formulation (40% marks)\n  - Step 2: Working & Calculation (40% marks)\n  - Step 3: Final Answer & Units (20% marks)\n- **Model Rubric Criteria**: ${q.rubric || "Award marks for accuracy."}`
+          )
+          .join("\n\n");
+        setAnswerKeyText(generatedRubricText);
+      }
+
+      // DIRECTLY TRANSITION TO SIDE-BY-SIDE PURE-WHITE SPLIT WORKSPACE
+      setStep(3);
     } catch (err: any) {
-      alert("Failed to scan question paper. Falling back to structured editor.");
-      setStep(stayOnStep3 ? 3 : 2);
+      alert("Failed to scan question paper. Opening split workspace editor.");
+      setStep(3);
     } finally {
       setIsScanning(false);
       setScanMessage(null);
     }
+  };
+
+  const handleGenerateMasterRubrics = () => {
+    if (questions.length === 0) {
+      alert("Please upload or add questions before generating rubrics.");
+      return;
+    }
+    const autoRubrics = questions
+      .map(
+        (q) =>
+          `### ${q.q_no} (${q.marks} Marks)\n- **Core Question**: ${(q.text || "").slice(0, 120)}...\n- **Step Breakdown**:\n  - Part 1: Principle & Formula (${(Number(q.marks) * 0.4).toFixed(1)} Marks)\n  - Part 2: Step-by-Step Working & Reasoning (${(Number(q.marks) * 0.4).toFixed(1)} Marks)\n  - Part 3: Accurate Final Result with Units (${(Number(q.marks) * 0.2).toFixed(1)} Marks)\n- **Evaluation Criteria**: ${q.rubric || "Award full marks for conceptual accuracy."}`
+      )
+      .join("\n\n");
+    setAnswerKeyText(autoRubrics);
+  };
+
+  const handleProceedToStudentCopies = async () => {
+    let targetExam = activeExam;
+    if (!targetExam) {
+      const targetSubjId = selectedSubjectId || (subjects.length > 0 ? subjects[0].id : "");
+      if (!targetSubjId) {
+        alert("Please ensure a subject is selected before continuing.");
+        return;
+      }
+      setIsSaving(true);
+      try {
+        const created = await academicApi.createExam({
+          subject_id: targetSubjId,
+          title: examTitle.trim() || "Academic Examination",
+          exam_type: examType,
+          max_marks: totalAllocatedMarks || 60.0,
+          passing_marks: passingMarks,
+          academic_year: academicYear,
+          target_section: targetSection,
+          exam_date: examDate,
+          correction_deadline: correctionDeadline,
+          question_paper_filename: paperFilename,
+          paper_id: paperId,
+          paper_page_count: paperPageCount,
+          answer_key_text: answerKeyText,
+          questions: questions
+        });
+        targetExam = created;
+        setActiveExam(created);
+        await loadExams();
+      } catch (err: any) {
+        alert("Failed to save exam before uploading copies: " + (err?.response?.data?.detail || err.message));
+        setIsSaving(false);
+        return;
+      } finally {
+        setIsSaving(false);
+      }
+    }
+    setSheetModalExam(targetExam);
+    setUploadedAnswerFiles([]);
+    setShowAnswerSheetModal(true);
   };
 
   const handleMarkChange = (index: number, newMarks: number) => {
@@ -938,7 +1081,6 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
   const handleOpenAnswerSheetsModal = (exam: Exam) => {
     setSheetModalExam(exam);
     setUploadedAnswerFiles([]);
-    setUploadActiveTab("upload");
     setShowAnswerSheetModal(true);
   };
 
@@ -946,6 +1088,203 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
     if (e.target.files) {
       setUploadedAnswerFiles(Array.from(e.target.files));
     }
+  };
+
+  const renderAnswerSheetsModal = () => {
+    if (!showAnswerSheetModal || !sheetModalExam) return null;
+    return (
+      <div className="modal-overlay-16-9" onClick={() => setShowAnswerSheetModal(false)}>
+        <div
+          className="modal-content-16-9"
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            maxWidth: "1050px",
+            minHeight: "560px",
+            background: "#0b132b",
+            color: "#ffffff",
+            border: "1px solid #1e293b",
+            borderRadius: "14px",
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column"
+          }}
+        >
+          {/* Modal Top Bar */}
+          <div style={{ padding: "1.25rem 1.75rem", borderBottom: "1px solid #1e293b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <h3 style={{ fontSize: "1.25rem", fontWeight: 800, margin: 0, color: "#ffffff" }}>
+                Student Copies &amp; Evaluation Desk
+              </h3>
+              <div style={{ fontSize: "0.8rem", color: "#94a3b8", marginTop: "0.2rem" }}>
+                {sheetModalExam.title} • {subjects.find((s) => s.id === sheetModalExam.subject_id)?.name || "Subject"}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+              <button onClick={() => setShowAnswerSheetModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }}>
+                <X size={20} />
+              </button>
+            </div>
+          </div>
+
+          {/* Sub-Header Actions & Section Tag */}
+          <div style={{ padding: "1rem 1.75rem", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #1e293b" }}>
+            <div style={{ fontSize: "0.85rem", color: "#94a3b8" }}>
+              Upload handwritten student answer copies (PDFs or images). Gemini AI evaluates each student's copy against the rubrics.
+            </div>
+
+            <div style={{ display: "flex", gap: "0.6rem" }}>
+              <label
+                style={{
+                  background: "#2563eb",
+                  color: "#ffffff",
+                  padding: "0.45rem 1rem",
+                  borderRadius: "8px",
+                  fontSize: "0.82rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.35rem"
+                }}
+              >
+                <UploadCloud size={15} /> Select Student Copies
+                <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg" onChange={handleAnswerSheetsSelected} style={{ display: "none" }} />
+              </label>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAnswerSheetModal(false);
+                  onNavigate("evaluation", { examId: sheetModalExam.id });
+                }}
+                style={{
+                  background: "#16a34a",
+                  border: "none",
+                  color: "#ffffff",
+                  padding: "0.45rem 1.15rem",
+                  borderRadius: "8px",
+                  fontSize: "0.82rem",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.45rem",
+                  boxShadow: "0 2px 6px rgba(22, 163, 74, 0.3)"
+                }}
+              >
+                <Sparkles size={15} />
+                <span>Start Grading ({uploadedAnswerFiles.length || 1}) →</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Modal Body: Upload Area */}
+          <div style={{ padding: "1.5rem 1.75rem", flex: 1, overflowY: "auto" }}>
+            <label
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "3.5rem 2rem",
+                border: "2px dashed #334155",
+                borderRadius: "14px",
+                background: "rgba(15, 23, 42, 0.4)",
+                cursor: "pointer",
+                textAlign: "center"
+              }}
+            >
+              <UploadCloud size={40} style={{ color: "#60a5fa", marginBottom: "0.75rem" }} />
+              <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "#ffffff" }}>
+                Drop student handwritten answer sheets here, or click to browse
+              </div>
+              <div style={{ fontSize: "0.8rem", color: "#94a3b8", marginTop: "0.25rem" }}>
+                PDF, JPG, or PNG files · Select multiple copies
+              </div>
+              <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg" onChange={handleAnswerSheetsSelected} style={{ display: "none" }} />
+            </label>
+
+            {uploadedAnswerFiles.length > 0 && (
+              <div style={{ marginTop: "1.25rem" }}>
+                <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#4ade80", marginBottom: "0.5rem" }}>
+                  ✓ {uploadedAnswerFiles.length} Student Answer Copies Attached:
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem" }}>
+                  {uploadedAnswerFiles.map((file, fIdx) => (
+                    <div
+                      key={fIdx}
+                      style={{
+                        background: "#1e293b",
+                        border: "1px solid #334155",
+                        borderRadius: "6px",
+                        padding: "0.3rem 0.65rem",
+                        fontSize: "0.78rem",
+                        color: "#e2e8f0",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.35rem"
+                      }}
+                    >
+                      <FileText size={13} style={{ color: "#60a5fa" }} />
+                      <span>{file.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Modal Footer */}
+          <div style={{ padding: "1rem 1.75rem", borderTop: "1px solid #1e293b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "0.8rem", color: "#94a3b8" }}>
+              {uploadedAnswerFiles.length} file(s) attached
+            </span>
+            <div style={{ display: "flex", gap: "0.75rem" }}>
+              <button
+                type="button"
+                onClick={() => setShowAnswerSheetModal(false)}
+                style={{
+                  background: "#1e293b",
+                  border: "1px solid #334155",
+                  color: "#cbd5e1",
+                  padding: "0.55rem 1rem",
+                  borderRadius: "8px",
+                  fontSize: "0.85rem",
+                  cursor: "pointer"
+                }}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAnswerSheetModal(false);
+                  onNavigate("evaluation", { examId: sheetModalExam.id });
+                }}
+                style={{
+                  background: "#16a34a",
+                  border: "none",
+                  color: "#ffffff",
+                  padding: "0.55rem 1.35rem",
+                  borderRadius: "8px",
+                  fontSize: "0.85rem",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.45rem",
+                  boxShadow: "0 2px 8px rgba(22, 163, 74, 0.3)"
+                }}
+              >
+                <Sparkles size={16} />
+                <span>Launch Evaluation Desk</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   // Group exams by Class for master list
@@ -1254,248 +1593,8 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
           </div>
         )}
 
-        {/* ANSWER SHEETS MODAL (Matching Image 3) */}
-        {showAnswerSheetModal && sheetModalExam && (
-          <div className="modal-overlay-16-9" onClick={() => setShowAnswerSheetModal(false)}>
-            <div
-              className="modal-content-16-9"
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                maxWidth: "1050px",
-                minHeight: "580px",
-                background: "#0b132b",
-                color: "#ffffff",
-                border: "1px solid #1e293b"
-              }}
-            >
-              {/* Modal Top Bar */}
-              <div style={{ padding: "1.25rem 1.75rem", borderBottom: "1px solid #1e293b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <h3 style={{ fontSize: "1.25rem", fontWeight: 800, margin: 0, color: "#ffffff" }}>
-                    Answer sheets
-                  </h3>
-                  <div style={{ fontSize: "0.8rem", color: "#94a3b8", marginTop: "0.2rem" }}>
-                    {sheetModalExam.title} • Class {sheetModalExam.academic_year || "CSE"} • {subjects.find((s) => s.id === sheetModalExam.subject_id)?.code || "ATCD"}
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                  <button style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }}><Eye size={18} /></button>
-                  <button style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }}><MoreVertical size={18} /></button>
-                  <button onClick={() => setShowAnswerSheetModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }}><X size={20} /></button>
-                </div>
-              </div>
-
-              {/* Sub-Header Actions & Section Tag */}
-              <div style={{ padding: "1rem 1.75rem", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #1e293b" }}>
-                <span style={{ width: "28px", height: "28px", borderRadius: "50%", background: "#1e293b", color: "#60a5fa", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.85rem", fontWeight: 800 }}>
-                  b
-                </span>
-
-                <div style={{ display: "flex", gap: "0.6rem" }}>
-                  <label
-                    style={{
-                      background: "#1d4ed8",
-                      color: "#ffffff",
-                      padding: "0.45rem 0.95rem",
-                      borderRadius: "8px",
-                      fontSize: "0.82rem",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.35rem"
-                    }}
-                  >
-                    <UploadCloud size={15} /> Upload answer sheets
-                    <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg" onChange={handleAnswerSheetsSelected} style={{ display: "none" }} />
-                  </label>
-
-                  <button
-                    onClick={() => {
-                      setShowAnswerSheetModal(false);
-                      onNavigate("evaluation", { examId: sheetModalExam.id });
-                    }}
-                    style={{
-                      background: "#1e293b",
-                      border: "1px solid #334155",
-                      color: "#e2e8f0",
-                      padding: "0.45rem 0.95rem",
-                      borderRadius: "8px",
-                      fontSize: "0.82rem",
-                      fontWeight: 700,
-                      cursor: "pointer"
-                    }}
-                  >
-                    Evaluate All (1)
-                  </button>
-                </div>
-              </div>
-
-              {/* Status Tabs Row */}
-              <div style={{ padding: "0.6rem 1.75rem", display: "flex", gap: "1.25rem", borderBottom: "1px solid #1e293b", fontSize: "0.82rem", color: "#94a3b8" }}>
-                <span>Total <strong style={{ color: "#ffffff" }}>1</strong></span>
-                <span>Attached <strong style={{ color: "#ffffff" }}>{uploadedAnswerFiles.length || 1}</strong></span>
-                <span>Evaluated <strong style={{ color: "#ffffff" }}>0</strong></span>
-                <span>Pending <strong style={{ color: "#ffffff" }}>1</strong></span>
-                <span>Student Review <strong style={{ color: "#ffffff" }}>0</strong></span>
-              </div>
-
-              {/* Banner: Answer Key Status Banner */}
-              <div
-                style={{
-                  margin: "1rem 1.75rem",
-                  padding: "0.85rem 1.25rem",
-                  borderRadius: "10px",
-                  background: "rgba(30, 58, 138, 0.4)",
-                  border: "1px solid #1d4ed8",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center"
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                  <div style={{ width: "18px", height: "18px", borderRadius: "50%", border: "2px solid #60a5fa", borderTopColor: "transparent", animation: "spin 1s linear infinite" }} />
-                  <div>
-                    <div style={{ fontSize: "0.88rem", fontWeight: 700, color: "#ffffff" }}>
-                      {sheetModalExam.answer_key_text ? "Answer key ready & approved" : "Preparing the answer key • 0 of 8 answers"}
-                    </div>
-                    <div style={{ fontSize: "0.78rem", color: "#93c5fd" }}>
-                      Upload answer sheets meanwhile. Grading starts once you approve the key.
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => {
-                    setShowAnswerSheetModal(false);
-                    handleOpenAnswerKeyReview(sheetModalExam);
-                  }}
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    color: "#93c5fd",
-                    fontSize: "0.82rem",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    textDecoration: "underline"
-                  }}
-                >
-                  View
-                </button>
-              </div>
-
-              {/* Tabs: Upload / Students */}
-              <div style={{ padding: "0 1.75rem", display: "flex", gap: "1.5rem", borderBottom: "1px solid #1e293b", fontSize: "0.85rem" }}>
-                <span
-                  onClick={() => setUploadActiveTab("upload")}
-                  style={{
-                    padding: "0.5rem 0",
-                    borderBottom: uploadActiveTab === "upload" ? "2px solid #3b82f6" : "none",
-                    color: uploadActiveTab === "upload" ? "#ffffff" : "#94a3b8",
-                    fontWeight: 700,
-                    cursor: "pointer"
-                  }}
-                >
-                  Upload
-                </span>
-                <span
-                  onClick={() => setUploadActiveTab("students")}
-                  style={{
-                    padding: "0.5rem 0",
-                    borderBottom: uploadActiveTab === "students" ? "2px solid #3b82f6" : "none",
-                    color: uploadActiveTab === "students" ? "#ffffff" : "#94a3b8",
-                    fontWeight: 700,
-                    cursor: "pointer"
-                  }}
-                >
-                  Students (1)
-                </span>
-              </div>
-
-              {/* Modal Body: Upload Area */}
-              <div style={{ padding: "1.5rem 1.75rem", flex: 1, overflowY: "auto" }}>
-                <div style={{ marginBottom: "0.85rem" }}>
-                  <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "#ffffff" }}>
-                    Upload without adding students
-                  </div>
-                  <div style={{ fontSize: "0.8rem", color: "#94a3b8" }}>
-                    Drop answer sheets and we'll read each student's name from the cover page. Confirm the names, then attach - no need to add students first.
-                  </div>
-                </div>
-
-                {/* Big Drag and Drop Box */}
-                <label
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: "3.5rem 2rem",
-                    border: "2px dashed #334155",
-                    borderRadius: "14px",
-                    background: "rgba(15, 23, 42, 0.4)",
-                    cursor: "pointer",
-                    textAlign: "center"
-                  }}
-                >
-                  <UploadCloud size={36} style={{ color: "#60a5fa", marginBottom: "0.75rem" }} />
-                  <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "#ffffff" }}>
-                    Drop answer sheets here, or click to browse
-                  </div>
-                  <div style={{ fontSize: "0.78rem", color: "#94a3b8", marginTop: "0.25rem" }}>
-                    PDF, JPG, or PNG - select multiple files
-                  </div>
-                  {uploadedAnswerFiles.length > 0 && (
-                    <div style={{ marginTop: "1rem", fontSize: "0.85rem", color: "#4ade80", fontWeight: 700 }}>
-                      ✓ {uploadedAnswerFiles.length} {uploadedAnswerFiles.length === 1 ? "file" : "files"} selected ready to attach
-                    </div>
-                  )}
-                  <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg" onChange={handleAnswerSheetsSelected} style={{ display: "none" }} />
-                </label>
-              </div>
-
-              {/* Modal Footer */}
-              <div style={{ padding: "1rem 1.75rem", borderTop: "1px solid #1e293b", display: "flex", justifyContent: "flex-end", gap: "0.75rem" }}>
-                <button
-                  onClick={() => setShowAnswerSheetModal(false)}
-                  style={{
-                    background: "#1e293b",
-                    border: "1px solid #334155",
-                    color: "#cbd5e1",
-                    padding: "0.55rem 1rem",
-                    borderRadius: "8px",
-                    fontSize: "0.85rem",
-                    cursor: "pointer"
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    alert(`Attached ${uploadedAnswerFiles.length || 1} answer sheet(s) successfully!`);
-                    setShowAnswerSheetModal(false);
-                  }}
-                  style={{
-                    background: "#2563eb",
-                    border: "none",
-                    color: "#ffffff",
-                    padding: "0.55rem 1.25rem",
-                    borderRadius: "8px",
-                    fontSize: "0.85rem",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.35rem"
-                  }}
-                >
-                  <Check size={16} /> Add & attach ({uploadedAnswerFiles.length})
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Render Answer Sheets / Student Copies Modal */}
+        {renderAnswerSheetsModal()}
       </div>
     );
   }
@@ -1736,6 +1835,51 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
 
             <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.65rem" }}>
               <button
+                type="button"
+                onClick={handleProceedToStudentCopies}
+                disabled={isSaving}
+                style={{
+                  background: "#16a34a",
+                  color: "#ffffff",
+                  border: "none",
+                  padding: "0.45rem 1.05rem",
+                  borderRadius: "8px",
+                  fontSize: "0.82rem",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.45rem",
+                  boxShadow: "0 2px 6px rgba(22, 163, 74, 0.25)"
+                }}
+              >
+                <UploadCloud size={15} />
+                <span>Upload Student Copies &amp; Grade</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSaveExam}
+                disabled={isSaving}
+                style={{
+                  background: "#2563eb",
+                  color: "#ffffff",
+                  border: "none",
+                  padding: "0.45rem 0.95rem",
+                  borderRadius: "8px",
+                  fontSize: "0.82rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.35rem"
+                }}
+              >
+                <Check size={15} />
+                {saveSuccess ? "Saved!" : isSaving ? "Saving..." : "Save Exam"}
+              </button>
+
+              <button
                 onClick={() => step3UploadInputRef.current?.click()}
                 disabled={isScanning}
                 style={{
@@ -1946,10 +2090,46 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                       </div>
                     </div>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.35rem" }}>
+                        <label style={{ fontSize: "0.74rem", fontWeight: 700, color: "#475569" }}>
+                          Quick Exam Preset ({isSchool ? "School Level" : "College Level"})
+                        </label>
+                        <span style={{ fontSize: "0.7rem", color: "#2563eb", fontWeight: 600 }}>
+                          Auto-sets title, marks &amp; passing criteria
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem", marginBottom: "0.75rem" }}>
+                        {activePresets.map((preset) => {
+                          const isActive = totalAllocatedMarks === preset.marks || examType === preset.type;
+                          return (
+                            <button
+                              key={preset.label}
+                              type="button"
+                              onClick={() => applyExamPreset(preset)}
+                              style={{
+                                background: isActive ? "#2563eb" : "#f8fafc",
+                                color: isActive ? "#ffffff" : "#334155",
+                                border: `1px solid ${isActive ? "#2563eb" : "#cbd5e1"}`,
+                                padding: "0.28rem 0.65rem",
+                                borderRadius: "6px",
+                                fontSize: "0.75rem",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                transition: "all 0.15s ease"
+                              }}
+                            >
+                              {preset.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: "0.75rem" }}>
                       <div>
                         <label style={{ display: "block", fontSize: "0.74rem", fontWeight: 700, color: "#475569", marginBottom: "0.25rem" }}>
-                          Exam Title
+                          Exam Title *
                         </label>
                         <input
                           type="text"
@@ -1962,9 +2142,13 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                             background: "#ffffff",
                             border: "1px solid #cbd5e1",
                             color: "#0f172a",
-                            fontSize: "0.83rem"
+                            fontSize: "0.83rem",
+                            fontWeight: 600
                           }}
                         />
+                        <div style={{ fontSize: "0.69rem", color: "#64748b", marginTop: "0.25rem" }}>
+                          Preset format: {getSuggestedExamTitle(totalAllocatedMarks || 20, currentSubj?.name || "Subject", isSchool)}
+                        </div>
                       </div>
                       <div>
                         <label style={{ display: "block", fontSize: "0.74rem", fontWeight: 700, color: "#475569", marginBottom: "0.25rem" }}>
@@ -1987,7 +2171,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                       </div>
                     </div>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "0.75rem" }}>
                       <div>
                         <label style={{ display: "block", fontSize: "0.74rem", fontWeight: 700, color: "#475569", marginBottom: "0.25rem" }}>
                           Target Section
@@ -2013,6 +2197,26 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                       </div>
                       <div>
                         <label style={{ display: "block", fontSize: "0.74rem", fontWeight: 700, color: "#475569", marginBottom: "0.25rem" }}>
+                          Passing Marks
+                        </label>
+                        <input
+                          type="number"
+                          value={passingMarks}
+                          onChange={(e) => setPassingMarks(Number(e.target.value))}
+                          style={{
+                            width: "100%",
+                            padding: "0.48rem 0.65rem",
+                            borderRadius: "8px",
+                            background: "#ffffff",
+                            border: "1px solid #cbd5e1",
+                            color: "#0f172a",
+                            fontSize: "0.83rem",
+                            fontWeight: 700
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.74rem", fontWeight: 700, color: "#475569", marginBottom: "0.25rem" }}>
                           Last Date to Submit
                         </label>
                         <input
@@ -2032,7 +2236,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                       </div>
                       <div>
                         <label style={{ display: "block", fontSize: "0.74rem", fontWeight: 700, color: "#475569", marginBottom: "0.25rem" }}>
-                          Total Allocated Marks
+                          Total Marks
                         </label>
                         <div
                           style={{
@@ -2042,15 +2246,102 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                             borderRadius: "8px",
                             color: "#1d4ed8",
                             fontWeight: 800,
-                            fontSize: "0.92rem"
+                            fontSize: "0.92rem",
+                            textAlign: "center"
                           }}
                         >
-                          {totalAllocatedMarks} marks
+                          {totalAllocatedMarks} M
                         </div>
                       </div>
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* ACCORDION: AI Generated Marking Rubrics & Step Breakdown */}
+              <div
+                style={{
+                  background: "#ffffff",
+                  borderRadius: "14px",
+                  border: "1px solid #e2e8f0",
+                  boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)",
+                  overflow: "hidden"
+                }}
+              >
+                <div
+                  style={{
+                    padding: "0.9rem 1.25rem",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    background: "linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%)",
+                    borderBottom: "1px solid #e2e8f0"
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "#0f172a", fontWeight: 800, fontSize: "0.95rem" }}>
+                    <Sparkles size={16} style={{ color: "#2563eb" }} />
+                    AI Generated Marking Rubrics &amp; Step Breakdown
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
+                      Double-tap to edit · Scrollable
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleGenerateMasterRubrics}
+                      style={{
+                        background: "#2563eb",
+                        color: "#ffffff",
+                        border: "none",
+                        padding: "0.28rem 0.65rem",
+                        borderRadius: "6px",
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.3rem"
+                      }}
+                    >
+                      <Sparkles size={12} />
+                      Generate AI Rubric
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ padding: "1.1rem 1.25rem" }}>
+                  <div
+                    style={{
+                      maxHeight: "260px",
+                      overflowY: "auto",
+                      background: "#f8fafc",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "10px",
+                      padding: "0.85rem 1rem",
+                      fontSize: "0.85rem",
+                      lineHeight: 1.6
+                    }}
+                  >
+                    <DoubleTapMarkdownEditor
+                      value={
+                        answerKeyText ||
+                        (questions.length > 0
+                          ? questions
+                              .map(
+                                (q) =>
+                                  `### ${q.q_no} (${q.marks} Marks)\n- **Marking Breakdown**: Working & steps (${(Number(q.marks) * 0.8).toFixed(1)}M), Final Answer (${(Number(q.marks) * 0.2).toFixed(1)}M)\n- **Rubric**: ${q.rubric || "Award marks for conceptual accuracy."}`
+                              )
+                              .join("\n\n")
+                          : "AI Generated Marking Rubrics & Step Breakdown will appear here. Upload a paper or double-tap to type.")
+                      }
+                      onChange={(newVal) => setAnswerKeyText(newVal)}
+                      minRows={4}
+                      maxRows={12}
+                      placeholder="AI Generated Marking Rubrics & Step Breakdown will appear here. Double-tap to edit..."
+                      emptyHint="No rubrics entered yet. Double-tap to edit."
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* ACCORDION 2: General Instructions */}
@@ -2566,7 +2857,32 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                                     </div>
                                   </div>
                                 ) : (
-                                  <MarkdownQuestionView text={q.text} />
+                                  <div>
+                                    <MarkdownQuestionView text={q.text} />
+                                    <div style={{ marginTop: "0.75rem", paddingTop: "0.75rem", borderTop: "1px dashed #e2e8f0" }}>
+                                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
+                                        <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "#475569", display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                                          <Sparkles size={12} style={{ color: "#2563eb" }} />
+                                          Marking Rubric &amp; Step Breakdown ({q.marks} Marks)
+                                        </span>
+                                        <span style={{ fontSize: "0.68rem", color: "#64748b" }}>Double-tap to edit</span>
+                                      </div>
+                                      <div style={{ maxHeight: "140px", overflowY: "auto", background: "#f8fafc", borderRadius: "8px", padding: "0.45rem 0.65rem" }}>
+                                        <DoubleTapMarkdownEditor
+                                          compact
+                                          value={q.rubric || `Award up to ${q.marks} marks for accurate step-by-step reasoning, formula usage, and final answer.`}
+                                          onChange={(newRubric) => {
+                                            const updated = [...questions];
+                                            updated[idx] = { ...updated[idx], rubric: newRubric };
+                                            setQuestions(updated);
+                                          }}
+                                          minRows={2}
+                                          maxRows={6}
+                                          placeholder="Step-by-step marks breakdown..."
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
                                 )}
                               </div>
                             )}
@@ -3424,6 +3740,9 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
           )}
         </div>
       )}
+
+      {/* Shared Student Copies / Answer Sheets Modal accessible from Step 3 & all views */}
+      {renderAnswerSheetsModal()}
     </div>
   );
 };

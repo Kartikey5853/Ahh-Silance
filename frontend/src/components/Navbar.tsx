@@ -1,5 +1,5 @@
 import React from "react";
-import { MessageCircle, Calendar, ChevronRight } from "lucide-react";
+import { ChevronRight, Calendar } from "lucide-react";
 import type { NavTab } from "./LeftDock";
 
 interface NavbarProps {
@@ -11,32 +11,28 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  onSelectTab,
-  activeTab,
-  userName = "Faculty"
+  activeTab
 }) => {
   const getTabTitle = (tab: NavTab) => {
     switch (tab) {
       case "dashboard":
-        return { title: "My Classes & Subjects", subtitle: "Sections, courses, and exam checking" };
+        return "My Classes & Subjects";
       case "exams":
-        return { title: "Exams & Question Papers", subtitle: "Answer keys, rubrics, and scanning" };
+        return "Exams & Question Papers";
       case "evaluation":
-        return { title: "Evaluation Desk", subtitle: "Magic Ink grading, handwriting OCR, and mark adjustments" };
+        return "Evaluation Desk";
       case "students":
-        return { title: "Marks Register & Students", subtitle: "Award list, Excel export, and institution roster" };
+        return "Marks Register";
       case "academics":
-        return { title: "Academics & Curriculum", subtitle: "Class levels, semesters, and departments" };
+        return "Academics Hierarchy";
       case "profile":
-        return { title: "Settings & Profile", subtitle: "Teacher account and institution preferences" };
+        return "Settings & Organization";
       case "subject-detail":
-        return { title: "Subject Workspace", subtitle: "Exams, roster, and syllabus overview" };
+        return "Subject Workspace";
       default:
-        return { title: "Faculty Console", subtitle: "AI-assisted academic evaluation" };
+        return "Faculty Console";
     }
   };
-
-  const current = getTabTitle(activeTab);
 
   return (
     <header
@@ -44,43 +40,36 @@ export const Navbar: React.FC<NavbarProps> = ({
       style={{
         background: "#ffffff",
         borderBottom: "1px solid #e2e8f0",
-        padding: "0.85rem 1.75rem",
+        padding: "0.75rem 1.75rem",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
         position: "sticky",
         top: 0,
-        zIndex: 40,
-        boxShadow: "0 1px 2px 0 rgba(0, 0, 0, 0.02)"
+        zIndex: 40
       }}
     >
       {/* View Title & Breadcrumb */}
-      <div>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-          <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#64748b" }}>
-            Faculty Desk
-          </span>
-          <ChevronRight size={13} style={{ color: "#94a3b8" }} />
-          <h1
-            style={{
-              fontSize: "1.1rem",
-              fontWeight: 800,
-              color: "#0f172a",
-              letterSpacing: "-0.02em",
-              margin: 0
-            }}
-          >
-            {current.title}
-          </h1>
-        </div>
-        <div style={{ fontSize: "0.74rem", color: "#64748b", marginTop: "1px" }}>
-          {current.subtitle}
-        </div>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+        <span style={{ fontSize: "0.8rem", color: "#64748b", fontWeight: 600 }}>
+          Faculty Desk
+        </span>
+        <ChevronRight size={14} style={{ color: "#94a3b8" }} />
+        <h1
+          style={{
+            fontSize: "1.05rem",
+            fontWeight: 800,
+            color: "#0f172a",
+            letterSpacing: "-0.02em",
+            margin: 0
+          }}
+        >
+          {getTabTitle(activeTab)}
+        </h1>
       </div>
 
-      {/* Right Side Utility Pills */}
-      <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
-        {/* Academic Session Pill */}
+      {/* Right Side Session Tag */}
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
         <div
           style={{
             display: "flex",
@@ -88,76 +77,16 @@ export const Navbar: React.FC<NavbarProps> = ({
             gap: "0.35rem",
             background: "#f8fafc",
             border: "1px solid #e2e8f0",
-            padding: "0.35rem 0.65rem",
+            padding: "0.3rem 0.65rem",
             borderRadius: "6px",
-            fontSize: "0.78rem",
+            fontSize: "0.75rem",
             fontWeight: 600,
             color: "#475569"
           }}
         >
           <Calendar size={13} style={{ color: "#2563eb" }} />
-          <span>Session 2026-2027</span>
+          <span>Academic Year 2026-2027</span>
         </div>
-
-        {/* WhatsApp Help Quick Pill */}
-        <a
-          href="https://wa.me/919999999999?text=Hello%20Niera%20Support%2C%20I%20am%20a%20teacher%20and%20need%20quick%20help."
-          target="_blank"
-          rel="noopener noreferrer"
-          title="Instant Teacher WhatsApp Support"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.35rem",
-            background: "#f0fdf4",
-            border: "1px solid #bbf7d0",
-            padding: "0.35rem 0.65rem",
-            borderRadius: "6px",
-            fontSize: "0.78rem",
-            fontWeight: 700,
-            color: "#166534",
-            textDecoration: "none"
-          }}
-        >
-          <MessageCircle size={14} style={{ color: "#16a34a" }} />
-          <span>Teacher Support</span>
-        </a>
-
-        {/* User Profile Avatar Link */}
-        <button
-          type="button"
-          onClick={() => onSelectTab("profile")}
-          style={{
-            background: "none",
-            border: "none",
-            display: "flex",
-            alignItems: "center",
-            gap: "0.5rem",
-            cursor: "pointer",
-            padding: "0.25rem 0.5rem",
-            borderRadius: "6px"
-          }}
-        >
-          <div
-            style={{
-              width: "28px",
-              height: "28px",
-              borderRadius: "50%",
-              background: "#2563eb",
-              color: "#ffffff",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "0.78rem",
-              fontWeight: 800
-            }}
-          >
-            {userName.charAt(0).toUpperCase()}
-          </div>
-          <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#1e293b" }}>
-            {userName}
-          </span>
-        </button>
       </div>
     </header>
   );

@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { academicApi } from "../api/academicApi";
-import type { UserProfile } from "../types/academic";
+import type { UserProfile, Institution, InstitutionType } from "../types/academic";
 import {
   Save,
-  GraduationCap
+  GraduationCap,
+  Building2,
+  Check,
+  Key
 } from "lucide-react";
 
 interface TeacherProfilePageProps {
@@ -16,20 +19,44 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({ onLogout
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("Professor");
   const [department, setDepartment] = useState("");
+  const [geminiApiKey, setGeminiApiKey] = useState("");
+
+  // Organization in Settings
+  const [institutions, setInstitutions] = useState<Institution[]>([]);
+  const [selectedInstId, setSelectedInstId] = useState<string>("");
+  const [showNewOrgForm, setShowNewOrgForm] = useState(false);
+  const [newOrgName, setNewOrgName] = useState("");
+  const [newOrgType, setNewOrgType] = useState<InstitutionType>("school");
+  const [newOrgCode, setNewOrgCode] = useState("");
+
   const [isSaving, setIsSaving] = useState(false);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    academicApi.getProfile().then((data) => {
-      setProfile(data);
-      setFullName(data.full_name || "");
-      setEmail(data.email || "");
-      setRole(data.role || "Professor");
-      setDepartment(data.department || "");
+    Promise.all([
+      academicApi.getProfile().catch(() => null),
+      academicApi.listInstitutions().catch(() => [])
+    ]).then(([profData, instList]) => {
+      if (profData) {
+        setProfile(profData);
+        setFullName(profData.full_name || "");
+        setEmail(profData.email || "");
+        setRole(profData.role || "Professor");
+        setDepartment(profData.department || "");
+        if (profData.institution_id) {
+          setSelectedInstId(profData.institution_id);
+        }
+      }
+      if (instList && instList.length > 0) {
+        setInstitutions(instList);
+        if (!selectedInstId && !profData?.institution_id) {
+          setSelectedInstId(instList[0].id);
+        }
+      }
     });
   }, []);
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     setSavedMessage(null);
@@ -39,13 +66,17 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({ onLogout
         full_name: fullName.trim(),
         email: email.trim(),
         role: role.trim(),
-        department: department.trim()
+        department: department.trim(),
+        institution_id: selectedInstId || undefined
       };
+      if (geminiApiKey.trim()) {
+        payload.gemini_api_key = geminiApiKey.trim();
+      }
 
       await academicApi.updateProfile(payload);
       const updated = await academicApi.getProfile();
       setProfile(updated);
-      setSavedMessage("Profile updated successfully!");
+      setSavedMessage("Settings saved successfully!");
       setTimeout(() => setSavedMessage(null), 3000);
     } catch (err) {
       alert("Error updating profile.");
@@ -54,59 +85,278 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({ onLogout
     }
   };
 
+  const handleCreateNewOrg = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newOrgName.trim()) return;
+
+    try {
+      setIsSaving(true);
+      const created = await academicApi.createInstitution({
+        name: newOrgName.trim(),
+        type: newOrgType,
+        code: newOrgCode.trim()
+      });
+      setInstitutions((prev) => [created, ...prev]);
+      setSelectedInstId(created.id);
+      await academicApi.updateProfile({ institution_id: created.id });
+      setShowNewOrgForm(false);
+      setNewOrgName("");
+      setNewOrgCode("");
+      setSavedMessage("Organization created & linked!");
+      setTimeout(() => setSavedMessage(null), 3000);
+    } catch (err) {
+      alert("Failed to create organization.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const currentOrg = institutions.find((i) => i.id === selectedInstId) || institutions[0];
+
   return (
-    <div className="teacher-profile-page pb-24" style={{ maxWidth: "700px", margin: "0 auto" }}>
+    <div className="teacher-profile-page pb-24" style={{ maxWidth: "760px", margin: "0 auto" }}>
       <div style={{ marginBottom: "1.5rem" }}>
-        <h1 style={{ fontSize: "1.75rem", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.03em" }}>
-          Faculty Profile
+        <h1 style={{ fontSize: "1.6rem", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.03em", margin: 0 }}>
+          Settings & Organization
         </h1>
-        <p style={{ color: "#64748b", fontSize: "0.9rem" }}>
-          Faculty details and academic credentials
+        <p style={{ color: "#64748b", fontSize: "0.88rem", marginTop: "2px" }}>
+          Manage your faculty profile and affiliated school / college organization
         </p>
       </div>
 
+      {savedMessage && (
+        <div
+          style={{
+            background: "#f0fdf4",
+            border: "1px solid #bbf7d0",
+            borderRadius: "8px",
+            padding: "0.75rem 1rem",
+            color: "#166534",
+            fontSize: "0.85rem",
+            fontWeight: 700,
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            marginBottom: "1.25rem"
+          }}
+        >
+          <Check size={16} />
+          <span>{savedMessage}</span>
+        </div>
+      )}
+
+      {/* SECTION 1: ORGANIZATION MANAGEMENT IN SETTINGS */}
       <div
         style={{
           background: "#ffffff",
           border: "1px solid #e2e8f0",
           borderRadius: "14px",
-          padding: "2rem",
-          boxShadow: "0 1px 3px 0 rgba(0, 0, 0, 0.04)"
+          padding: "1.75rem",
+          marginBottom: "1.5rem",
+          boxShadow: "0 1px 3px 0 rgba(0, 0, 0, 0.03)"
         }}
       >
-        {/* Profile Card Header */}
-        <div style={{ display: "flex", alignItems: "center", gap: "1.25rem", paddingBottom: "1.5rem", borderBottom: "1px solid #e2e8f0", marginBottom: "1.5rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.25rem" }}>
           <div
             style={{
-              width: "60px",
-              height: "60px",
+              width: "38px",
+              height: "38px",
+              borderRadius: "8px",
+              background: "#eff6ff",
+              color: "#2563eb",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center"
+            }}
+          >
+            <Building2 size={20} />
+          </div>
+          <div>
+            <h2 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
+              Academic Organization
+            </h2>
+            <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
+              Configure your school or college hierarchy
+            </div>
+          </div>
+        </div>
+
+        {/* Current Active Org Selection */}
+        {institutions.length > 0 && (
+          <div style={{ marginBottom: "1rem" }}>
+            <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.35rem" }}>
+              Active Organization
+            </label>
+            <select
+              value={selectedInstId}
+              onChange={(e) => setSelectedInstId(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "0.55rem 0.75rem",
+                borderRadius: "8px",
+                border: "1px solid #cbd5e1",
+                fontSize: "0.88rem",
+                fontWeight: 600,
+                background: "#ffffff"
+              }}
+            >
+              {institutions.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.name} ({i.type.toUpperCase()})
+                </option>
+              ))}
+            </select>
+
+            {currentOrg && (
+              <div style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "0.35rem" }}>
+                Type: <strong>{currentOrg.type === "school" ? "School (CBSE / State)" : currentOrg.type === "college" ? "College (University / Autonomous)" : "Competitive"}</strong> • Code: {currentOrg.code || "None"}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <button
+            type="button"
+            onClick={() => setShowNewOrgForm(!showNewOrgForm)}
+            style={{
+              background: showNewOrgForm ? "#f1f5f9" : "#eff6ff",
+              border: `1px solid ${showNewOrgForm ? "#cbd5e1" : "#bfdbfe"}`,
+              color: showNewOrgForm ? "#475569" : "#1d4ed8",
+              padding: "0.4rem 0.85rem",
+              borderRadius: "6px",
+              fontSize: "0.8rem",
+              fontWeight: 700,
+              cursor: "pointer"
+            }}
+          >
+            {showNewOrgForm ? "Cancel" : "+ Add New Organization"}
+          </button>
+        </div>
+
+        {/* New Organization Sub-Form */}
+        {showNewOrgForm && (
+          <form onSubmit={handleCreateNewOrg} style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #f1f5f9" }}>
+            <div style={{ marginBottom: "0.85rem" }}>
+              <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                Organization Model
+              </label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem" }}>
+                {[
+                  { id: "school", label: "School (CBSE)" },
+                  { id: "college", label: "College (B.Tech)" },
+                  { id: "competitive", label: "Coaching (JEE)" }
+                ].map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setNewOrgType(t.id as any)}
+                    style={{
+                      border: newOrgType === t.id ? "2px solid #2563eb" : "1px solid #cbd5e1",
+                      background: newOrgType === t.id ? "#eff6ff" : "#ffffff",
+                      padding: "0.45rem",
+                      borderRadius: "6px",
+                      fontSize: "0.78rem",
+                      fontWeight: 700,
+                      cursor: "pointer"
+                    }}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1.4fr 0.8fr", gap: "0.75rem", marginBottom: "1rem" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                  Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Delhi Public School"
+                  value={newOrgName}
+                  onChange={(e) => setNewOrgName(e.target.value)}
+                  style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                  Code
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. DPS-2026"
+                  value={newOrgCode}
+                  onChange={(e) => setNewOrgCode(e.target.value)}
+                  style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSaving}
+              style={{
+                background: "#2563eb",
+                color: "#ffffff",
+                border: "none",
+                borderRadius: "6px",
+                padding: "0.45rem 1rem",
+                fontSize: "0.82rem",
+                fontWeight: 700,
+                cursor: "pointer"
+              }}
+            >
+              Save Organization
+            </button>
+          </form>
+        )}
+      </div>
+
+      {/* SECTION 2: FACULTY PROFILE */}
+      <div
+        style={{
+          background: "#ffffff",
+          border: "1px solid #e2e8f0",
+          borderRadius: "14px",
+          padding: "1.75rem",
+          boxShadow: "0 1px 3px 0 rgba(0, 0, 0, 0.03)"
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem", paddingBottom: "1rem", borderBottom: "1px solid #e2e8f0" }}>
+          <div
+            style={{
+              width: "44px",
+              height: "44px",
               borderRadius: "50%",
               background: "#0f172a",
               color: "#ffffff",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontSize: "1.4rem",
+              fontSize: "1.1rem",
               fontWeight: 800
             }}
           >
-            <GraduationCap size={28} />
+            <GraduationCap size={22} />
           </div>
           <div>
-            <h2 style={{ fontSize: "1.35rem", fontWeight: 800, color: "#0f172a" }}>
+            <h2 style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
               {profile?.full_name || "Faculty Profile"}
             </h2>
-            <div style={{ fontSize: "0.85rem", color: "#475569" }}>
-              {profile?.role || "Faculty"} • {profile?.department || "Academic Department"}
+            <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
+              Username: <strong>{profile?.username}</strong>
             </div>
           </div>
         </div>
 
-        <form onSubmit={handleSave}>
+        <form onSubmit={handleSaveProfile}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
             <div>
               <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                Name
+                Full Name
               </label>
               <input
                 type="text"
@@ -123,15 +373,15 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({ onLogout
               </label>
               <input
                 type="email"
-                required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                placeholder="teacher@school.edu"
                 style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
               />
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1.5rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1.25rem" }}>
             <div>
               <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
                 Academic Role
@@ -151,16 +401,30 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({ onLogout
               </label>
               <input
                 type="text"
-                required
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
+                placeholder="e.g. Science / Computer Science"
                 style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1" }}
               />
             </div>
           </div>
 
+          <div style={{ marginBottom: "1.5rem" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+              <Key size={14} style={{ color: "#2563eb" }} />
+              <span>Gemini API Key (Optional)</span>
+            </label>
+            <input
+              type="password"
+              value={geminiApiKey}
+              onChange={(e) => setGeminiApiKey(e.target.value)}
+              placeholder="Leave blank to use system Gemini model"
+              style={{ width: "100%", padding: "0.55rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
+            />
+          </div>
+
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            {onLogout && (
+            {onLogout ? (
               <button
                 type="button"
                 onClick={onLogout}
@@ -177,27 +441,32 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({ onLogout
               >
                 Sign Out
               </button>
-            )}
+            ) : <div />}
 
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginLeft: "auto" }}>
-              {savedMessage && (
-                <span style={{ color: "#16a34a", fontSize: "0.85rem", fontWeight: 600 }}>
-                  {savedMessage}
-                </span>
-              )}
-              <button
-                type="submit"
-                disabled={isSaving}
-                className="btn btn-primary"
-                style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}
-              >
-                <Save size={15} />
-                {isSaving ? "Saving..." : "Save Profile"}
-              </button>
-            </div>
+            <button
+              type="submit"
+              disabled={isSaving}
+              style={{
+                background: "#2563eb",
+                color: "#ffffff",
+                border: "none",
+                borderRadius: "8px",
+                padding: "0.55rem 1.25rem",
+                fontSize: "0.88rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.4rem"
+              }}
+            >
+              <Save size={15} />
+              <span>{isSaving ? "Saving..." : "Save Settings"}</span>
+            </button>
           </div>
         </form>
       </div>
     </div>
   );
 };
+export default TeacherProfilePage;
