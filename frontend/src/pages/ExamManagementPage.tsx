@@ -115,7 +115,36 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
       }
     >
   >({});
-  const [answerKeyReturnView, setAnswerKeyReturnView] = useState<"list" | "detail">("list");
+  const [answerKeyReturnView, setAnswerKeyReturnView] = useState<"list" | "detail" | "create">("list");
+
+  // Inline Quick Add Class in Exam Setup
+  const [showInlineClassForm, setShowInlineClassForm] = useState(false);
+  const [inlineClassName, setInlineClassName] = useState("");
+  const [inlineClassCode, setInlineClassCode] = useState("");
+  const [isCreatingInlineClass, setIsCreatingInlineClass] = useState(false);
+
+  const handleInlineCreateClass = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!inlineClassName.trim()) return;
+    setIsCreatingInlineClass(true);
+    try {
+      const instId = institutions[0]?.id || undefined;
+      const created = await academicApi.createClass({
+        name: inlineClassName.trim(),
+        code: inlineClassCode.trim() || undefined,
+        institution_id: instId
+      });
+      setClasses((prev) => [...prev, created]);
+      setSelectedClassId(created.id);
+      setInlineClassName("");
+      setInlineClassCode("");
+      setShowInlineClassForm(false);
+    } catch (err: any) {
+      alert("Failed to create class: " + (err?.response?.data?.detail || err.message));
+    } finally {
+      setIsCreatingInlineClass(false);
+    }
+  };
 
   // Answer Sheets Upload Modal State
   const [showAnswerSheetModal, setShowAnswerSheetModal] = useState(false);
@@ -911,6 +940,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
     setSaveSuccess(false);
 
     try {
+      let savedExamObj: Exam | null = null;
       if (activeExam) {
         const res = await academicApi.updateExamQuestions(activeExam.id, questions, totalAllocatedMarks, {
           paper_id: paperId || undefined,
@@ -921,7 +951,10 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
           correction_deadline: correctionDeadline || undefined
         });
         if (res?.exam) {
+          savedExamObj = res.exam;
           setActiveExam(res.exam);
+        } else {
+          savedExamObj = activeExam;
         }
         if (answerKeyText) {
           await academicApi.updateExamAnswerKey(activeExam.id, answerKeyText);
@@ -943,11 +976,15 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
           answer_key_text: answerKeyText,
           questions: questions
         });
+        savedExamObj = created;
         setActiveExam(created);
       }
       setSaveSuccess(true);
       await loadExams();
-      setTimeout(() => setSaveSuccess(false), 2000);
+      // Jump directly into the Answer Key generation section after saving
+      if (savedExamObj) {
+        await handleOpenAnswerKeyReview(savedExamObj, "create");
+      }
     } catch (err: any) {
       alert("Error saving examination: " + (err?.response?.data?.detail || err.message));
     } finally {
@@ -1026,7 +1063,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
   };
 
   // Open Fullscreen Pure-White Answer Key Workspace (non-blocking — never stalls on mount)
-  const handleOpenAnswerKeyReview = async (exam: Exam, fromView: "list" | "detail" = "list") => {
+  const handleOpenAnswerKeyReview = async (exam: Exam, fromView: "list" | "detail" | "create" = "list") => {
     setAnswerKeyReturnView(fromView);
     setActiveExam(exam);
     setPaperId(exam.paper_id || "");
@@ -1068,7 +1105,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
         setExamDetails(det);
       }
       if (approveAndExit) {
-        setViewMode(answerKeyReturnView);
+        setViewMode(answerKeyReturnView === "create" ? "list" : answerKeyReturnView);
       }
     } catch (err: any) {
       alert("Failed to save answer key: " + (err?.response?.data?.detail || err.message));
@@ -1647,7 +1684,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
         onStartBackgroundGeneration={() => handleStartBackgroundAnswerKey(activeExam.id)}
         onSaveAnswerKey={handleSaveFullscreenAnswerKey}
         isSaving={isSaving}
-        onClose={() => setViewMode(answerKeyReturnView)}
+        onClose={() => setViewMode(answerKeyReturnView === "create" ? "list" : answerKeyReturnView)}
       />
     );
   }
@@ -2033,59 +2070,221 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
 
                 {openInfoAccordion && (
                   <div style={{ padding: "1.2rem", display: "flex", flexDirection: "column", gap: "1rem", background: "#ffffff" }}>
-                    <div style={{ background: "#f8fafc", borderRadius: "10px", padding: "0.95rem", border: "1px solid #e2e8f0" }}>
-                      <div style={{ fontSize: "0.85rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.15rem" }}>
-                        Class & subject
-                      </div>
-                      <div style={{ fontSize: "0.76rem", color: "#64748b", marginBottom: "0.75rem" }}>
-                        Choose the class, student group and subject for this paper.
-                      </div>
-
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                    <div style={{ background: "#f8fafc", borderRadius: "10px", padding: "1rem", border: "1px solid #e2e8f0" }}>
+                      {/* Class Selection Header */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.45rem" }}>
                         <div>
-                          <label style={{ display: "block", fontSize: "0.74rem", fontWeight: 700, color: "#475569", marginBottom: "0.25rem" }}>
-                            Class / course *
-                          </label>
-                          <select
-                            value={selectedClassId}
-                            onChange={(e) => setSelectedClassId(e.target.value)}
-                            style={{
-                              width: "100%",
-                              padding: "0.48rem 0.65rem",
-                              borderRadius: "8px",
-                              background: "#ffffff",
-                              border: "1px solid #cbd5e1",
-                              color: "#0f172a",
-                              fontSize: "0.83rem"
-                            }}
-                          >
-                            {classes.map((c) => (
-                              <option key={c.id} value={c.id}>{c.name}</option>
-                            ))}
-                          </select>
+                          <div style={{ fontSize: "0.84rem", fontWeight: 800, color: "#0f172a" }}>
+                            Assign to Class / Course *
+                          </div>
+                          <div style={{ fontSize: "0.74rem", color: "#64748b" }}>
+                            Choose which student cohort this paper belongs to
+                          </div>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowInlineClassForm(!showInlineClassForm)}
+                          style={{
+                            background: showInlineClassForm ? "#f1f5f9" : "#eff6ff",
+                            color: showInlineClassForm ? "#475569" : "#2563eb",
+                            border: `1px solid ${showInlineClassForm ? "#cbd5e1" : "#bfdbfe"}`,
+                            borderRadius: "6px",
+                            padding: "0.26rem 0.65rem",
+                            fontSize: "0.74rem",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.3rem"
+                          }}
+                        >
+                          <Plus size={13} /> {showInlineClassForm ? "Cancel" : "Add New Class"}
+                        </button>
+                      </div>
 
-                        <div>
-                          <label style={{ display: "block", fontSize: "0.74rem", fontWeight: 700, color: "#475569", marginBottom: "0.25rem" }}>
+                      {/* Inline Quick Add Class Form */}
+                      {showInlineClassForm && (
+                        <div
+                          style={{
+                            background: "#ffffff",
+                            border: "1.5px dashed #3b82f6",
+                            borderRadius: "9px",
+                            padding: "0.75rem",
+                            marginBottom: "0.75rem"
+                          }}
+                        >
+                          <div style={{ fontSize: "0.76rem", fontWeight: 800, color: "#1e3a8a", marginBottom: "0.35rem" }}>
+                            Quick Create Class
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr auto", gap: "0.5rem", alignItems: "end" }}>
+                            <div>
+                              <label style={{ display: "block", fontSize: "0.68rem", fontWeight: 700, color: "#64748b", marginBottom: "0.2rem" }}>
+                                Class Name *
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="e.g. Class 10-A or CSE-3B"
+                                value={inlineClassName}
+                                onChange={(e) => setInlineClassName(e.target.value)}
+                                style={{ width: "100%", padding: "0.4rem 0.6rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.8rem" }}
+                              />
+                            </div>
+                            <div>
+                              <label style={{ display: "block", fontSize: "0.68rem", fontWeight: 700, color: "#64748b", marginBottom: "0.2rem" }}>
+                                Code / Section
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="e.g. 10A"
+                                value={inlineClassCode}
+                                onChange={(e) => setInlineClassCode(e.target.value)}
+                                style={{ width: "100%", padding: "0.4rem 0.6rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.8rem" }}
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleInlineCreateClass}
+                              disabled={isCreatingInlineClass || !inlineClassName.trim()}
+                              style={{
+                                background: "#2563eb",
+                                color: "#ffffff",
+                                border: "none",
+                                borderRadius: "6px",
+                                padding: "0.45rem 0.85rem",
+                                fontSize: "0.76rem",
+                                fontWeight: 700,
+                                cursor: "pointer"
+                              }}
+                            >
+                              {isCreatingInlineClass ? "Adding..." : "Add Class"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Modern UI Class List */}
+                      {classes.length === 0 ? (
+                        <div style={{ padding: "0.8rem", background: "#ffffff", borderRadius: "8px", border: "1px dashed #cbd5e1", textAlign: "center", fontSize: "0.78rem", color: "#64748b", marginBottom: "0.75rem" }}>
+                          No classes yet. Click &quot;+ Add New Class&quot; above to create one.
+                        </div>
+                      ) : (
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: "0.45rem", maxHeight: "155px", overflowY: "auto", paddingRight: "2px", marginBottom: "0.85rem" }}>
+                          {classes.map((c) => {
+                            const isSelected = selectedClassId === c.id;
+                            return (
+                              <div
+                                key={c.id}
+                                onClick={() => setSelectedClassId(c.id)}
+                                style={{
+                                  padding: "0.5rem 0.65rem",
+                                  borderRadius: "8px",
+                                  border: isSelected ? "2px solid #2563eb" : "1px solid #e2e8f0",
+                                  background: isSelected ? "#eff6ff" : "#ffffff",
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  transition: "all 0.15s ease",
+                                  boxShadow: isSelected ? "0 1px 3px rgba(37,99,235,0.12)" : "0 1px 2px rgba(0,0,0,0.02)"
+                                }}
+                              >
+                                <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", minWidth: 0 }}>
+                                  <div
+                                    style={{
+                                      width: "24px",
+                                      height: "24px",
+                                      borderRadius: "6px",
+                                      background: isSelected ? "#2563eb" : "#f1f5f9",
+                                      color: isSelected ? "#ffffff" : "#64748b",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      flexShrink: 0
+                                    }}
+                                  >
+                                    <FolderGit2 size={13} />
+                                  </div>
+                                  <div style={{ minWidth: 0 }}>
+                                    <div
+                                      style={{
+                                        fontSize: "0.78rem",
+                                        fontWeight: isSelected ? 800 : 600,
+                                        color: isSelected ? "#1e3a8a" : "#1e293b",
+                                        whiteSpace: "nowrap",
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis"
+                                      }}
+                                    >
+                                      {c.name}
+                                    </div>
+                                    {c.code && (
+                                      <div style={{ fontSize: "0.66rem", color: isSelected ? "#3b82f6" : "#94a3b8" }}>
+                                        {c.code}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                                {isSelected && (
+                                  <div
+                                    style={{
+                                      width: "16px",
+                                      height: "16px",
+                                      borderRadius: "50%",
+                                      background: "#2563eb",
+                                      color: "#ffffff",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      flexShrink: 0
+                                    }}
+                                  >
+                                    <Check size={10} strokeWidth={3} />
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Subject Selection (Modern Pills / Grid) */}
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.35rem" }}>
+                          <label style={{ fontSize: "0.74rem", fontWeight: 700, color: "#475569" }}>
                             Subject *
                           </label>
-                          <select
-                            value={selectedSubjectId}
-                            onChange={(e) => setSelectedSubjectId(e.target.value)}
-                            style={{
-                              width: "100%",
-                              padding: "0.48rem 0.65rem",
-                              borderRadius: "8px",
-                              background: "#ffffff",
-                              border: "1px solid #cbd5e1",
-                              color: "#0f172a",
-                              fontSize: "0.83rem"
-                            }}
-                          >
-                            {subjects.map((s) => (
-                              <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
-                            ))}
-                          </select>
+                          <span style={{ fontSize: "0.69rem", color: "#64748b" }}>
+                            {currentSubj ? `${currentSubj.code} • ${currentSubj.credits || 4} Credits` : "Select subject"}
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+                          {subjects.map((s) => {
+                            const isSelected = selectedSubjectId === s.id;
+                            return (
+                              <button
+                                key={s.id}
+                                type="button"
+                                onClick={() => setSelectedSubjectId(s.id)}
+                                style={{
+                                  padding: "0.35rem 0.65rem",
+                                  borderRadius: "7px",
+                                  border: isSelected ? "1.5px solid #2563eb" : "1px solid #cbd5e1",
+                                  background: isSelected ? "#2563eb" : "#ffffff",
+                                  color: isSelected ? "#ffffff" : "#334155",
+                                  fontSize: "0.76rem",
+                                  fontWeight: isSelected ? 700 : 500,
+                                  cursor: "pointer",
+                                  transition: "all 0.15s ease",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "0.35rem"
+                                }}
+                              >
+                                {s.name} <span style={{ opacity: 0.75, fontSize: "0.68rem" }}>({s.code})</span>
+                                {isSelected && <Check size={12} />}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                     </div>
