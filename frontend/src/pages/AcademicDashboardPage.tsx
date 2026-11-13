@@ -10,7 +10,8 @@ import {
   X,
   Sparkles,
   Search,
-  ArrowRight
+  ArrowRight,
+  Check
 } from "lucide-react";
 
 interface AcademicDashboardProps {
@@ -43,6 +44,34 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({
   const [subjCode, setSubjCode] = useState("SCI-10");
   const [subjSem, setSubjSem] = useState("Class 10 - Term 1");
   const [subjClassId, setSubjClassId] = useState<string>("");
+
+  // Inline Quick Add Class within Subject Creation
+  const [showInlineAddClassInModal, setShowInlineAddClassInModal] = useState(false);
+  const [inlineClassName, setInlineClassName] = useState("");
+  const [inlineClassCode, setInlineClassCode] = useState("");
+  const [isCreatingInlineClass, setIsCreatingInlineClass] = useState(false);
+
+  const handleInlineCreateClass = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!inlineClassName.trim()) return;
+    setIsCreatingInlineClass(true);
+    try {
+      const created = await academicApi.createClass({
+        name: inlineClassName.trim(),
+        code: inlineClassCode.trim() || undefined,
+        institution_id: currentOrg?.id || undefined
+      });
+      setClasses((prev) => [...prev, created]);
+      setSubjClassId(created.id);
+      setInlineClassName("");
+      setInlineClassCode("");
+      setShowInlineAddClassInModal(false);
+    } catch (err: any) {
+      alert("Failed to create class: " + (err?.response?.data?.detail || err.message));
+    } finally {
+      setIsCreatingInlineClass(false);
+    }
+  };
 
   const currentOrg = institutions.length > 0 ? institutions[0] : null;
 
@@ -999,22 +1028,175 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({
                 </div>
               </div>
 
-              {classes.length > 0 && (
-                <div style={{ marginBottom: "1.25rem" }}>
-                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+              <div style={{ marginBottom: "1.25rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.45rem" }}>
+                  <label style={{ fontSize: "0.8rem", fontWeight: 700, color: "#1e293b" }}>
                     Assign to Class
                   </label>
-                  <select
-                    value={subjClassId}
-                    onChange={(e) => setSubjClassId(e.target.value)}
-                    style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#ffffff" }}
+                  <button
+                    type="button"
+                    onClick={() => setShowInlineAddClassInModal(!showInlineAddClassInModal)}
+                    style={{
+                      background: showInlineAddClassInModal ? "#f1f5f9" : "#eff6ff",
+                      color: showInlineAddClassInModal ? "#475569" : "#2563eb",
+                      border: `1px solid ${showInlineAddClassInModal ? "#cbd5e1" : "#bfdbfe"}`,
+                      borderRadius: "6px",
+                      padding: "0.22rem 0.6rem",
+                      fontSize: "0.74rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.25rem"
+                    }}
                   >
-                    {classes.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name} ({c.code || "CLS"})</option>
-                    ))}
-                  </select>
+                    <Plus size={12} /> {showInlineAddClassInModal ? "Close" : "Add New Class"}
+                  </button>
                 </div>
-              )}
+
+                {showInlineAddClassInModal && (
+                  <div
+                    style={{
+                      background: "#f8fafc",
+                      border: "1.5px dashed #3b82f6",
+                      borderRadius: "10px",
+                      padding: "0.75rem",
+                      marginBottom: "0.75rem"
+                    }}
+                  >
+                    <div style={{ fontSize: "0.76rem", fontWeight: 800, color: "#1e3a8a", marginBottom: "0.4rem" }}>
+                      Create New Class Cohort
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr auto", gap: "0.5rem", alignItems: "end" }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.68rem", fontWeight: 700, color: "#64748b", marginBottom: "0.2rem" }}>
+                          Class Name *
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Class 11 - Batch B"
+                          value={inlineClassName}
+                          onChange={(e) => setInlineClassName(e.target.value)}
+                          style={{ width: "100%", padding: "0.4rem 0.6rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.8rem" }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: "0.68rem", fontWeight: 700, color: "#64748b", marginBottom: "0.2rem" }}>
+                          Code / Section
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 11B"
+                          value={inlineClassCode}
+                          onChange={(e) => setInlineClassCode(e.target.value)}
+                          style={{ width: "100%", padding: "0.4rem 0.6rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.8rem" }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleInlineCreateClass}
+                        disabled={isCreatingInlineClass || !inlineClassName.trim()}
+                        style={{
+                          background: "#2563eb",
+                          color: "#ffffff",
+                          border: "none",
+                          borderRadius: "6px",
+                          padding: "0.45rem 0.85rem",
+                          fontSize: "0.76rem",
+                          fontWeight: 700,
+                          cursor: "pointer"
+                        }}
+                      >
+                        {isCreatingInlineClass ? "Saving..." : "Add"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {classes.length === 0 ? (
+                  <div style={{ padding: "0.8rem", background: "#f8fafc", borderRadius: "8px", border: "1px dashed #cbd5e1", textAlign: "center", fontSize: "0.8rem", color: "#64748b" }}>
+                    No classes found. Click &quot;+ Add New Class&quot; above to create one.
+                  </div>
+                ) : (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "0.45rem", maxHeight: "155px", overflowY: "auto", paddingRight: "2px" }}>
+                    {classes.map((c) => {
+                      const isSelected = subjClassId === c.id;
+                      return (
+                        <div
+                          key={c.id}
+                          onClick={() => setSubjClassId(c.id)}
+                          style={{
+                            padding: "0.5rem 0.65rem",
+                            borderRadius: "8px",
+                            border: isSelected ? "2px solid #2563eb" : "1px solid #e2e8f0",
+                            background: isSelected ? "#eff6ff" : "#ffffff",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            transition: "all 0.15s ease",
+                            boxShadow: isSelected ? "0 1px 3px rgba(37,99,235,0.12)" : "0 1px 2px rgba(0,0,0,0.02)"
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", minWidth: 0 }}>
+                            <div
+                              style={{
+                                width: "24px",
+                                height: "24px",
+                                borderRadius: "6px",
+                                background: isSelected ? "#2563eb" : "#f1f5f9",
+                                color: isSelected ? "#ffffff" : "#64748b",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                flexShrink: 0
+                              }}
+                            >
+                              <FolderGit2 size={13} />
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                              <div
+                                style={{
+                                  fontSize: "0.78rem",
+                                  fontWeight: isSelected ? 800 : 600,
+                                  color: isSelected ? "#1e3a8a" : "#1e293b",
+                                  whiteSpace: "nowrap",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis"
+                                }}
+                              >
+                                {c.name}
+                              </div>
+                              {c.code && (
+                                <div style={{ fontSize: "0.66rem", color: isSelected ? "#3b82f6" : "#94a3b8" }}>
+                                  {c.code}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          {isSelected && (
+                            <div
+                              style={{
+                                width: "16px",
+                                height: "16px",
+                                borderRadius: "50%",
+                                background: "#2563eb",
+                                color: "#ffffff",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                flexShrink: 0
+                              }}
+                            >
+                              <Check size={10} strokeWidth={3} />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "1rem" }}>
                 <button
