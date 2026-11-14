@@ -161,14 +161,26 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
     try {
       setIsAdding(true);
       setAddError(null);
-      const newStudent = await academicApi.addStudent(targetSubjectId, {
-        name: studentName.trim(),
-        roll_number: rollNumber.trim().toUpperCase(),
-        section: section.trim() || "A",
-        class_id: modalClassId || undefined,
-        attendance_percentage: 85.0,
-        cgpa_or_percentage: 0.0
-      });
+      let newStudent: Student;
+      if (modalClassId) {
+        newStudent = await academicApi.addStudentToClass(modalClassId, {
+          name: studentName.trim(),
+          roll_number: rollNumber.trim().toUpperCase(),
+          section: section.trim() || "A",
+          subject_id: targetSubjectId || undefined,
+          attendance_percentage: 85.0,
+          cgpa_or_percentage: 0.0
+        });
+      } else {
+        newStudent = await academicApi.addStudent(targetSubjectId, {
+          name: studentName.trim(),
+          roll_number: rollNumber.trim().toUpperCase(),
+          section: section.trim() || "A",
+          class_id: modalClassId || undefined,
+          attendance_percentage: 85.0,
+          cgpa_or_percentage: 0.0
+        });
+      }
       setStudents((prev) => [newStudent, ...prev]);
       setShowAddModal(false);
     } catch (err: any) {

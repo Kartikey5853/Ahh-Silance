@@ -683,7 +683,77 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({
             </p>
           </div>
 
+          {/* Clean Drag and Drop / Upload Question Paper Section */}
+          <div
+            onClick={() => onNavigate("exams", { mode: "create" })}
+            style={{
+              background: "#f8faff",
+              border: "1.5px dashed #3b82f6",
+              borderRadius: "14px",
+              padding: "1.5rem 1.75rem",
+              marginBottom: "1.75rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "1.25rem",
+              flexWrap: "wrap",
+              cursor: "pointer",
+              transition: "all 0.15s ease"
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = "#1d4ed8";
+              e.currentTarget.style.background = "#eff6ff";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = "#3b82f6";
+              e.currentTarget.style.background = "#f8faff";
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+              <div
+                style={{
+                  width: "42px",
+                  height: "42px",
+                  borderRadius: "10px",
+                  background: "#eff6ff",
+                  color: "#2563eb",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0
+                }}
+              >
+                <UploadCloud size={22} />
+              </div>
+              <div>
+                <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "#0f172a" }}>
+                  Drop Question Paper Here or Click to Upload &amp; Grade
+                </div>
+              </div>
+            </div>
 
+            <button
+              type="button"
+              style={{
+                background: "#2563eb",
+                color: "#ffffff",
+                border: "none",
+                borderRadius: "8px",
+                padding: "0.6rem 1.25rem",
+                fontSize: "0.85rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.4rem",
+                boxShadow: "0 2px 8px rgba(37, 99, 235, 0.25)",
+                pointerEvents: "none"
+              }}
+            >
+              <UploadCloud size={15} />
+              <span>+ Upload Question Paper &amp; Grade</span>
+            </button>
+          </div>
 
           {/* Classes Section Header */}
           <div

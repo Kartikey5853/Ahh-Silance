@@ -128,6 +128,12 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
   const [inlineClassCode, setInlineClassCode] = useState("");
   const [isCreatingInlineClass, setIsCreatingInlineClass] = useState(false);
 
+  // Inline Quick Add Subject in Exam Setup
+  const [showInlineSubjectForm, setShowInlineSubjectForm] = useState(false);
+  const [inlineSubjectName, setInlineSubjectName] = useState("");
+  const [inlineSubjectCode, setInlineSubjectCode] = useState("");
+  const [isCreatingInlineSubject, setIsCreatingInlineSubject] = useState(false);
+
   const handleInlineCreateClass = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!inlineClassName.trim()) return;
@@ -148,6 +154,35 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
       alert("Failed to create class: " + (err?.response?.data?.detail || err.message));
     } finally {
       setIsCreatingInlineClass(false);
+    }
+  };
+
+  const handleInlineCreateSubject = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!inlineSubjectName.trim()) return;
+    setIsCreatingInlineSubject(true);
+    try {
+      const instId = institutions[0]?.id || "inst-69e5f2e4";
+      const created = await academicApi.createSubject({
+        name: inlineSubjectName.trim(),
+        code: inlineSubjectCode.trim() || inlineSubjectName.trim().substring(0, 3).toUpperCase() + "-10",
+        institution_type: isSchool ? "school" : "college",
+        institution_id: instId,
+        class_id: selectedClassId || undefined,
+        semester_or_grade: isSchool ? "Grade 10" : "Semester 1",
+        credits: 4,
+        academic_year: "2026-2027",
+        chapters: []
+      });
+      setSubjects((prev) => [...prev, created]);
+      setSelectedSubjectId(created.id);
+      setInlineSubjectName("");
+      setInlineSubjectCode("");
+      setShowInlineSubjectForm(false);
+    } catch (err: any) {
+      alert("Failed to create subject: " + (err?.response?.data?.detail || err.message));
+    } finally {
+      setIsCreatingInlineSubject(false);
     }
   };
 
@@ -2487,10 +2522,92 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                           <label style={{ fontSize: "0.74rem", fontWeight: 700, color: "#475569" }}>
                             Subject *
                           </label>
-                          <span style={{ fontSize: "0.69rem", color: "#64748b" }}>
-                            {currentSubj ? `${currentSubj.code} • ${currentSubj.credits || 4} Credits` : "Select subject"}
-                          </span>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <span style={{ fontSize: "0.69rem", color: "#64748b" }}>
+                              {currentSubj ? `${currentSubj.code} • ${currentSubj.credits || 4} Credits` : "Select subject"}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setShowInlineSubjectForm(!showInlineSubjectForm)}
+                              style={{
+                                background: showInlineSubjectForm ? "#f1f5f9" : "#eff6ff",
+                                color: showInlineSubjectForm ? "#475569" : "#2563eb",
+                                border: `1px solid ${showInlineSubjectForm ? "#cbd5e1" : "#bfdbfe"}`,
+                                borderRadius: "6px",
+                                padding: "0.2rem 0.5rem",
+                                fontSize: "0.7rem",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.25rem"
+                              }}
+                            >
+                              <Plus size={11} /> {showInlineSubjectForm ? "Cancel" : "Add Subject"}
+                            </button>
+                          </div>
                         </div>
+
+                        {/* Inline Quick Add Subject Form */}
+                        {showInlineSubjectForm && (
+                          <div
+                            style={{
+                              background: "#ffffff",
+                              border: "1.5px dashed #3b82f6",
+                              borderRadius: "9px",
+                              padding: "0.75rem",
+                              marginBottom: "0.75rem"
+                            }}
+                          >
+                            <div style={{ fontSize: "0.76rem", fontWeight: 800, color: "#1e3a8a", marginBottom: "0.35rem" }}>
+                              Quick Add Subject for this Class
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr auto", gap: "0.5rem", alignItems: "end" }}>
+                              <div>
+                                <label style={{ display: "block", fontSize: "0.68rem", fontWeight: 700, color: "#64748b", marginBottom: "0.2rem" }}>
+                                  Subject Name *
+                                </label>
+                                <input
+                                  type="text"
+                                  placeholder="e.g. Physics, Hindi, History"
+                                  value={inlineSubjectName}
+                                  onChange={(e) => setInlineSubjectName(e.target.value)}
+                                  style={{ width: "100%", padding: "0.4rem 0.6rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.8rem" }}
+                                />
+                              </div>
+                              <div>
+                                <label style={{ display: "block", fontSize: "0.68rem", fontWeight: 700, color: "#64748b", marginBottom: "0.2rem" }}>
+                                  Subject Code
+                                </label>
+                                <input
+                                  type="text"
+                                  placeholder="e.g. PHY-10"
+                                  value={inlineSubjectCode}
+                                  onChange={(e) => setInlineSubjectCode(e.target.value)}
+                                  style={{ width: "100%", padding: "0.4rem 0.6rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.8rem" }}
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={handleInlineCreateSubject}
+                                disabled={isCreatingInlineSubject || !inlineSubjectName.trim()}
+                                style={{
+                                  background: "#2563eb",
+                                  color: "#ffffff",
+                                  border: "none",
+                                  borderRadius: "6px",
+                                  padding: "0.45rem 0.85rem",
+                                  fontSize: "0.76rem",
+                                  fontWeight: 700,
+                                  cursor: "pointer"
+                                }}
+                              >
+                                {isCreatingInlineSubject ? "Adding..." : "Add Subject"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
                         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
                           {subjects.map((s) => {
                             const isSelected = selectedSubjectId === s.id;
