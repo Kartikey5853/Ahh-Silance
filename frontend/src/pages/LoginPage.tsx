@@ -7,7 +7,6 @@
 
 import React, { useState } from "react";
 import { authApi } from "../api/authApi";
-import { academicApi } from "../api/academicApi";
 import type { AuthResponse } from "../types/auth";
 import type { InstitutionType } from "../types/academic";
 import {
@@ -33,7 +32,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [regPassword, setRegPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState("Teacher / Professor");
+  const [role, setRole] = useState<"Teacher" | "Admin">("Teacher");
 
   // Organization Fields (As requested: configured on Register page)
   const [orgName, setOrgName] = useState("Delhi Public School");
@@ -92,30 +91,19 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     setIsLoading(true);
 
     try {
-      // 1. Register User
+      // 1. Register User with selected Role and Organization details
       const response = await authApi.register({
         username: regUsername.trim(),
         password: regPassword.trim(),
         full_name: fullName.trim() || regUsername.trim(),
         email: email.trim(),
-        role: role
+        role: role,
+        institution_name: orgName.trim() || "My Academic Institution",
+        institution_type: orgType,
+        institution_code: orgCode.trim() || "INST"
       });
       localStorage.setItem("auth_token", response.access_token);
       localStorage.setItem("auth_user", JSON.stringify(response));
-
-      // 2. Automatically create & configure Organization on Register!
-      try {
-        const inst = await academicApi.createInstitution({
-          name: orgName.trim() || "My Academic Institution",
-          type: orgType,
-          code: orgCode.trim() || "INST"
-        });
-        if (inst && inst.id) {
-          await academicApi.updateProfile({ institution_id: inst.id });
-        }
-      } catch (instErr) {
-        console.warn("Auto institution setup fallback:", instErr);
-      }
 
       setSuccessMessage("Account created successfully! Loading your dashboard...");
       setTimeout(() => {
@@ -136,14 +124,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     setOrgName("Delhi Public School");
     setOrgType("school");
     setOrgCode("DPS-CBSE");
-    setRole("Senior School Teacher");
+    setRole("Teacher");
   };
 
   const applyCollegePreset = () => {
     setOrgName("ACE College of Engineering");
     setOrgType("college");
     setOrgCode("ACE-ENG");
-    setRole("Associate Professor");
+    setRole("Teacher");
   };
 
   return (
@@ -286,42 +274,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
           {activeTab === "login" ? (
             <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              {/* Quick Fill Preset */}
-              <div
-                style={{
-                  background: "#f8fafc",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "8px",
-                  padding: "0.55rem 0.75rem",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between"
-                }}
-              >
-                <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
-                  Demo faculty login: <strong>test</strong> / <strong>test123</strong>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLoginUsername("test");
-                    setLoginPassword("test123");
-                  }}
-                  style={{
-                    background: "#eff6ff",
-                    border: "1px solid #bfdbfe",
-                    color: "#1d4ed8",
-                    padding: "0.2rem 0.5rem",
-                    borderRadius: "4px",
-                    fontSize: "0.72rem",
-                    fontWeight: 700,
-                    cursor: "pointer"
-                  }}
-                >
-                  Auto-fill
-                </button>
-              </div>
-
               <div>
                 <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
                   Username
@@ -459,6 +411,54 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                       fontSize: "0.88rem"
                     }}
                   />
+                </div>
+              </div>
+
+              {/* Account Role Selector: Teacher vs Admin */}
+              <div>
+                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, color: "#334155", marginBottom: "0.3rem" }}>
+                  Account Role <span style={{ color: "#ef4444" }}>*</span>
+                </label>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
+                  <button
+                    type="button"
+                    onClick={() => setRole("Teacher")}
+                    style={{
+                      padding: "0.45rem",
+                      borderRadius: "6px",
+                      border: role === "Teacher" ? "2px solid #2563eb" : "1px solid #cbd5e1",
+                      background: role === "Teacher" ? "#eff6ff" : "#ffffff",
+                      fontSize: "0.8rem",
+                      fontWeight: 700,
+                      color: role === "Teacher" ? "#1d4ed8" : "#475569",
+                      cursor: "pointer",
+                      textAlign: "center"
+                    }}
+                  >
+                    👨‍🏫 Teacher
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRole("Admin")}
+                    style={{
+                      padding: "0.45rem",
+                      borderRadius: "6px",
+                      border: role === "Admin" ? "2px solid #2563eb" : "1px solid #cbd5e1",
+                      background: role === "Admin" ? "#eff6ff" : "#ffffff",
+                      fontSize: "0.8rem",
+                      fontWeight: 700,
+                      color: role === "Admin" ? "#1d4ed8" : "#475569",
+                      cursor: "pointer",
+                      textAlign: "center"
+                    }}
+                  >
+                    🛡️ Admin
+                  </button>
+                </div>
+                <div style={{ fontSize: "0.72rem", color: "#64748b", marginTop: "0.25rem" }}>
+                  {role === "Teacher"
+                    ? "Teachers grade exams & manage classes under their organization."
+                    : "Admins manage institution settings and organizational structure."}
                 </div>
               </div>
 

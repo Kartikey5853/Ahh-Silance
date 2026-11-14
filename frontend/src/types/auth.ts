@@ -19,6 +19,10 @@ export interface RegisterPayload {
   email?: string;
   role?: string;
   department?: string;
+  institution_id?: string;
+  institution_name?: string;
+  institution_type?: string;
+  institution_code?: string;
   gemini_api_key?: string;
 }
 

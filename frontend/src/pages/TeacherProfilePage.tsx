@@ -9,7 +9,9 @@ import {
   Key,
   FolderGit2,
   Plus,
-  Trash2
+  Trash2,
+  Bell,
+  Lock
 } from "lucide-react";
 
 interface TeacherProfilePageProps {
@@ -38,6 +40,12 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({ onLogout
   const [newClassName, setNewClassName] = useState("");
   const [newClassCode, setNewClassCode] = useState("");
   const [newClassDept, setNewClassDept] = useState("");
+
+  // Notification Settings (No backend logic connected, pure UI toggles as requested)
+  const [notifyGradingComplete, setNotifyGradingComplete] = useState(true);
+  const [notifyParentAlerts, setNotifyParentAlerts] = useState(true);
+  const [notifyWeeklyDigest, setNotifyWeeklyDigest] = useState(false);
+  const [notifyRubricUpdates, setNotifyRubricUpdates] = useState(true);
 
   const [isSaving, setIsSaving] = useState(false);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
@@ -180,14 +188,16 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({ onLogout
 
   const currentOrg = institutions.find((i) => i.id === selectedInstId) || institutions[0];
 
+  const isAdmin = (profile?.role || role || "").toLowerCase().includes("admin");
+
   return (
     <div className="teacher-profile-page pb-24" style={{ maxWidth: "760px", margin: "0 auto" }}>
       <div style={{ marginBottom: "1.5rem" }}>
         <h1 style={{ fontSize: "1.6rem", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.03em", margin: 0 }}>
-          Settings & Organization
+          Settings &amp; Preferences
         </h1>
         <p style={{ color: "#64748b", fontSize: "0.88rem", marginTop: "2px" }}>
-          Manage your faculty profile and affiliated school / college organization
+          Manage your faculty profile, organization details, class cohorts and alert preferences
         </p>
       </div>
 
@@ -243,142 +253,182 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({ onLogout
               Academic Organization
             </h2>
             <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
-              Configure your school or college hierarchy
+              {isAdmin ? "Manage and switch educational institutions" : "Affiliated educational institution (locked for teachers)"}
             </div>
           </div>
         </div>
 
-        {/* Current Active Org Selection */}
-        {institutions.length > 0 && (
-          <div style={{ marginBottom: "1rem" }}>
-            <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.35rem" }}>
-              Active Organization
-            </label>
-            <select
-              value={selectedInstId}
-              onChange={(e) => setSelectedInstId(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "0.55rem 0.75rem",
-                borderRadius: "8px",
-                border: "1px solid #cbd5e1",
-                fontSize: "0.88rem",
-                fontWeight: 600,
-                background: "#ffffff"
-              }}
-            >
-              {institutions.map((i) => (
-                <option key={i.id} value={i.id}>
-                  {i.name} ({i.type.toUpperCase()})
-                </option>
-              ))}
-            </select>
+        {/* Current Active Org Selection (or Read-only for Teachers) */}
+        {!isAdmin ? (
+          <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "1rem" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
+              <div>
+                <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                  Your School / College
+                </div>
+                <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "#0f172a", marginTop: "0.2rem" }}>
+                  {currentOrg?.name || "Academic Institution"}
+                </div>
+                <div style={{ fontSize: "0.76rem", color: "#64748b", marginTop: "0.25rem" }}>
+                  Type: <strong>{currentOrg?.type === "school" ? "School (CBSE / State)" : currentOrg?.type === "college" ? "College (University)" : "Competitive"}</strong> • Code: {currentOrg?.code || "None"}
+                </div>
+              </div>
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.35rem",
+                  background: "#f1f5f9",
+                  border: "1px solid #cbd5e1",
+                  padding: "0.35rem 0.65rem",
+                  borderRadius: "6px",
+                  fontSize: "0.74rem",
+                  color: "#475569",
+                  fontWeight: 700
+                }}
+              >
+                <Lock size={12} />
+                <span>Managed by Admin</span>
+              </div>
+            </div>
+            <div style={{ fontSize: "0.72rem", color: "#94a3b8", marginTop: "0.6rem" }}>
+              Teachers cannot change affiliated organization. To request a transfer, please contact your school/college administrator.
+            </div>
+          </div>
+        ) : (
+          <>
+            {institutions.length > 0 && (
+              <div style={{ marginBottom: "1rem" }}>
+                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.35rem" }}>
+                  Active Organization
+                </label>
+                <select
+                  value={selectedInstId}
+                  onChange={(e) => setSelectedInstId(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "0.55rem 0.75rem",
+                    borderRadius: "8px",
+                    border: "1px solid #cbd5e1",
+                    fontSize: "0.88rem",
+                    fontWeight: 600,
+                    background: "#ffffff"
+                  }}
+                >
+                  {institutions.map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {i.name} ({i.type.toUpperCase()})
+                    </option>
+                  ))}
+                </select>
 
-            {currentOrg && (
-              <div style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "0.35rem" }}>
-                Type: <strong>{currentOrg.type === "school" ? "School (CBSE / State)" : currentOrg.type === "college" ? "College (University / Autonomous)" : "Competitive"}</strong> • Code: {currentOrg.code || "None"}
+                {currentOrg && (
+                  <div style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "0.35rem" }}>
+                    Type: <strong>{currentOrg.type === "school" ? "School (CBSE / State)" : currentOrg.type === "college" ? "College (University / Autonomous)" : "Competitive"}</strong> • Code: {currentOrg.code || "None"}
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        )}
 
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <button
-            type="button"
-            onClick={() => setShowNewOrgForm(!showNewOrgForm)}
-            style={{
-              background: showNewOrgForm ? "#f1f5f9" : "#eff6ff",
-              border: `1px solid ${showNewOrgForm ? "#cbd5e1" : "#bfdbfe"}`,
-              color: showNewOrgForm ? "#475569" : "#1d4ed8",
-              padding: "0.4rem 0.85rem",
-              borderRadius: "6px",
-              fontSize: "0.8rem",
-              fontWeight: 700,
-              cursor: "pointer"
-            }}
-          >
-            {showNewOrgForm ? "Cancel" : "+ Add New Organization"}
-          </button>
-        </div>
-
-        {/* New Organization Sub-Form */}
-        {showNewOrgForm && (
-          <form onSubmit={handleCreateNewOrg} style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #f1f5f9" }}>
-            <div style={{ marginBottom: "0.85rem" }}>
-              <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                Organization Model
-              </label>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem" }}>
-                {[
-                  { id: "school", label: "School (CBSE)" },
-                  { id: "college", label: "College (B.Tech)" },
-                  { id: "competitive", label: "Coaching (JEE)" }
-                ].map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setNewOrgType(t.id as any)}
-                    style={{
-                      border: newOrgType === t.id ? "2px solid #2563eb" : "1px solid #cbd5e1",
-                      background: newOrgType === t.id ? "#eff6ff" : "#ffffff",
-                      padding: "0.45rem",
-                      borderRadius: "6px",
-                      fontSize: "0.78rem",
-                      fontWeight: 700,
-                      cursor: "pointer"
-                    }}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => setShowNewOrgForm(!showNewOrgForm)}
+                style={{
+                  background: showNewOrgForm ? "#f1f5f9" : "#eff6ff",
+                  border: `1px solid ${showNewOrgForm ? "#cbd5e1" : "#bfdbfe"}`,
+                  color: showNewOrgForm ? "#475569" : "#1d4ed8",
+                  padding: "0.4rem 0.85rem",
+                  borderRadius: "6px",
+                  fontSize: "0.8rem",
+                  fontWeight: 700,
+                  cursor: "pointer"
+                }}
+              >
+                {showNewOrgForm ? "Cancel" : "+ Add New Organization"}
+              </button>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1.4fr 0.8fr", gap: "0.75rem", marginBottom: "1rem" }}>
-              <div>
-                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                  Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Delhi Public School"
-                  value={newOrgName}
-                  onChange={(e) => setNewOrgName(e.target.value)}
-                  style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
-                />
-              </div>
-              <div>
-                <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                  Code
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. DPS-2026"
-                  value={newOrgCode}
-                  onChange={(e) => setNewOrgCode(e.target.value)}
-                  style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
-                />
-              </div>
-            </div>
+            {/* New Organization Sub-Form */}
+            {showNewOrgForm && (
+              <form onSubmit={handleCreateNewOrg} style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #f1f5f9" }}>
+                <div style={{ marginBottom: "0.85rem" }}>
+                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                    Organization Model
+                  </label>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem" }}>
+                    {[
+                      { id: "school", label: "School (CBSE)" },
+                      { id: "college", label: "College (B.Tech)" },
+                      { id: "competitive", label: "Coaching (JEE)" }
+                    ].map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setNewOrgType(t.id as any)}
+                        style={{
+                          border: newOrgType === t.id ? "2px solid #2563eb" : "1px solid #cbd5e1",
+                          background: newOrgType === t.id ? "#eff6ff" : "#ffffff",
+                          padding: "0.45rem",
+                          borderRadius: "6px",
+                          fontSize: "0.78rem",
+                          fontWeight: 700,
+                          cursor: "pointer"
+                        }}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-            <button
-              type="submit"
-              disabled={isSaving}
-              style={{
-                background: "#2563eb",
-                color: "#ffffff",
-                border: "none",
-                borderRadius: "6px",
-                padding: "0.45rem 1rem",
-                fontSize: "0.82rem",
-                fontWeight: 700,
-                cursor: "pointer"
-              }}
-            >
-              Save Organization
-            </button>
-          </form>
+                <div style={{ display: "grid", gridTemplateColumns: "1.4fr 0.8fr", gap: "0.75rem", marginBottom: "1rem" }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                      Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Delhi Public School"
+                      value={newOrgName}
+                      onChange={(e) => setNewOrgName(e.target.value)}
+                      style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                      Code
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. DPS-2026"
+                      value={newOrgCode}
+                      onChange={(e) => setNewOrgCode(e.target.value)}
+                      style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  style={{
+                    background: "#2563eb",
+                    color: "#ffffff",
+                    border: "none",
+                    borderRadius: "6px",
+                    padding: "0.45rem 1rem",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    cursor: "pointer"
+                  }}
+                >
+                  Save Organization
+                </button>
+              </form>
+            )}
+          </>
         )}
       </div>
 
@@ -796,6 +846,128 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({ onLogout
             </button>
           </div>
         </form>
+      </div>
+
+      {/* SECTION 4: NOTIFICATION SETTINGS */}
+      <div
+        style={{
+          background: "#ffffff",
+          border: "1px solid #e2e8f0",
+          borderRadius: "14px",
+          padding: "1.75rem",
+          marginTop: "1.5rem",
+          boxShadow: "0 1px 3px 0 rgba(0, 0, 0, 0.03)"
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.25rem" }}>
+          <div
+            style={{
+              width: "38px",
+              height: "38px",
+              borderRadius: "8px",
+              background: "#eff6ff",
+              color: "#2563eb",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center"
+            }}
+          >
+            <Bell size={20} />
+          </div>
+          <div>
+            <h2 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
+              Notification Settings
+            </h2>
+            <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
+              Configure automatic grading alerts and parent communication channels
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+          {[
+            {
+              id: "grading",
+              label: "Grading Completion Email Alerts",
+              desc: "Receive an immediate summary report when a batch of student copies finishes AI grading.",
+              checked: notifyGradingComplete,
+              toggle: () => setNotifyGradingComplete(!notifyGradingComplete)
+            },
+            {
+              id: "parents",
+              label: "Parent Grade Notifications (SMS / WhatsApp)",
+              desc: "Allow sending digital scorecard alerts directly to parents after marks are finalized by faculty.",
+              checked: notifyParentAlerts,
+              toggle: () => setNotifyParentAlerts(!notifyParentAlerts)
+            },
+            {
+              id: "rubric",
+              label: "Marking Scheme & Rubric Sync Alerts",
+              desc: "Get notified when department-wide syllabus rubrics or question paper templates are updated.",
+              checked: notifyRubricUpdates,
+              toggle: () => setNotifyRubricUpdates(!notifyRubricUpdates)
+            },
+            {
+              id: "digest",
+              label: "Weekly Cohort Performance Digest",
+              desc: "Receive a consolidated Monday morning performance digest for all enrolled student batches.",
+              checked: notifyWeeklyDigest,
+              toggle: () => setNotifyWeeklyDigest(!notifyWeeklyDigest)
+            }
+          ].map((item) => (
+            <div
+              key={item.id}
+              onClick={item.toggle}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "0.85rem 1rem",
+                borderRadius: "10px",
+                border: "1px solid #e2e8f0",
+                background: item.checked ? "#f8fafc" : "#ffffff",
+                cursor: "pointer",
+                transition: "all 0.15s ease"
+              }}
+            >
+              <div style={{ paddingRight: "1rem" }}>
+                <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#0f172a" }}>
+                  {item.label}
+                </div>
+                <div style={{ fontSize: "0.76rem", color: "#64748b", marginTop: "0.15rem" }}>
+                  {item.desc}
+                </div>
+              </div>
+
+              {/* Modern iOS / Material style toggle switch */}
+              <div
+                style={{
+                  width: "42px",
+                  height: "24px",
+                  borderRadius: "999px",
+                  background: item.checked ? "#2563eb" : "#cbd5e1",
+                  position: "relative",
+                  transition: "background 0.2s ease",
+                  flexShrink: 0
+                }}
+              >
+                <div
+                  style={{
+                    width: "18px",
+                    height: "18px",
+                    borderRadius: "50%",
+                    background: "#ffffff",
+                    position: "absolute",
+                    top: "3px",
+                    left: item.checked ? "21px" : "3px",
+                    transition: "left 0.2s ease",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.2)"
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

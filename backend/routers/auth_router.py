@@ -5,6 +5,7 @@ Provides endpoints for logging in, fetching current user details, creating new
 accounts, and retrieving past evaluation records from the SQLite database.
 """
 
+import uuid
 from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -30,8 +31,12 @@ class RegisterRequest(BaseModel):
     password: str = Field(..., min_length=4)
     full_name: Optional[str] = Field(default="")
     email: Optional[str] = Field(default="")
-    role: Optional[str] = Field(default="Professor")
+    role: Optional[str] = Field(default="Teacher") # "Teacher" or "Admin"
     department: Optional[str] = Field(default="")
+    institution_id: Optional[str] = Field(default="")
+    institution_name: Optional[str] = Field(default="")
+    institution_type: Optional[str] = Field(default="school")
+    institution_code: Optional[str] = Field(default="")
     gemini_api_key: Optional[str] = Field(default="")
 
 
@@ -93,14 +98,38 @@ async def register(payload: RegisterRequest) -> AuthResponse:
             detail="Username already taken."
         )
 
+    inst_id = payload.institution_id or ""
+    if not inst_id and payload.institution_name:
+        all_insts = db.list_institutions()
+        match = next(
+            (
+                i for i in all_insts
+                if i["name"].lower() == payload.institution_name.strip().lower()
+                or (payload.institution_code and (i.get("code") or "").lower() == payload.institution_code.strip().lower())
+            ),
+            None
+        )
+        if match:
+            inst_id = match["id"]
+        else:
+            inst_id = f"inst-{uuid.uuid4().hex[:8]}"
+            db.create_institution(
+                inst_id,
+                payload.institution_name.strip(),
+                payload.institution_type or "school",
+                payload.institution_code or "",
+                {}
+            )
+
     pwd_hash = hash_password(payload.password)
     user_id = db.create_user(
         username=payload.username,
         password_hash=pwd_hash,
         full_name=payload.full_name or payload.username,
         email=payload.email or "",
-        role=payload.role or "Professor",
+        role=payload.role or "Teacher",
         department=payload.department or "",
+        institution_id=inst_id,
         gemini_api_key=payload.gemini_api_key or ""
     )
     if not user_id:

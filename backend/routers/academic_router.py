@@ -226,6 +226,12 @@ def update_profile(req: ProfileUpdateRequest, current_user: Optional[Dict[str, A
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     updates = req.model_dump(exclude_unset=True)
+    
+    # Teachers cannot change organization — only Admins can
+    user_role = (user.get("role") or "").strip().lower()
+    if user_role not in ["admin"] and "institution_id" in updates:
+        updates.pop("institution_id")
+
     success = db.update_user_profile(user["id"], updates)
     return {"status": "success", "updated": success, "profile": db.get_user_by_id(user["id"])}
 
@@ -240,11 +246,18 @@ def list_institutions():
 @router.post("/institutions")
 def create_institution(req: InstitutionCreateRequest, current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)):
     """Creates a new institution / organization and associates it with the active user."""
+    if current_user and current_user.get("username"):
+        u = db.get_user_by_username(current_user["username"])
+        if u:
+            u_role = (u.get("role") or "").strip().lower()
+            if u_role not in ["admin"]:
+                raise HTTPException(status_code=403, detail="Teachers cannot create or change organizations. Contact your administrator.")
+
     inst_id = f"inst-{uuid.uuid4().hex[:8]}"
     created = db.create_institution(inst_id, req.name, req.type, req.code or "", req.config or {})
     if current_user and current_user.get("username"):
         u = db.get_user_by_username(current_user["username"])
-        if u:
+        if u and (u.get("role") or "").strip().lower() == "admin":
             db.update_user_profile(u["id"], {"institution_id": inst_id})
     return created
 
