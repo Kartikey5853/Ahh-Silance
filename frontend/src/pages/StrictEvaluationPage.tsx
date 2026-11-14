@@ -6,6 +6,7 @@ import { DoubleTapMarkdownEditor } from "../components/DoubleTapMarkdownEditor";
 import { MarkdownQuestionView } from "../components/MarkdownQuestionView";
 import { StudentProfileModal } from "../components/StudentProfileModal";
 import { useAnswerKeyStudio } from "../hooks/useAnswerKeyStudio";
+import { useIsMobile } from "../hooks/useIsMobile";
 import type { Exam, Student, AcademicEvaluation, Subject, ClassItem, AnswerRegionItem } from "../types/academic";
 import {
   UploadCloud,
@@ -78,6 +79,8 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
   const [activeScorecard, setActiveScorecard] = useState<AcademicEvaluation | null>(null);
   const [profileModalStudent, setProfileModalStudent] = useState<Student | null>(null);
   const [hideAnswerSheet, setHideAnswerSheet] = useState(false);
+  const isMobile = useIsMobile(768);
+  const [mobileSplitTab, setMobileSplitTab] = useState<"scorecard" | "sheet">("scorecard");
   const [sheetZoom, setSheetZoom] = useState(100);
   const [magicInk, setMagicInk] = useState(true);
   const [showBoundaryBoxes, setShowBoundaryBoxes] = useState(true);
@@ -569,7 +572,7 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
             border: "1px solid #e2e8f0",
             boxShadow: "0 24px 60px rgba(15, 23, 42, 0.25)",
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
+            gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
             overflow: "hidden"
           }}
         >
@@ -1100,10 +1103,83 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
           </div>
         )}
 
-        {/* Split Screen Workspace */}
-        <div style={{ display: "grid", gridTemplateColumns: hideAnswerSheet ? "1fr" : "1.1fr 0.9fr", gap: "1.25rem", minHeight: "78vh" }}>
+        {/* Split Screen Workspace - Mobile Tabs or Desktop 2-Column */}
+        {isMobile && !hideAnswerSheet && (
+          <div
+            style={{
+              display: "flex",
+              background: "#ffffff",
+              border: "1px solid #e2e8f0",
+              borderRadius: "12px",
+              padding: "0.25rem",
+              marginBottom: "1rem",
+              gap: "0.25rem"
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setMobileSplitTab("scorecard")}
+              style={{
+                flex: 1,
+                padding: "0.55rem 0.75rem",
+                borderRadius: "8px",
+                border: "none",
+                background: mobileSplitTab === "scorecard" ? "#2563eb" : "transparent",
+                color: mobileSplitTab === "scorecard" ? "#ffffff" : "#475569",
+                fontSize: "0.84rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "0.35rem",
+                transition: "all 0.15s ease"
+              }}
+            >
+              <FileText size={15} />
+              <span>Scorecard &amp; Rubrics</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileSplitTab("sheet")}
+              style={{
+                flex: 1,
+                padding: "0.55rem 0.75rem",
+                borderRadius: "8px",
+                border: "none",
+                background: mobileSplitTab === "sheet" ? "#2563eb" : "transparent",
+                color: mobileSplitTab === "sheet" ? "#ffffff" : "#475569",
+                fontSize: "0.84rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "0.35rem",
+                transition: "all 0.15s ease"
+              }}
+            >
+              <PenTool size={15} />
+              <span>Answer Sheet {activeScorecard.page_count ? `(${activeScorecard.page_count} pgs)` : ""}</span>
+            </button>
+          </div>
+        )}
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: isMobile
+              ? "1fr"
+              : hideAnswerSheet
+              ? "1fr"
+              : "1.1fr 0.9fr",
+            gap: "1.25rem",
+            minHeight: "78vh"
+          }}
+        >
           {/* LEFT HALF: Scorecard, Answer Map, Breakdown, Scope of Improvement, and Scrollable Questions */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem", overflowY: "auto", maxHeight: "84vh", paddingRight: "0.35rem" }}>
+          {(!isMobile || mobileSplitTab === "scorecard") && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem", overflowY: isMobile ? "visible" : "auto", maxHeight: isMobile ? "none" : "84vh", paddingRight: "0.35rem" }}>
             {/* CLEAN WHITE HERO SCORE CARD */}
             <div
               style={{
@@ -1552,7 +1628,9 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
                       <div
                         style={{
                           display: "grid",
-                          gridTemplateColumns: "minmax(0, 1.35fr) minmax(240px, 0.95fr)",
+                          gridTemplateColumns: isMobile
+                            ? "1fr"
+                            : "minmax(0, 1.35fr) minmax(240px, 0.95fr)",
                           gap: "1rem",
                           padding: "1.1rem 1.2rem",
                           background: "#ffffff",
@@ -1787,9 +1865,10 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
               </div>
             </div>
           </div>
+          )}
 
           {/* RIGHT HALF: Evaluated Student Handwritten Answer Sheet Preview with MagicInk */}
-          {!hideAnswerSheet && (
+          {!hideAnswerSheet && (!isMobile || mobileSplitTab === "sheet") && (
             <div
               style={{
                 background: "#ffffff",
@@ -2689,8 +2768,8 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
           </div>
 
           {/* Students Grading Table */}
-          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "14px", overflow: "hidden", boxShadow: "0 1px 4px rgba(0, 0, 0, 0.04)" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "14px", overflow: "hidden", overflowX: "auto", WebkitOverflowScrolling: "touch", boxShadow: "0 1px 4px rgba(0, 0, 0, 0.04)" }}>
+            <table style={{ width: "100%", minWidth: "680px", borderCollapse: "collapse", textAlign: "left" }}>
               <thead>
                 <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
                   <th style={{ padding: "0.75rem 1.25rem", fontSize: "0.75rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>Student Name</th>

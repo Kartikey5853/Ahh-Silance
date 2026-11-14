@@ -840,7 +840,7 @@ body {
 }
 
 /* ==========================================================================
-   NIERA LEFT DOCK & WORKSPACE LAYOUT
+   NIERA LEFT DOCK, BOTTOM MOBILE DOCK & RESPONSIVE LAYOUT
    ========================================================================== */
 
 .niera-app-container {
@@ -850,18 +850,14 @@ body {
 }
 
 .niera-left-dock {
-  width: 260px;
-  min-width: 260px;
-  height: 100vh;
-  position: sticky;
-  top: 0;
+  width: 240px;
+  min-width: 240px;
   background: #ffffff;
-  border-right: 1px solid #e2e8f0;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   z-index: 100;
-  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: width 0.2s ease, min-width 0.2s ease;
 }
 
 .niera-layout-content {
@@ -874,28 +870,183 @@ body {
 
 .niera-page-body {
   flex: 1;
-  padding: 1.75rem 2rem 5rem 2rem;
+  padding: 1.25rem 2rem 5rem 2rem;
   max-width: 1600px;
   width: 100%;
   margin: 0 auto;
 }
 
-@media (max-width: 900px) {
-  .mobile-sidebar-toggle {
-    display: flex !important;
+/* Mobile Topbar & Bottom Dock - Hidden on Desktop */
+.niera-mobile-topbar {
+  display: none;
+}
+
+.niera-bottom-dock {
+  display: none;
+}
+
+/* ==========================================================================
+   MOBILE & TABLET BREAKPOINTS (<= 768px)
+   ========================================================================== */
+@media (max-width: 768px) {
+  .niera-app-container {
+    flex-direction: column !important;
   }
+
+  /* Hide Desktop Sidebar Dock completely */
   .niera-left-dock {
-    position: fixed !important;
+    display: none !important;
+  }
+
+  /* Show Mobile Header */
+  .niera-mobile-topbar {
+    display: flex !important;
+    position: sticky;
     top: 0;
     left: 0;
+    right: 0;
+    z-index: 990;
+    height: 56px;
+    padding: 0 1rem;
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid #e2e8f0;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  }
+
+  /* Show Floating / Fixed Bottom Dock Bar */
+  .niera-bottom-dock {
+    display: flex !important;
+    position: fixed;
     bottom: 0;
-    transform: translateX(-100%);
-    box-shadow: 10px 0 25px rgba(0, 0, 0, 0.15);
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    height: 64px;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(16px);
+    border-top: 1px solid #e2e8f0;
+    box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.08);
+    padding: 0.25rem 0.5rem calc(0.25rem + env(safe-area-inset-bottom, 0px)) 0.5rem;
+    align-items: center;
+    justify-content: space-around;
   }
-  .niera-left-dock.mobile-open {
-    transform: translateX(0) !important;
+
+  .niera-dock-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 6px 4px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: #64748b;
+    border-radius: 10px;
+    transition: all 0.15s ease;
+    position: relative;
+    -webkit-tap-highlight-color: transparent;
   }
+
+  .niera-dock-item:active {
+    transform: scale(0.93);
+    background: #f1f5f9;
+  }
+
+  .niera-dock-item.active {
+    color: #2563eb;
+  }
+
+  .niera-dock-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s ease;
+  }
+
+  .niera-dock-item.active .niera-dock-icon {
+    transform: translateY(-1px);
+    color: #2563eb;
+  }
+
+  .niera-dock-label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 64px;
+  }
+
+  .niera-dock-item.active .niera-dock-label {
+    font-weight: 800;
+    color: #1d4ed8;
+  }
+
+  .niera-dock-indicator {
+    position: absolute;
+    top: 2px;
+    width: 18px;
+    height: 3px;
+    border-radius: 3px;
+    background: #2563eb;
+  }
+
+  /* Give workspace padding at bottom so bottom dock doesn't obscure content */
   .niera-page-body {
-    padding: 1rem 1rem 5rem 1rem;
+    padding: 0.85rem 0.85rem calc(5.5rem + env(safe-area-inset-bottom, 0px)) 0.85rem !important;
+  }
+
+  /* General responsive adjustments for modals and forms on mobile */
+  .modal-overlay-16-9 {
+    padding: 0.5rem !important;
+  }
+  .modal-content-16-9 {
+    width: 98vw !important;
+    max-height: 94vh !important;
+    border-radius: 14px !important;
+  }
+
+  /* Universal table scroll wrapper for mobile phones */
+  table {
+    display: table;
+  }
+
+  /* Ensure card grids adapt seamlessly to mobile width */
+  div[style*="repeat(auto-fill, minmax("],
+  div[style*="repeat(auto-fit, minmax("] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* 2-column form grids collapse gracefully into 1 column on phone */
+  div[style*="gridTemplateColumns: \"1fr 1fr\""],
+  div[style*="grid-template-columns: 1fr 1fr"],
+  div[style*="gridTemplateColumns: \"1.2fr 0.8fr\""],
+  div[style*="gridTemplateColumns: \"1.4fr 0.8fr\""],
+  div[style*="gridTemplateColumns: \"2fr 1fr\""] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Multi-column stat cards and options collapse or wrap */
+  div[style*="gridTemplateColumns: \"1fr 1fr 1fr\""],
+  div[style*="gridTemplateColumns: \"1fr 1fr 1fr 1fr\""] {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.5rem !important;
+  }
+
+  /* Full screen / modal container adjustments */
+  .modal-overlay-16-9 > div,
+  div[style*="position: fixed"][style*="inset: 0"] > div[style*="maxWidth:"] {
+    max-width: 96vw !important;
+    width: 96vw !important;
+    max-height: 92vh !important;
+    padding: 1rem !important;
+    overflow-y: auto !important;
   }
 }

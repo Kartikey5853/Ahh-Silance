@@ -60,9 +60,11 @@ def init_sqlite_db(db_path: Optional[str] = None) -> None:
                 type TEXT NOT NULL, -- 'college', 'school', 'competitive'
                 code TEXT,
                 config_json TEXT NOT NULL,
+                created_by_user_id INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        _add_column_if_not_exists(cursor, "institutions", "created_by_user_id", "INTEGER DEFAULT 0")
 
         # 2.1 Classes Table (Hierarchy: Organization -> Class -> Subject)
         cursor.execute("""
@@ -148,6 +150,7 @@ def init_sqlite_db(db_path: Optional[str] = None) -> None:
         _add_column_if_not_exists(cursor, "exams", "paper_id", "TEXT DEFAULT ''")
         _add_column_if_not_exists(cursor, "exams", "paper_page_count", "INTEGER DEFAULT 0")
         _add_column_if_not_exists(cursor, "exams", "target_section", "TEXT DEFAULT ''")
+        _add_column_if_not_exists(cursor, "exams", "target_classes_json", "TEXT DEFAULT '[]'")
         _add_column_if_not_exists(cursor, "exams", "answer_key_json", "TEXT DEFAULT '{}'")
 
         # 6. Academic Evaluations Table (Strict evaluated student papers)
@@ -584,10 +587,10 @@ class SQLiteDatabase:
 
     # --- Institution operations ---
 
-    def list_institutions(self) -> List[Dict[str, Any]]:
+    def list_institutions(self, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT id, name, type, code, config_json, created_at FROM institutions ORDER BY created_at ASC")
+            cursor.execute("SELECT id, name, type, code, config_json, created_by_user_id, created_at FROM institutions ORDER BY created_at ASC")
             results = []
             for r in cursor.fetchall():
                 d = dict(r)
@@ -598,7 +601,7 @@ class SQLiteDatabase:
     def get_institution(self, institution_id: str) -> Optional[Dict[str, Any]]:
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT id, name, type, code, config_json, created_at FROM institutions WHERE id = ?", (institution_id,))
+            cursor.execute("SELECT id, name, type, code, config_json, created_by_user_id, created_at FROM institutions WHERE id = ?", (institution_id,))
             row = cursor.fetchone()
             if row:
                 d = dict(row)
@@ -606,13 +609,13 @@ class SQLiteDatabase:
                 return d
         return None
 
-    def create_institution(self, inst_id: str, name: str, inst_type: str, code: str, config: Dict[str, Any]) -> Dict[str, Any]:
+    def create_institution(self, inst_id: str, name: str, inst_type: str, code: str, config: Dict[str, Any], created_by_user_id: int = 0) -> Dict[str, Any]:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT OR REPLACE INTO institutions (id, name, type, code, config_json)
-                VALUES (?, ?, ?, ?, ?)
-            """, (inst_id, name, inst_type, code, json.dumps(config)))
+                INSERT OR REPLACE INTO institutions (id, name, type, code, config_json, created_by_user_id)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (inst_id, name, inst_type, code, json.dumps(config), created_by_user_id))
             conn.commit()
         return self.get_institution(inst_id) # type: ignore
 
@@ -996,6 +999,10 @@ class SQLiteDatabase:
             d["answer_key_structured"] = json.loads(d.get("answer_key_json") or "{}")
         except Exception:
             d["answer_key_structured"] = {}
+        try:
+            d["target_classes"] = json.loads(d.get("target_classes_json") or "[]")
+        except Exception:
+            d["target_classes"] = []
         d["target_section"] = d.get("target_section") or ""
         return d
 
@@ -1003,7 +1010,7 @@ class SQLiteDatabase:
         query = (
             "SELECT e.id, e.subject_id, e.title, e.exam_type, e.max_marks, e.passing_marks, e.academic_year, "
             "e.exam_date, e.correction_deadline, e.question_paper_filename, e.paper_id, e.paper_page_count, "
-            "e.target_section, e.answer_key_text, e.answer_key_json, e.questions_json, e.created_at "
+            "e.target_section, e.target_classes_json, e.answer_key_text, e.answer_key_json, e.questions_json, e.created_at "
             "FROM exams e "
             "LEFT JOIN subjects s ON e.subject_id = s.id "
             "WHERE 1=1"
@@ -1038,7 +1045,7 @@ class SQLiteDatabase:
             cursor.execute("""
                 SELECT id, subject_id, title, exam_type, max_marks, passing_marks, academic_year,
                        exam_date, correction_deadline, question_paper_filename, paper_id, paper_page_count,
-                       target_section, answer_key_text, answer_key_json, questions_json, created_at
+                       target_section, target_classes_json, answer_key_text, answer_key_json, questions_json, created_at
                 FROM exams WHERE id = ?
             """, (exam_id,))
             row = cursor.fetchone()
@@ -1064,14 +1071,15 @@ class SQLiteDatabase:
                 correction_deadline = time.strftime("%Y-%m-%d")
 
         answer_key_structured = data.get("answer_key_structured") or {}
+        target_classes = data.get("target_classes") or []
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO exams (
                     id, subject_id, title, exam_type, max_marks, passing_marks,
                     academic_year, exam_date, correction_deadline, question_paper_filename,
-                    paper_id, paper_page_count, target_section, answer_key_text, answer_key_json, questions_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    paper_id, paper_page_count, target_section, target_classes_json, answer_key_text, answer_key_json, questions_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 exam_id,
                 data.get("subject_id", "subj-nlp-101"),
@@ -1086,6 +1094,7 @@ class SQLiteDatabase:
                 data.get("paper_id", ""),
                 int(data.get("paper_page_count") or 0),
                 data.get("target_section", ""),
+                json.dumps(target_classes),
                 data.get("answer_key_text", ""),
                 json.dumps(answer_key_structured),
                 json.dumps(questions)
@@ -1147,12 +1156,15 @@ class SQLiteDatabase:
     def update_exam_meta(self, exam_id: str, meta: Dict[str, Any]) -> bool:
         allowed = [
             "title", "exam_type", "max_marks", "passing_marks",
-            "academic_year", "exam_date", "correction_deadline", "target_section", "subject_id"
+            "academic_year", "exam_date", "correction_deadline", "target_section", "target_classes", "target_classes_json", "subject_id"
         ]
         updates: List[str] = []
         params: List[Any] = []
         for k, v in meta.items():
-            if k in allowed and v is not None:
+            if k == "target_classes" and v is not None:
+                updates.append("target_classes_json = ?")
+                params.append(json.dumps(v))
+            elif k in allowed and v is not None:
                 updates.append(f"{k} = ?")
                 params.append(v)
         if not updates:

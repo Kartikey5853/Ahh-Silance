@@ -392,8 +392,8 @@ export const SubjectDetailPage: React.FC<SubjectDetailPageProps> = ({
               No students enrolled in this subject yet.
             </div>
           ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.88rem" }}>
+            <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+              <table style={{ width: "100%", minWidth: "620px", borderCollapse: "collapse", fontSize: "0.88rem" }}>
                 <thead>
                   <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0", textAlign: "left", color: "#475569" }}>
                     <th style={{ padding: "0.75rem 1rem", fontWeight: 700 }}>Roll Number</th>
@@ -450,8 +450,8 @@ export const SubjectDetailPage: React.FC<SubjectDetailPageProps> = ({
               No graded submissions for this subject yet. Upload student answer sheets to view evaluations.
             </div>
           ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.88rem" }}>
+            <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+              <table style={{ width: "100%", minWidth: "620px", borderCollapse: "collapse", fontSize: "0.88rem" }}>
                 <thead>
                   <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0", textAlign: "left", color: "#475569" }}>
                     <th style={{ padding: "0.75rem 1rem", fontWeight: 700 }}>Student Name</th>

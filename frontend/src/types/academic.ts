@@ -205,6 +205,7 @@ export interface Exam {
   passing_marks: number;
   academic_year: string;
   target_section?: string;
+  target_classes?: string[];
   exam_date?: string;
   correction_deadline?: string;
   question_paper_filename?: string;

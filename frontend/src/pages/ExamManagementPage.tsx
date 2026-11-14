@@ -4,6 +4,7 @@ import { resolveApiUrl } from "../api/client";
 import { MarkdownQuestionView } from "../components/MarkdownQuestionView";
 import { DoubleTapMarkdownEditor } from "../components/DoubleTapMarkdownEditor";
 import { ExamDetailWorkspace } from "../components/ExamDetailWorkspace";
+import { useIsMobile } from "../hooks/useIsMobile";
 import type { AnswerKeyStructuredItem } from "../types/academic";
 import type {
   Subject,
@@ -72,6 +73,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
   const [institutions, setInstitutions] = useState<Institution[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string>("");
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>(initialSubjectId || "");
   const [exams, setExams] = useState<Exam[]>([]);
@@ -86,6 +88,8 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
 
   // Zoom control for question paper preview
   const [paperZoom, setPaperZoom] = useState<number>(75);
+  const isMobile = useIsMobile(768);
+  const [mobileStep3Tab, setMobileStep3Tab] = useState<"questions" | "paper">("questions");
 
   // Accordion & Collapse toggles in Exam Review & Edit
   const [openInfoAccordion, setOpenInfoAccordion] = useState(true);
@@ -132,6 +136,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
   const [showInlineSubjectForm, setShowInlineSubjectForm] = useState(false);
   const [inlineSubjectName, setInlineSubjectName] = useState("");
   const [inlineSubjectCode, setInlineSubjectCode] = useState("");
+  const [inlineSubjectCredits, setInlineSubjectCredits] = useState<number>(4);
   const [isCreatingInlineSubject, setIsCreatingInlineSubject] = useState(false);
 
   const handleInlineCreateClass = async (e?: React.FormEvent) => {
@@ -147,6 +152,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
       });
       setClasses((prev) => [...prev, created]);
       setSelectedClassId(created.id);
+      setSelectedClassIds((prev) => (prev.includes(created.id) ? prev : [...prev, created.id]));
       setInlineClassName("");
       setInlineClassCode("");
       setShowInlineClassForm(false);
@@ -168,9 +174,9 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
         code: inlineSubjectCode.trim() || inlineSubjectName.trim().substring(0, 3).toUpperCase() + "-10",
         institution_type: isSchool ? "school" : "college",
         institution_id: instId,
-        class_id: selectedClassId || undefined,
+        class_id: selectedClassId || selectedClassIds[0] || undefined,
         semester_or_grade: isSchool ? "Grade 10" : "Semester 1",
-        credits: 4,
+        credits: Number(inlineSubjectCredits) || 4,
         academic_year: "2026-2027",
         chapters: []
       });
@@ -178,6 +184,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
       setSelectedSubjectId(created.id);
       setInlineSubjectName("");
       setInlineSubjectCode("");
+      setInlineSubjectCredits(4);
       setShowInlineSubjectForm(false);
     } catch (err: any) {
       alert("Failed to create subject: " + (err?.response?.data?.detail || err.message));
@@ -253,6 +260,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
 
       if (classList.length > 0) {
         setSelectedClassId(classList[0].id);
+        setSelectedClassIds([classList[0].id]);
       }
 
       if (initialSubjectId && subjList.some((s) => s.id === initialSubjectId)) {
@@ -549,7 +557,18 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
     if (exam.subject_id) {
       setSelectedSubjectId(exam.subject_id);
       const subjObj = subjects.find((s) => s.id === exam.subject_id);
-      if (subjObj?.class_id) setSelectedClassId(subjObj.class_id);
+      if (subjObj?.class_id) {
+        setSelectedClassId(subjObj.class_id);
+      }
+    }
+    if (exam.target_classes && exam.target_classes.length > 0) {
+      setSelectedClassIds(exam.target_classes);
+      if (!selectedClassId) setSelectedClassId(exam.target_classes[0]);
+    } else if (exam.subject_id) {
+      const subjObj = subjects.find((s) => s.id === exam.subject_id);
+      if (subjObj?.class_id) {
+        setSelectedClassIds([subjObj.class_id]);
+      }
     }
     setAnswerKeyText(exam.answer_key_text || "");
     setPaperId(exam.paper_id || "");
@@ -677,7 +696,10 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
     setCurrentPaperPage(1);
     setEditingQuestionIdx(null);
     setScanMessage(null);
-    if (presetClassId) setSelectedClassId(presetClassId);
+    if (presetClassId) {
+      setSelectedClassId(presetClassId);
+      setSelectedClassIds([presetClassId]);
+    }
     if (presetSubjectId) setSelectedSubjectId(presetSubjectId);
     setViewMode("create");
     setStep(1);
@@ -795,6 +817,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
           passing_marks: passingMarks,
           academic_year: academicYear,
           target_section: targetSection,
+          target_classes: selectedClassIds.length > 0 ? selectedClassIds : (selectedClassId ? [selectedClassId] : []),
           exam_date: examDate,
           correction_deadline: correctionDeadline,
           question_paper_filename: paperFilename,
@@ -825,6 +848,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
           passing_marks: passingMarks,
           academic_year: academicYear,
           target_section: targetSection,
+          target_classes: selectedClassIds.length > 0 ? selectedClassIds : (selectedClassId ? [selectedClassId] : []),
           exam_date: examDate,
           correction_deadline: correctionDeadline
         });
@@ -1030,6 +1054,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
           question_paper_filename: paperFilename || undefined,
           title: examTitle.trim() || undefined,
           target_section: targetSection,
+          target_classes: selectedClassIds.length > 0 ? selectedClassIds : (selectedClassId ? [selectedClassId] : []),
           correction_deadline: correctionDeadline || undefined
         });
         if (res?.exam) {
@@ -1047,6 +1072,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
           passing_marks: passingMarks,
           academic_year: academicYear,
           target_section: targetSection,
+          target_classes: selectedClassIds.length > 0 ? selectedClassIds : (selectedClassId ? [selectedClassId] : []),
           exam_date: examDate,
           correction_deadline: correctionDeadline,
           question_paper_filename: paperFilename,
@@ -2294,15 +2320,77 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
           </div>
 
           {/* Pure White Full-Scrollable Left Column + Sticky Right Scanned Paper Viewer */}
+          {isMobile && (
+            <div
+              style={{
+                display: "flex",
+                background: "#ffffff",
+                border: "1px solid #e2e8f0",
+                borderRadius: "12px",
+                padding: "0.25rem",
+                marginBottom: "1rem",
+                gap: "0.25rem"
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setMobileStep3Tab("questions")}
+                style={{
+                  flex: 1,
+                  padding: "0.55rem 0.75rem",
+                  borderRadius: "8px",
+                  border: "none",
+                  background: mobileStep3Tab === "questions" ? "#2563eb" : "transparent",
+                  color: mobileStep3Tab === "questions" ? "#ffffff" : "#475569",
+                  fontSize: "0.84rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "0.35rem",
+                  transition: "all 0.15s ease"
+                }}
+              >
+                <FileText size={15} />
+                <span>Questions ({questions.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileStep3Tab("paper")}
+                style={{
+                  flex: 1,
+                  padding: "0.55rem 0.75rem",
+                  borderRadius: "8px",
+                  border: "none",
+                  background: mobileStep3Tab === "paper" ? "#2563eb" : "transparent",
+                  color: mobileStep3Tab === "paper" ? "#ffffff" : "#475569",
+                  fontSize: "0.84rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "0.35rem",
+                  transition: "all 0.15s ease"
+                }}
+              >
+                <Eye size={15} />
+                <span>Paper Preview {paperPageCount > 1 ? `(${paperPageCount} pgs)` : ""}</span>
+              </button>
+            </div>
+          )}
+
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "1.12fr 0.88fr",
+              gridTemplateColumns: isMobile ? "1fr" : "1.12fr 0.88fr",
               gap: "1.25rem",
               alignItems: "start"
             }}
           >
             {/* LEFT HALF: Naturally Scrollable Accordions & Markdown Questions */}
+            {(!isMobile || mobileStep3Tab === "questions") && (
             <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
               {/* ACCORDION 1: Exam Information */}
               <div
@@ -2431,7 +2519,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                         </div>
                       )}
 
-                      {/* Modern UI Class List */}
+                      {/* Modern UI Class List (Multi-Select Supported) */}
                       {classes.length === 0 ? (
                         <div style={{ padding: "0.8rem", background: "#ffffff", borderRadius: "8px", border: "1px dashed #cbd5e1", textAlign: "center", fontSize: "0.78rem", color: "#64748b", marginBottom: "0.75rem" }}>
                           No classes yet. Click &quot;+ Add New Class&quot; above to create one.
@@ -2439,11 +2527,21 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                       ) : (
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: "0.45rem", maxHeight: "155px", overflowY: "auto", paddingRight: "2px", marginBottom: "0.85rem" }}>
                           {classes.map((c) => {
-                            const isSelected = selectedClassId === c.id;
+                            const isSelected = selectedClassIds.includes(c.id) || selectedClassId === c.id;
                             return (
                               <div
                                 key={c.id}
-                                onClick={() => setSelectedClassId(c.id)}
+                                onClick={() => {
+                                  setSelectedClassId(c.id);
+                                  setSelectedClassIds((prev) => {
+                                    if (prev.includes(c.id)) {
+                                      const next = prev.filter((id) => id !== c.id);
+                                      return next.length > 0 ? next : [c.id];
+                                    } else {
+                                      return [...prev, c.id];
+                                    }
+                                  });
+                                }}
                                 style={{
                                   padding: "0.5rem 0.65rem",
                                   borderRadius: "8px",
@@ -2516,7 +2614,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                         </div>
                       )}
 
-                      {/* Subject Selection (Modern Pills / Grid) */}
+                      {/* Subject Selection (Nested under Classes) */}
                       <div>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.35rem" }}>
                           <label style={{ fontSize: "0.74rem", fontWeight: 700, color: "#475569" }}>
@@ -2548,7 +2646,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                           </div>
                         </div>
 
-                        {/* Inline Quick Add Subject Form */}
+                        {/* Inline Quick Add Subject Form with Credits */}
                         {showInlineSubjectForm && (
                           <div
                             style={{
@@ -2562,7 +2660,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                             <div style={{ fontSize: "0.76rem", fontWeight: 800, color: "#1e3a8a", marginBottom: "0.35rem" }}>
                               Quick Add Subject for this Class
                             </div>
-                            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr auto", gap: "0.5rem", alignItems: "end" }}>
+                            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.2fr 0.8fr 0.6fr auto", gap: "0.5rem", alignItems: "end" }}>
                               <div>
                                 <label style={{ display: "block", fontSize: "0.68rem", fontWeight: 700, color: "#64748b", marginBottom: "0.2rem" }}>
                                   Subject Name *
@@ -2587,6 +2685,20 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                                   style={{ width: "100%", padding: "0.4rem 0.6rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.8rem" }}
                                 />
                               </div>
+                              <div>
+                                <label style={{ display: "block", fontSize: "0.68rem", fontWeight: 700, color: "#64748b", marginBottom: "0.2rem" }}>
+                                  Credits
+                                </label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="10"
+                                  value={inlineSubjectCredits}
+                                  onChange={(e) => setInlineSubjectCredits(Math.max(1, Number(e.target.value) || 1))}
+                                  placeholder="4"
+                                  style={{ width: "100%", padding: "0.4rem 0.6rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.8rem", fontWeight: 700 }}
+                                />
+                              </div>
                               <button
                                 type="button"
                                 onClick={handleInlineCreateSubject}
@@ -2599,7 +2711,8 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                                   padding: "0.45rem 0.85rem",
                                   fontSize: "0.76rem",
                                   fontWeight: 700,
-                                  cursor: "pointer"
+                                  cursor: "pointer",
+                                  height: "33px"
                                 }}
                               >
                                 {isCreatingInlineSubject ? "Adding..." : "Add Subject"}
@@ -2608,35 +2721,99 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                           </div>
                         )}
 
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
-                          {subjects.map((s) => {
-                            const isSelected = selectedSubjectId === s.id;
-                            return (
-                              <button
-                                key={s.id}
-                                type="button"
-                                onClick={() => setSelectedSubjectId(s.id)}
-                                style={{
-                                  padding: "0.35rem 0.65rem",
-                                  borderRadius: "7px",
-                                  border: isSelected ? "1.5px solid #2563eb" : "1px solid #cbd5e1",
-                                  background: isSelected ? "#2563eb" : "#ffffff",
-                                  color: isSelected ? "#ffffff" : "#334155",
-                                  fontSize: "0.76rem",
-                                  fontWeight: isSelected ? 700 : 500,
-                                  cursor: "pointer",
-                                  transition: "all 0.15s ease",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: "0.35rem"
-                                }}
-                              >
-                                {s.name} <span style={{ opacity: 0.75, fontSize: "0.68rem" }}>({s.code})</span>
-                                {isSelected && <Check size={12} />}
-                              </button>
-                            );
-                          })}
-                        </div>
+                        {/* Nested Subjects Display */}
+                        {(() => {
+                          const activeClasses = classes.filter((c) => selectedClassIds.includes(c.id) || selectedClassId === c.id);
+                          const relevantClasses = activeClasses.length > 0 ? activeClasses : classes;
+                          
+                          return (
+                            <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
+                              {relevantClasses.map((cls) => {
+                                const classSubjects = subjects.filter((s) => s.class_id === cls.id);
+                                if (classSubjects.length === 0) return null;
+                                return (
+                                  <div key={cls.id} style={{ background: "#f8fafc", borderRadius: "8px", padding: "0.45rem 0.6rem", border: "1px solid #f1f5f9" }}>
+                                    <div style={{ fontSize: "0.7rem", fontWeight: 700, color: "#64748b", marginBottom: "0.3rem" }}>
+                                      {cls.name}
+                                    </div>
+                                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+                                      {classSubjects.map((s) => {
+                                        const isSelected = selectedSubjectId === s.id;
+                                        return (
+                                          <button
+                                            key={s.id}
+                                            type="button"
+                                            onClick={() => setSelectedSubjectId(s.id)}
+                                            style={{
+                                              padding: "0.32rem 0.65rem",
+                                              borderRadius: "7px",
+                                              border: isSelected ? "1.5px solid #2563eb" : "1px solid #cbd5e1",
+                                              background: isSelected ? "#2563eb" : "#ffffff",
+                                              color: isSelected ? "#ffffff" : "#334155",
+                                              fontSize: "0.76rem",
+                                              fontWeight: isSelected ? 700 : 500,
+                                              cursor: "pointer",
+                                              transition: "all 0.15s ease",
+                                              display: "flex",
+                                              alignItems: "center",
+                                              gap: "0.35rem"
+                                            }}
+                                          >
+                                            {s.name} <span style={{ opacity: 0.75, fontSize: "0.68rem" }}>({s.code} • {s.credits || 4}C)</span>
+                                            {isSelected && <Check size={12} />}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+
+                              {/* Unassigned or other subjects */}
+                              {(() => {
+                                const classSubjIds = new Set(relevantClasses.flatMap((c) => subjects.filter((s) => s.class_id === c.id).map((s) => s.id)));
+                                const otherSubjects = subjects.filter((s) => !classSubjIds.has(s.id));
+                                if (otherSubjects.length === 0) return null;
+                                return (
+                                  <div style={{ background: "#f8fafc", borderRadius: "8px", padding: "0.45rem 0.6rem", border: "1px solid #f1f5f9" }}>
+                                    <div style={{ fontSize: "0.7rem", fontWeight: 700, color: "#64748b", marginBottom: "0.3rem" }}>
+                                      Other Subjects
+                                    </div>
+                                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
+                                      {otherSubjects.map((s) => {
+                                        const isSelected = selectedSubjectId === s.id;
+                                        return (
+                                          <button
+                                            key={s.id}
+                                            type="button"
+                                            onClick={() => setSelectedSubjectId(s.id)}
+                                            style={{
+                                              padding: "0.32rem 0.65rem",
+                                              borderRadius: "7px",
+                                              border: isSelected ? "1.5px solid #2563eb" : "1px solid #cbd5e1",
+                                              background: isSelected ? "#2563eb" : "#ffffff",
+                                              color: isSelected ? "#ffffff" : "#334155",
+                                              fontSize: "0.76rem",
+                                              fontWeight: isSelected ? 700 : 500,
+                                              cursor: "pointer",
+                                              transition: "all 0.15s ease",
+                                              display: "flex",
+                                              alignItems: "center",
+                                              gap: "0.35rem"
+                                            }}
+                                          >
+                                            {s.name} <span style={{ opacity: 0.75, fontSize: "0.68rem" }}>({s.code} • {s.credits || 4}C)</span>
+                                            {isSelected && <Check size={12} />}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
 
@@ -2676,7 +2853,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                       </div>
                     </div>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: "0.75rem" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.2fr 0.8fr", gap: "0.75rem" }}>
                       <div>
                         <label style={{ display: "block", fontSize: "0.74rem", fontWeight: 700, color: "#475569", marginBottom: "0.25rem" }}>
                           Exam Title *
@@ -2721,30 +2898,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                       </div>
                     </div>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "0.75rem" }}>
-                      <div>
-                        <label style={{ display: "block", fontSize: "0.74rem", fontWeight: 700, color: "#475569", marginBottom: "0.25rem" }}>
-                          Target Section
-                        </label>
-                        <select
-                          value={targetSection}
-                          onChange={(e) => setTargetSection(e.target.value)}
-                          style={{
-                            width: "100%",
-                            padding: "0.48rem 0.65rem",
-                            borderRadius: "8px",
-                            background: "#ffffff",
-                            border: "1px solid #cbd5e1",
-                            color: "#0f172a",
-                            fontSize: "0.83rem"
-                          }}
-                        >
-                          <option value="">All Sections</option>
-                          <option value="A">Section A</option>
-                          <option value="B">Section B</option>
-                          <option value="C">Section C</option>
-                        </select>
-                      </div>
+                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1.3fr 1fr", gap: "0.75rem" }}>
                       <div>
                         <label style={{ display: "block", fontSize: "0.74rem", fontWeight: 700, color: "#475569", marginBottom: "0.25rem" }}>
                           Passing Marks
@@ -3748,13 +3902,16 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                 </div>
               </div>
             </div>
+            )}
 
             {/* RIGHT HALF: Sticky Pure-White Scanned Paper Viewer with Interactive Spatial Overlays */}
+            {(!isMobile || mobileStep3Tab === "paper") && (
             <div
               style={{
-                position: "sticky",
-                top: "1rem",
-                height: "calc(100vh - 6.5rem)",
+                position: isMobile ? "static" : "sticky",
+                top: isMobile ? "auto" : "1rem",
+                height: isMobile ? "auto" : "calc(100vh - 6.5rem)",
+                minHeight: isMobile ? "70vh" : "auto",
                 background: "#ffffff",
                 border: "1px solid #e2e8f0",
                 borderRadius: "14px",
@@ -4194,6 +4351,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                 })()}
               </div>
             </div>
+            )}
           </div>
 
           {/* NON-BLURRING FLOATING REFINE WINDOW (No dim backdrop, lazy on user action) */}

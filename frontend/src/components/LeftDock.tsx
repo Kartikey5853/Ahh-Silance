@@ -5,8 +5,6 @@ import {
   Users,
   Settings,
   LogOut,
-  Menu,
-  X,
   ChevronLeft,
   ChevronRight,
   ShieldCheck,
@@ -45,7 +43,6 @@ export const LeftDock: React.FC<LeftDockProps> = ({
 }) => {
   const [localInstitutionName, setLocalInstitutionName] = useState<string>("");
   const [localUserRole, setLocalUserRole] = useState<string>("");
-  const [mobileOpen, setMobileOpen] = useState<boolean>(false);
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
 
   useEffect(() => {
@@ -119,54 +116,127 @@ export const LeftDock: React.FC<LeftDockProps> = ({
 
   const handleItemClick = (id: NavTab) => {
     onTabChange(id);
-    setMobileOpen(false);
   };
 
   return (
     <>
-      {/* Mobile Hamburger Toggle */}
-      <button
-        type="button"
-        className="mobile-sidebar-toggle"
-        onClick={() => setMobileOpen(!mobileOpen)}
-        aria-label="Toggle navigation menu"
-        style={{
-          display: "none",
-          position: "fixed",
-          bottom: "1.25rem",
-          left: "1.25rem",
-          zIndex: 120,
-          background: "#2563eb",
-          color: "#ffffff",
-          border: "none",
-          borderRadius: "50%",
-          width: "48px",
-          height: "48px",
-          alignItems: "center",
-          justifyContent: "center",
-          boxShadow: "0 4px 14px rgba(37, 99, 235, 0.4)",
-          cursor: "pointer"
-        }}
-      >
-        {mobileOpen ? <X size={22} /> : <Menu size={22} />}
-      </button>
+      {/* Mobile Top App Bar with Branding & Quick Profile / Logout */}
+      <header className="niera-mobile-topbar">
+        <div style={{ display: "flex", alignItems: "center", gap: "0.55rem" }}>
+          <div
+            style={{
+              width: "30px",
+              height: "30px",
+              borderRadius: "8px",
+              background: "#ffffff",
+              border: "1px solid #e2e8f0",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              overflow: "hidden"
+            }}
+          >
+            <img
+              src="/niera-logo.png"
+              alt="Niera"
+              style={{ width: "20px", height: "20px", objectFit: "contain" }}
+            />
+          </div>
+          <div>
+            <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#0f172a", lineHeight: 1.1 }}>
+              Niera
+            </div>
+            <div style={{ fontSize: "0.65rem", color: "#64748b", fontWeight: 600, maxWidth: "150px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {displayOrgName}
+            </div>
+          </div>
+        </div>
 
-      {mobileOpen && (
-        <div
-          onClick={() => setMobileOpen(false)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15, 23, 42, 0.45)",
-            backdropFilter: "blur(4px)",
-            zIndex: 90
-          }}
-        />
-      )}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+          <button
+            type="button"
+            onClick={() => handleItemClick("profile")}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.35rem",
+              background: activeTab === "profile" ? "#eff6ff" : "#f8fafc",
+              border: "1px solid #e2e8f0",
+              borderRadius: "20px",
+              padding: "0.25rem 0.6rem",
+              cursor: "pointer"
+            }}
+          >
+            <div
+              style={{
+                width: "22px",
+                height: "22px",
+                borderRadius: "50%",
+                background: "#2563eb",
+                color: "#ffffff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontWeight: 700,
+                fontSize: "0.72rem"
+              }}
+            >
+              {userName.charAt(0).toUpperCase()}
+            </div>
+            <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#334155" }}>
+              {userName.split(" ")[0]}
+            </span>
+          </button>
 
-      {/* Persistent Rounded & Collapsible Left Dock */}
+          <button
+            type="button"
+            onClick={onLogout}
+            title="Sign Out"
+            style={{
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              borderRadius: "8px",
+              padding: "0.35rem",
+              color: "#64748b",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center"
+            }}
+          >
+            <LogOut size={16} />
+          </button>
+        </div>
+      </header>
+
+      {/* Mobile Bottom Dock Navigation Bar */}
+      <nav className="niera-bottom-dock" aria-label="Mobile Navigation">
+        {navItems.map((item) => {
+          const isActive =
+            activeTab === item.id ||
+            (item.id === "exams" && activeTab === "evaluation") ||
+            (item.id === "dashboard" && activeTab === "subject-detail") ||
+            (item.id === "students" && activeTab === "academics");
+
+          return (
+            <button
+              key={item.id}
+              type="button"
+              className={`niera-dock-item ${isActive ? "active" : ""}`}
+              onClick={() => handleItemClick(item.id)}
+              aria-label={item.label}
+            >
+              <span className="niera-dock-icon">{item.icon}</span>
+              <span className="niera-dock-label">{item.label}</span>
+              {isActive && <span className="niera-dock-indicator" />}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* Desktop Persistent Rounded & Collapsible Left Dock */}
       <aside
-        className={`niera-left-dock ${mobileOpen ? "mobile-open" : ""}`}
+        className="niera-left-dock"
         style={{
           width: isCollapsed ? "72px" : "240px",
           minWidth: isCollapsed ? "72px" : "240px",

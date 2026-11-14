@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { DoubleTapMarkdownEditor } from "./DoubleTapMarkdownEditor";
 import { MarkdownQuestionView } from "./MarkdownQuestionView";
+import { useIsMobile } from "../hooks/useIsMobile";
 import type { Exam, ExamDetailsResponse } from "../types/academic";
 import {
   ArrowLeft,
@@ -36,7 +37,7 @@ export const ExamDetailWorkspace: React.FC<ExamDetailWorkspaceProps> = ({
   details,
   loading,
   onBack,
-  onSelectTargetSection,
+  onSelectTargetSection: _onSelectTargetSection,
   onEditPaperQuestions,
   onOpenFullscreenAnswerKey,
   onOpenUploadSheets: _onOpenUploadSheets,
@@ -47,7 +48,7 @@ export const ExamDetailWorkspace: React.FC<ExamDetailWorkspaceProps> = ({
   onNavigateEvaluation
 }) => {
   const [activeTab, setActiveTab] = useState<"students" | "answer_key" | "questions">("students");
-  const [savingSection, setSavingSection] = useState(false);
+  const isMobile = useIsMobile(768);
   const [savingManualKey, setSavingManualKey] = useState(false);
   const [manualKeyDraft, setManualKeyDraft] = useState<string>("");
   const [draftSyncedExamId, setDraftSyncedExamId] = useState<string>("");
@@ -86,17 +87,7 @@ export const ExamDetailWorkspace: React.FC<ExamDetailWorkspaceProps> = ({
 
   const eligible = details.eligible_students || [];
   const evaluatedCount = eligible.filter((s) => s.evaluated).length;
-  const availableSections = details.available_sections || [];
   const hasAnswerKey = Boolean(exam.answer_key_text && exam.answer_key_text.trim());
-
-  const handleSectionChange = async (sec: string) => {
-    setSavingSection(true);
-    try {
-      await onSelectTargetSection(sec);
-    } finally {
-      setSavingSection(false);
-    }
-  };
 
   const handleSaveKey = async () => {
     setSavingManualKey(true);
@@ -128,12 +119,12 @@ export const ExamDetailWorkspace: React.FC<ExamDetailWorkspaceProps> = ({
           background: "#ffffff",
           border: "1px solid #e2e8f0",
           borderRadius: "16px",
-          padding: "1.35rem 1.5rem",
+          padding: isMobile ? "1rem" : "1.35rem 1.5rem",
           boxShadow: "0 1px 4px rgba(15, 23, 42, 0.04)"
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem", marginBottom: "1rem" }}>
-          <div style={{ display: "flex", alignItems: "flex-start", gap: "0.85rem" }}>
+        <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", alignItems: isMobile ? "stretch" : "flex-start", gap: "1rem" }}>
+          <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "flex-start", gap: "0.85rem", width: isMobile ? "100%" : "auto" }}>
             <button
               type="button"
               onClick={onBack}
@@ -148,14 +139,15 @@ export const ExamDetailWorkspace: React.FC<ExamDetailWorkspaceProps> = ({
                 alignItems: "center",
                 gap: "0.35rem",
                 fontSize: "0.82rem",
-                fontWeight: 700
+                fontWeight: 700,
+                alignSelf: "flex-start"
               }}
             >
               <ArrowLeft size={15} /> All Exams
             </button>
 
-            <div>
-              <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.4rem" }}>
                 <span style={{ background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", padding: "0.18rem 0.55rem", borderRadius: "6px", fontSize: "0.75rem", fontWeight: 700 }}>
                   {details.subject?.code || "SUB"} · {details.subject?.name || "Subject"}
                 </span>
@@ -164,17 +156,22 @@ export const ExamDetailWorkspace: React.FC<ExamDetailWorkspaceProps> = ({
                     {details.class_item.name}
                   </span>
                 )}
+                {exam.target_classes && exam.target_classes.length > 1 && (
+                  <span style={{ background: "#fdf4ff", color: "#86198f", border: "1px solid #f5d0fe", padding: "0.18rem 0.55rem", borderRadius: "6px", fontSize: "0.75rem", fontWeight: 700 }}>
+                    {exam.target_classes.length} Classes Enrolled
+                  </span>
+                )}
                 <span style={{ background: hasAnswerKey ? "#f0fdf4" : "#fffbeb", color: hasAnswerKey ? "#15803d" : "#b45309", border: `1px solid ${hasAnswerKey ? "#bbf7d0" : "#fde68a"}`, padding: "0.18rem 0.55rem", borderRadius: "6px", fontSize: "0.75rem", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
                   {hasAnswerKey ? <CheckCircle2 size={12} /> : <Sparkles size={12} />}
                   {hasAnswerKey ? "Answer Key Ready" : "Answer Key Needed"}
                 </span>
               </div>
 
-              <h1 style={{ fontSize: "1.65rem", fontWeight: 900, color: "#0f172a", margin: "0.45rem 0 0.3rem", letterSpacing: "-0.02em" }}>
+              <h1 style={{ fontSize: isMobile ? "1.28rem" : "1.65rem", fontWeight: 900, color: "#0f172a", margin: "0.45rem 0 0.3rem", letterSpacing: "-0.02em", wordBreak: "break-word" }}>
                 {exam.title}
               </h1>
 
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem", fontSize: "0.82rem", color: "#64748b" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.65rem 1rem", fontSize: "0.8rem", color: "#64748b" }}>
                 <span><strong>{exam.questions?.length || 0}</strong> Questions</span>
                 <span><strong>{exam.max_marks}</strong> Max Marks (Pass: {exam.passing_marks})</span>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: "0.28rem" }}>
@@ -199,12 +196,12 @@ export const ExamDetailWorkspace: React.FC<ExamDetailWorkspaceProps> = ({
             </div>
           </div>
 
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.55rem" }}>
+          <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", flexWrap: "wrap", gap: "0.55rem", width: isMobile ? "100%" : "auto" }}>
             <button
               type="button"
               onClick={() => onEditPaperQuestions(exam)}
               className="btn btn-secondary"
-              style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", fontSize: "0.82rem", fontWeight: 700 }}
+              style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.4rem", fontSize: "0.82rem", fontWeight: 700, width: isMobile ? "100%" : "auto" }}
             >
               <Edit3 size={14} style={{ color: "#2563eb" }} /> Edit Questions &amp; Key
             </button>
@@ -212,70 +209,17 @@ export const ExamDetailWorkspace: React.FC<ExamDetailWorkspaceProps> = ({
               type="button"
               onClick={() => onNavigateEvaluation(exam.id)}
               className="btn btn-primary"
-              style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", fontSize: "0.82rem", fontWeight: 700 }}
+              style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.4rem", fontSize: "0.82rem", fontWeight: 700, width: isMobile ? "100%" : "auto" }}
             >
               <Sparkles size={14} /> Grade Papers &amp; Upload Copies →
             </button>
-          </div>
-        </div>
-
-        {/* Section Target Picker Strip */}
-        <div
-          style={{
-            background: "#f8fafc",
-            border: "1px solid #e2e8f0",
-            borderRadius: "12px",
-            padding: "0.85rem 1.1rem",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: "0.85rem"
-          }}
-        >
-          <div>
-            <div style={{ fontSize: "0.82rem", fontWeight: 800, color: "#0f172a" }}>
-              Target Section Writing This Exam
-            </div>
-            <div style={{ fontSize: "0.76rem", color: "#64748b" }}>
-              Choose whether the entire class cohort writes this exam or restrict it to a specific section (e.g. Section A).
-            </div>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.45rem" }}>
-            {["", ...Array.from(new Set(["A", "B", ...availableSections]))].map((secOpt) => {
-              const currentNorm = (exam.target_section || "").trim().toLowerCase().replace("section ", "");
-              const optNorm = secOpt.trim().toLowerCase().replace("section ", "");
-              const isSelected = currentNorm === optNorm;
-              const label = secOpt ? (secOpt.toLowerCase().startsWith("section") ? secOpt : `Section ${secOpt}`) : "All Sections";
-              return (
-                <button
-                  key={label}
-                  type="button"
-                  disabled={savingSection}
-                  onClick={() => handleSectionChange(secOpt)}
-                  style={{
-                    padding: "0.36rem 0.78rem",
-                    borderRadius: "8px",
-                    border: isSelected ? "1.5px solid #2563eb" : "1px solid #cbd5e1",
-                    background: isSelected ? "#2563eb" : "#ffffff",
-                    color: isSelected ? "#ffffff" : "#334155",
-                    fontSize: "0.78rem",
-                    fontWeight: 700,
-                    cursor: savingSection ? "wait" : "pointer"
-                  }}
-                >
-                  {label}
-                </button>
-              );
-            })}
           </div>
         </div>
       </div>
 
       {/* Tabs Container */}
       <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "16px", overflow: "hidden", boxShadow: "0 1px 4px rgba(15, 23, 42, 0.04)" }}>
-        <div style={{ display: "flex", gap: "1.5rem", padding: "0 1.5rem", borderBottom: "1px solid #e2e8f0", background: "#ffffff" }}>
+        <div style={{ display: "flex", gap: isMobile ? "0.75rem" : "1.5rem", padding: isMobile ? "0 0.85rem" : "0 1.5rem", borderBottom: "1px solid #e2e8f0", background: "#ffffff", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
           {[
             { id: "students" as const, label: `People Writing (${eligible.length}) · ${evaluatedCount} Graded`, icon: Users },
             { id: "answer_key" as const, label: "Answer Key & Rubrics", icon: Sparkles },
@@ -314,22 +258,73 @@ export const ExamDetailWorkspace: React.FC<ExamDetailWorkspaceProps> = ({
           })}
         </div>
 
-        <div style={{ padding: "1.35rem 1.5rem" }}>
+        <div style={{ padding: isMobile ? "0.85rem" : "1.35rem 1.5rem" }}>
           {/* TAB 1: STUDENTS WRITING THIS EXAM */}
           {activeTab === "students" && (
             eligible.length === 0 ? (
               <div style={{ textAlign: "center", padding: "3rem", background: "#f8fafc", borderRadius: "12px", border: "1px dashed #cbd5e1", color: "#64748b" }}>
-                No students match <strong>{exam.target_section ? `Section ${exam.target_section}` : "this cohort"}</strong> yet. Switch target section above or enroll students under Students &amp; Cohorts.
+                No students enrolled in this exam yet. Add or assign students to this class under Students &amp; Cohorts.
+              </div>
+            ) : isMobile ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
+                {eligible.map((st, idx) => (
+                  <div
+                    key={st.student_id}
+                    style={{
+                      background: "#ffffff",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "10px",
+                      padding: "0.85rem",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.5rem"
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                        <span style={{ fontSize: "0.75rem", color: "#94a3b8", fontWeight: 700 }}>#{idx + 1}</span>
+                        <span style={{ fontFamily: "monospace", fontWeight: 700, background: "#f1f5f9", padding: "0.15rem 0.45rem", borderRadius: "5px", fontSize: "0.8rem" }}>
+                          {st.roll_number}
+                        </span>
+                        <span style={{ fontWeight: 800, color: "#0f172a", fontSize: "0.9rem" }}>{st.name}</span>
+                      </div>
+                      <div>
+                        {st.evaluated ? (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0", padding: "0.15rem 0.5rem", borderRadius: "999px", fontSize: "0.72rem", fontWeight: 700 }}>
+                            <FileCheck2 size={11} /> {st.total_score}/{st.max_score} ({st.grade})
+                          </span>
+                        ) : (
+                          <span style={{ background: "#f8fafc", color: "#64748b", border: "1px solid #e2e8f0", padding: "0.15rem 0.5rem", borderRadius: "999px", fontSize: "0.72rem", fontWeight: 600 }}>
+                            Pending
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "0.35rem", borderTop: "1px solid #f1f5f9" }}>
+                      <span style={{ fontSize: "0.74rem", color: "#64748b" }}>
+                        CGPA: <strong>{st.cgpa_or_percentage && st.cgpa_or_percentage > 0 ? st.cgpa_or_percentage.toFixed(2) : "—"}</strong>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onNavigateEvaluation(exam.id, st.evaluation_id)}
+                        className="btn btn-secondary"
+                        style={{ fontSize: "0.76rem", padding: "0.3rem 0.75rem" }}
+                      >
+                        {st.evaluated ? "View Scorecard" : "Evaluate"}
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+              <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+                <table style={{ width: "100%", minWidth: "750px", borderCollapse: "collapse", textAlign: "left" }}>
                   <thead>
                     <tr style={{ borderBottom: "1px solid #e2e8f0", fontSize: "0.72rem", color: "#64748b", textTransform: "uppercase" }}>
                       <th style={{ padding: "0.65rem 0.9rem" }}>#</th>
                       <th style={{ padding: "0.65rem 0.9rem" }}>Roll No</th>
                       <th style={{ padding: "0.65rem 0.9rem" }}>Student Name</th>
-                      <th style={{ padding: "0.65rem 0.9rem" }}>Section</th>
                       <th style={{ padding: "0.65rem 0.9rem" }}>Enrolled Subjects</th>
                       <th style={{ padding: "0.65rem 0.9rem" }}>CGPA</th>
                       <th style={{ padding: "0.65rem 0.9rem" }}>Evaluation Status</th>
@@ -346,11 +341,6 @@ export const ExamDetailWorkspace: React.FC<ExamDetailWorkspaceProps> = ({
                           </span>
                         </td>
                         <td style={{ padding: "0.75rem 0.9rem", fontWeight: 700, color: "#0f172a" }}>{st.name}</td>
-                        <td style={{ padding: "0.75rem 0.9rem" }}>
-                          <span style={{ background: "#e2e8f0", color: "#334155", padding: "0.14rem 0.5rem", borderRadius: "4px", fontSize: "0.75rem", fontWeight: 700 }}>
-                            Section {(st.sections && st.sections.join(", ")) || st.section || "A"}
-                          </span>
-                        </td>
                         <td style={{ padding: "0.75rem 0.9rem" }}>
                           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
                             {(st.enrolled_subjects || []).map((tag) => (

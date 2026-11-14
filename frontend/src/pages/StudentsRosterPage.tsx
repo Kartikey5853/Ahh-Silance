@@ -505,8 +505,8 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
 
         {/* Unified Table: Students + Marks */}
         {filteredConsolidatedList.length > 0 ? (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
+          <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+            <table style={{ width: "100%", minWidth: "720px", borderCollapse: "collapse", fontSize: "0.85rem" }}>
               <thead>
                 <tr style={{ background: "#f8fafc", borderBottom: "2px solid #e2e8f0", textAlign: "left" }}>
                   <th style={{ padding: "0.75rem 1rem", fontWeight: 700, color: "#475569", width: "100px" }}>Roll No</th>
@@ -753,17 +753,6 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                     style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
                   />
                 </div>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                    Section
-                  </label>
-                  <input
-                    type="text"
-                    value={section}
-                    onChange={(e) => setSection(e.target.value)}
-                    style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
-                  />
-                </div>
               </div>
 
               <div style={{ marginBottom: "1.25rem" }}>
@@ -894,8 +883,8 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                 </div>
               )}
 
-              <div style={{ border: "1px solid #e2e8f0", borderRadius: "10px", overflow: "hidden" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem", textAlign: "left" }}>
+              <div style={{ border: "1px solid #e2e8f0", borderRadius: "10px", overflow: "hidden", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+                <table style={{ width: "100%", minWidth: "680px", borderCollapse: "collapse", fontSize: "0.82rem", textAlign: "left" }}>
                   <thead>
                     <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
                       <th style={{ padding: "0.6rem 0.85rem", color: "#64748b", fontWeight: 700 }}>Roll No</th>

@@ -104,8 +104,8 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({ onViewScorecard }) => 
           </p>
         </div>
       ) : (
-        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.88rem" }}>
+        <div className="card" style={{ padding: 0, overflow: "hidden", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+          <table style={{ width: "100%", minWidth: "640px", borderCollapse: "collapse", fontSize: "0.88rem" }}>
             <thead>
               <tr style={{ background: "var(--bg-secondary)", borderBottom: "1px solid var(--border-color)", textAlign: "left" }}>
                 <th style={{ padding: "0.75rem 1rem" }}>Evaluation ID</th>

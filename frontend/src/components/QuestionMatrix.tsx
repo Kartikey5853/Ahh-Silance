@@ -266,8 +266,8 @@ export const QuestionMatrix: React.FC<QuestionMatrixProps> = ({ questions, examT
       </div>
 
       {/* Question Table */}
-      <div style={{ overflowX: "auto", marginTop: "1rem" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
+      <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", marginTop: "1rem" }}>
+        <table style={{ width: "100%", minWidth: "640px", borderCollapse: "collapse", fontSize: "0.85rem" }}>
           <thead>
             <tr style={{ borderBottom: "2px solid var(--border-color)", textAlign: "left", background: "var(--bg-secondary)" }}>
               <th style={{ padding: "0.6rem 0.75rem" }}>Q#</th>

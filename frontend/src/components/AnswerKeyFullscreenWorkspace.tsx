@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { resolveApiUrl } from "../api/client";
+import { useIsMobile } from "../hooks/useIsMobile";
 import { DoubleTapMarkdownEditor } from "./DoubleTapMarkdownEditor";
 import { MarkdownQuestionView } from "./MarkdownQuestionView";
 import type { AnswerKeyStructuredItem, Exam, Subject } from "../types/academic";
@@ -81,6 +82,8 @@ export const AnswerKeyFullscreenWorkspace: React.FC<AnswerKeyFullscreenWorkspace
   const [paperZoom, setPaperZoom] = useState<number>(85);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [paperLoadError, setPaperLoadError] = useState<boolean>(false);
+  const isMobile = useIsMobile(768);
+  const [mobileTab, setMobileTab] = useState<"rubrics" | "paper">("rubrics");
 
   const items: AnswerKeyStructuredItem[] =
     structuredAnswers.length > 0 ? structuredAnswers : scaffoldFromQuestions(exam);
@@ -343,23 +346,82 @@ export const AnswerKeyFullscreenWorkspace: React.FC<AnswerKeyFullscreenWorkspace
         </div>
       )}
 
+      {/* Mobile Tab Switcher */}
+      {isMobile && (
+        <div
+          style={{
+            display: "flex",
+            background: "#ffffff",
+            borderBottom: "1px solid #e2e8f0",
+            padding: "0.4rem 0.75rem",
+            gap: "0.35rem"
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setMobileTab("rubrics")}
+            style={{
+              flex: 1,
+              padding: "0.5rem 0.75rem",
+              borderRadius: "8px",
+              border: "none",
+              background: mobileTab === "rubrics" ? "#2563eb" : "transparent",
+              color: mobileTab === "rubrics" ? "#ffffff" : "#475569",
+              fontSize: "0.84rem",
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.35rem"
+            }}
+          >
+            <Sparkles size={14} />
+            <span>Rubrics &amp; Keys</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileTab("paper")}
+            style={{
+              flex: 1,
+              padding: "0.5rem 0.75rem",
+              borderRadius: "8px",
+              border: "none",
+              background: mobileTab === "paper" ? "#2563eb" : "transparent",
+              color: mobileTab === "paper" ? "#ffffff" : "#475569",
+              fontSize: "0.84rem",
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.35rem"
+            }}
+          >
+            <Eye size={14} />
+            <span>Scanned Paper</span>
+          </button>
+        </div>
+      )}
+
       {/* Fullscreen Pure-White 2-Column Split Body */}
       <div
         style={{
           flex: 1,
           minHeight: 0,
           display: "grid",
-          gridTemplateColumns: "1.08fr 0.92fr",
+          gridTemplateColumns: isMobile ? "1fr" : "1.08fr 0.92fr",
           background: "#f8fafc"
         }}
       >
         {/* LEFT PANE: Structured Rubric Cards OR Manual Answer Key Editor */}
+        {(!isMobile || mobileTab === "rubrics") && (
         <div
           style={{
             overflowY: "auto",
             padding: "1.25rem 1.5rem",
             background: "#ffffff",
-            borderRight: "1px solid #e2e8f0",
+            borderRight: isMobile ? "none" : "1px solid #e2e8f0",
             display: "flex",
             flexDirection: "column",
             gap: "1rem"
@@ -693,8 +755,10 @@ export const AnswerKeyFullscreenWorkspace: React.FC<AnswerKeyFullscreenWorkspace
             </>
           )}
         </div>
+        )}
 
         {/* RIGHT PANE: Real Scanned Paper Viewer & Active Question Highlight */}
+        {(!isMobile || mobileTab === "paper") && (
         <div style={{ display: "flex", flexDirection: "column", minHeight: 0, background: "#f8fafc" }}>
           <div
             style={{
@@ -835,6 +899,7 @@ export const AnswerKeyFullscreenWorkspace: React.FC<AnswerKeyFullscreenWorkspace
             )}
           </div>
         </div>
+        )}
       </div>
     </div>
   );

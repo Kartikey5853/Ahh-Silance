@@ -657,8 +657,8 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                       No previous semester SGPA/CGPA records added yet. Click &quot;Add Semester Record&quot; to log historical semesters.
                     </div>
                   ) : (
-                    <div style={{ overflowX: "auto" }}>
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8rem" }}>
+                    <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+                      <table style={{ width: "100%", minWidth: "500px", borderCollapse: "collapse", fontSize: "0.8rem" }}>
                         <thead>
                           <tr style={{ borderBottom: "1px solid #cbd5e1", color: "#475569", textAlign: "left" }}>
                             <th style={{ padding: "0.4rem 0.5rem" }}>Semester</th>

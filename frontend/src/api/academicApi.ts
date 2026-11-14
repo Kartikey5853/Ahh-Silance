@@ -229,6 +229,7 @@ export const academicApi = {
       passing_marks: number;
       academic_year: string;
       target_section: string;
+      target_classes: string[];
       exam_date: string;
       correction_deadline: string;
       answer_key_text: string;
@@ -280,6 +281,7 @@ export const academicApi = {
     passing_marks: number;
     academic_year: string;
     target_section?: string;
+    target_classes?: string[];
     exam_date?: string;
     correction_deadline?: string;
     question_paper_filename?: string;
@@ -303,6 +305,7 @@ export const academicApi = {
       question_paper_filename?: string;
       title?: string;
       target_section?: string;
+      target_classes?: string[];
       correction_deadline?: string;
     }
   ): Promise<any> => {

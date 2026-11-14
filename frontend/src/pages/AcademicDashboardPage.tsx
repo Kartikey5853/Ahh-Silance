@@ -45,7 +45,6 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
   const [newStudentName, setNewStudentName] = useState("");
   const [newStudentRoll, setNewStudentRoll] = useState("");
-  const [newStudentSection, setNewStudentSection] = useState("A");
   const [newStudentEmail, setNewStudentEmail] = useState("");
   const [newStudentParentName, setNewStudentParentName] = useState("");
   const [newStudentParentPhone, setNewStudentParentPhone] = useState("");
@@ -82,7 +81,7 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({
       await academicApi.addStudentToClass(selectedClassDetail.id, {
         name: newStudentName.trim(),
         roll_number: newStudentRoll.trim(),
-        section: newStudentSection.trim() || "A",
+        section: "A",
         email: newStudentEmail.trim(),
         parent_name: newStudentParentName.trim(),
         parent_phone: newStudentParentPhone.trim()
@@ -140,6 +139,7 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({
   const [subjName, setSubjName] = useState("Science");
   const [subjCode, setSubjCode] = useState("SCI-10");
   const [subjSem, setSubjSem] = useState("Class 10 - Term 1");
+  const [subjCredits, setSubjCredits] = useState<number>(4);
   const [subjClassId, setSubjClassId] = useState<string>("");
 
   // Inline Quick Add Class within Subject Creation
@@ -253,7 +253,7 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({
         class_id: subjClassId || (classes[0]?.id ?? undefined),
         institution_type: currentOrg?.type || "school",
         semester_or_grade: subjSem,
-        credits: 4,
+        credits: Number(subjCredits) || 4,
         academic_year: "2026-2027",
         chapters: []
       });
@@ -261,6 +261,7 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({
       setShowSubjModal(false);
       setSubjName("");
       setSubjCode("");
+      setSubjCredits(4);
       // Real re-fetch from SQLite database
       const updatedSubjects = await academicApi.listSubjects();
       setSubjects(updatedSubjects);
@@ -479,8 +480,8 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({
                 </div>
               </div>
             ) : (
-              <div style={{ border: "1px solid #e2e8f0", borderRadius: "10px", overflow: "hidden" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.85rem" }}>
+              <div style={{ border: "1px solid #e2e8f0", borderRadius: "10px", overflow: "hidden", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+                <table style={{ width: "100%", minWidth: "620px", borderCollapse: "collapse", textAlign: "left", fontSize: "0.85rem" }}>
                   <thead>
                     <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
                       <th style={{ padding: "0.7rem 1rem", color: "#64748b", fontWeight: 700 }}>Roll No</th>
@@ -1114,7 +1115,7 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({
                 />
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "0.85rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 0.8fr", gap: "0.75rem", marginBottom: "0.85rem" }}>
                 <div>
                   <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
                     Code
@@ -1137,6 +1138,20 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({
                     onChange={(e) => setSubjSem(e.target.value)}
                     placeholder="e.g. Class 10 Term 1"
                     style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
+                    Credits
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={subjCredits}
+                    onChange={(e) => setSubjCredits(Math.max(1, Number(e.target.value) || 1))}
+                    placeholder="4"
+                    style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem", fontWeight: 700 }}
                   />
                 </div>
               </div>
@@ -1400,18 +1415,6 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({
                     placeholder="e.g. 101"
                     value={newStudentRoll}
                     onChange={(e) => setNewStudentRoll(e.target.value)}
-                    style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 700, marginBottom: "0.3rem" }}>
-                    Section
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="A"
-                    value={newStudentSection}
-                    onChange={(e) => setNewStudentSection(e.target.value)}
                     style={{ width: "100%", padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem" }}
                   />
                 </div>

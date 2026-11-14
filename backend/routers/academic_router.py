@@ -148,6 +148,7 @@ class ExamCreateRequest(BaseModel):
     passing_marks: float = 20.0
     academic_year: str = "2026-2027"
     target_section: Optional[str] = ""
+    target_classes: Optional[List[str]] = None
     exam_date: Optional[str] = None
     correction_deadline: Optional[str] = None
     question_paper_filename: Optional[str] = ""
@@ -166,6 +167,7 @@ class QuestionsUpdateRequest(BaseModel):
     question_paper_filename: Optional[str] = None
     title: Optional[str] = None
     target_section: Optional[str] = None
+    target_classes: Optional[List[str]] = None
     correction_deadline: Optional[str] = None
 
 
@@ -176,6 +178,7 @@ class ExamUpdateRequest(BaseModel):
     passing_marks: Optional[float] = None
     academic_year: Optional[str] = None
     target_section: Optional[str] = None
+    target_classes: Optional[List[str]] = None
     exam_date: Optional[str] = None
     correction_deadline: Optional[str] = None
     answer_key_text: Optional[str] = None
@@ -296,16 +299,19 @@ def update_profile(req: ProfileUpdateRequest, current_user: Optional[Dict[str, A
 # 2. Institutions
 @router.get("/institutions")
 def list_institutions(current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)):
-    """Lists configured academic institutions. For non-admins, strictly scoped to their own affiliated institution."""
+    """Lists configured academic institutions. For non-admins, strictly scoped to their own affiliated or created institutions."""
     all_insts = db.list_institutions()
     if not current_user:
         return all_insts
     user_inst_id = current_user.get("institution_id") or ""
+    user_id = current_user.get("id") or 0
     user_role = (current_user.get("role") or "").strip().lower()
     if user_role in ["admin"]:
         return all_insts
-    if user_inst_id:
-        return [i for i in all_insts if i["id"] == user_inst_id]
+    if user_inst_id or user_id:
+        scoped = [i for i in all_insts if (user_inst_id and i["id"] == user_inst_id) or (user_id and i.get("created_by_user_id") == user_id)]
+        if scoped:
+            return scoped
     return all_insts
 
 
@@ -313,7 +319,8 @@ def list_institutions(current_user: Optional[Dict[str, Any]] = Depends(get_optio
 def create_institution(req: InstitutionCreateRequest, current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)):
     """Creates a new institution / organization and associates it with the active user."""
     inst_id = f"inst-{uuid.uuid4().hex[:8]}"
-    created = db.create_institution(inst_id, req.name, req.type, req.code or "", req.config or {})
+    user_id = current_user.get("id", 0) if current_user else 0
+    created = db.create_institution(inst_id, req.name, req.type, req.code or "", req.config or {}, created_by_user_id=user_id)
     if current_user and current_user.get("username"):
         u = db.get_user_by_username(current_user["username"])
         if u and not u.get("institution_id"):
@@ -867,10 +874,15 @@ def get_exam_details(exam_id: str):
     subject = db.get_subject(exam["subject_id"]) if exam.get("subject_id") else None
     class_item = db.get_class(subject["class_id"]) if subject and subject.get("class_id") else None
 
-    # Gather cohort students (both direct subject rows and parent class rows)
+    # Gather cohort students (direct subject rows, primary class rows, and any target_classes rows)
     subject_rows = db.list_students(subject_id=exam.get("subject_id")) if exam.get("subject_id") else []
     class_rows = db.list_students(class_id=class_item["id"]) if class_item else []
-    combined_rows = subject_rows + class_rows
+    target_class_ids = exam.get("target_classes") or []
+    extra_class_rows: List[Dict[str, Any]] = []
+    for t_cid in target_class_ids:
+        if not class_item or t_cid != class_item["id"]:
+            extra_class_rows.extend(db.list_students(class_id=t_cid))
+    combined_rows = subject_rows + class_rows + extra_class_rows
 
     subject_lookup = {s["id"]: s for s in db.list_subjects()}
     exam_evals = db.list_academic_evaluations(exam_id=exam_id)

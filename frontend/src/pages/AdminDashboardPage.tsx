@@ -772,8 +772,8 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onNaviga
           </div>
 
           {/* Faculty Table */}
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+          <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+            <table style={{ width: "100%", minWidth: "680px", borderCollapse: "collapse", textAlign: "left" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
                   <th style={{ padding: "0.75rem 1rem", fontSize: "0.74rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
@@ -1021,8 +1021,8 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({ onNaviga
           </div>
 
           {/* Student Table */}
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+          <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
+            <table style={{ width: "100%", minWidth: "680px", borderCollapse: "collapse", textAlign: "left" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
                   <th style={{ padding: "0.75rem 1rem", fontSize: "0.74rem", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
