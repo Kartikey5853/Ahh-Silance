@@ -2429,8 +2429,20 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
                         <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
                           <Calendar size={14} /> Exam: {ex.exam_date || "Pending"}
                         </span>
-                        <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                          <Clock size={14} /> Due: {ex.correction_deadline || "Upcoming"}
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.3rem",
+                            color: "#dc2626",
+                            background: "#fef2f2",
+                            border: "1px solid #fecaca",
+                            padding: "0.12rem 0.45rem",
+                            borderRadius: "4px",
+                            fontWeight: 700
+                          }}
+                        >
+                          <Clock size={14} style={{ color: "#dc2626" }} /> Due: {ex.correction_deadline || "Upcoming"}
                         </span>
                       </div>
 

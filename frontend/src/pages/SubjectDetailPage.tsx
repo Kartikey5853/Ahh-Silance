@@ -325,8 +325,20 @@ export const SubjectDetailPage: React.FC<SubjectDetailPageProps> = ({
                         <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
                           <Calendar size={13} /> {exam.exam_date || "Exam Date Pending"}
                         </span>
-                        <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                          <Clock size={13} /> Deadline: {exam.correction_deadline || "Upcoming"}
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.3rem",
+                            color: "#dc2626",
+                            background: "#fef2f2",
+                            border: "1px solid #fecaca",
+                            padding: "0.12rem 0.45rem",
+                            borderRadius: "4px",
+                            fontWeight: 700
+                          }}
+                        >
+                          <Clock size={13} style={{ color: "#dc2626" }} /> Deadline: {exam.correction_deadline || "Upcoming"}
                         </span>
                       </div>
 

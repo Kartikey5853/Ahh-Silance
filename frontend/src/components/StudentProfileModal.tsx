@@ -975,8 +975,20 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
                             Exam Date: {ex.exam_date || "Upcoming"}
                           </span>
                           {ex.correction_deadline && (
-                            <span style={{ display: "flex", alignItems: "center", gap: "0.3rem", color: "#0369a1", fontWeight: 600 }}>
-                              <Clock size={13} />
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.3rem",
+                                color: "#dc2626",
+                                background: "#fef2f2",
+                                border: "1px solid #fecaca",
+                                padding: "0.12rem 0.45rem",
+                                borderRadius: "4px",
+                                fontWeight: 700
+                              }}
+                            >
+                              <Clock size={13} style={{ color: "#dc2626" }} />
                               Deadline: {ex.correction_deadline}
                             </span>
                           )}

@@ -3,7 +3,7 @@
  * Question Paper Extraction, and Strict Grading.
  */
 
-export type InstitutionType = "college" | "school" | "competitive";
+export type InstitutionType = "college" | "school" | "institution" | "competitive";
 
 export interface Institution {
   id: string;

@@ -271,36 +271,6 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({
 
   return (
     <div className="academic-dashboard-page" style={{ maxWidth: "1280px", margin: "0 auto", paddingBottom: "4rem" }}>
-      {/* Welcome Banner */}
-      <div
-        style={{
-          background: "#ffffff",
-          border: "1px solid #e2e8f0",
-          borderRadius: "14px",
-          padding: "1.25rem 1.5rem",
-          marginBottom: "1.25rem"
-        }}
-      >
-        <h1
-          style={{
-            fontSize: "1.45rem",
-            fontWeight: 800,
-            color: "#0f172a",
-            letterSpacing: "-0.03em",
-            margin: 0,
-            display: "flex",
-            alignItems: "center",
-            gap: "0.45rem"
-          }}
-        >
-          <span>Namaste, {profile?.full_name || "Faculty"}</span>
-          <Sparkles size={18} style={{ color: "#2563eb" }} />
-        </h1>
-        <p style={{ color: "#64748b", fontSize: "0.85rem", margin: "4px 0 0 0", fontWeight: 600 }}>
-          {currentOrg?.name || "Academic Portal"}
-        </p>
-      </div>
-
       {selectedClassDetail ? (
         /* ============================================================== */
         /* CLASS DETAILS VIEW (Students Roster & Nested Recent Exams)     */

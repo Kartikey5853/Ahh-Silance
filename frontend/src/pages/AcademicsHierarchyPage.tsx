@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { academicApi } from "../api/academicApi";
-import type { Subject, Institution, ClassItem } from "../types/academic";
+import type { Subject, Institution, ClassItem, InstitutionType } from "../types/academic";
 import {
   Building2,
   FolderGit2,
@@ -103,8 +103,8 @@ export const AcademicsHierarchyPage: React.FC<AcademicsHierarchyProps> = ({ onNa
     { label: "Crash Course", name: "JEE Main Final Lap Crash Course", code: "JEE-CRASH", dept: "Mock Tests & Rank Boost" },
   ];
 
-  const applyOrgTypeDefaults = (type: "college" | "school" | "competitive") => {
-    if (type === "college") {
+  const applyOrgTypeDefaults = (type: InstitutionType) => {
+    if (type === "college" || type === "institution") {
       setNewClassName("Semester 1");
       setNewClassCode("SEM-01");
       setNewClassDept("Computer Science & Engineering");

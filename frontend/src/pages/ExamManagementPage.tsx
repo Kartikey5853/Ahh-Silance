@@ -1428,19 +1428,19 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
   // ==========================================
   if (viewMode === "list") {
     return (
-      <div className="exam-management-page pb-28">
-        {/* Header Bar */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem", marginBottom: "1.25rem" }}>
+      <div className="exam-management-page pb-20">
+        {/* Compact Header Bar */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem", marginBottom: "0.75rem" }}>
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-              <h1 style={{ fontSize: "1.85rem", fontWeight: 900, color: "#0f172a", letterSpacing: "-0.03em", margin: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <h1 style={{ fontSize: "1.35rem", fontWeight: 900, color: "#0f172a", letterSpacing: "-0.03em", margin: 0 }}>
                 Examinations &amp; Papers
               </h1>
-              <span style={{ background: "#e0e7ff", color: "#3730a3", fontSize: "0.78rem", fontWeight: 700, padding: "0.25rem 0.65rem", borderRadius: "9999px" }}>
+              <span style={{ background: "#e0e7ff", color: "#3730a3", fontSize: "0.75rem", fontWeight: 700, padding: "0.15rem 0.55rem", borderRadius: "9999px" }}>
                 {exams.length} Total Exams
               </span>
             </div>
-            <p style={{ color: "#64748b", fontSize: "0.88rem", marginTop: "0.3rem", margin: 0 }}>
+            <p style={{ color: "#64748b", fontSize: "0.8rem", marginTop: "0.15rem", margin: 0 }}>
               Digitize question papers, edit rubrics and master answer keys, and evaluate student copies all in one unified desk.
             </p>
           </div>
@@ -1448,89 +1448,66 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
           <button
             onClick={() => handleStartUploadNewExam()}
             className="btn btn-primary"
-            style={{ display: "flex", alignItems: "center", gap: "0.45rem", padding: "0.6rem 1.1rem", fontSize: "0.88rem", borderRadius: "8px" }}
+            style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem", fontSize: "0.82rem", borderRadius: "8px" }}
           >
-            <Plus size={16} />
+            <Plus size={15} />
             + Create New Exam
           </button>
         </div>
 
-        {/* Evaluation Deadlines & Key Statistics Strip */}
+        {/* Compact Metrics Ribbon */}
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-            gap: "0.85rem",
-            marginBottom: "1.25rem"
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            flexWrap: "wrap",
+            marginBottom: "0.75rem"
           }}
         >
-          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "0.85rem 1rem", display: "flex", alignItems: "center", gap: "0.75rem", boxShadow: "0 1px 2px rgba(0,0,0,0.02)" }}>
-            <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#eff6ff", color: "#2563eb", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <Calendar size={18} />
-            </div>
-            <div>
-              <div style={{ fontSize: "1.2rem", fontWeight: 800, color: "#0f172a" }}>{exams.length}</div>
-              <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600 }}>Scheduled Exams</div>
-            </div>
+          <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1d4ed8", padding: "0.25rem 0.65rem", borderRadius: "6px", fontSize: "0.76rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.35rem" }}>
+            <Calendar size={13} />
+            <span>{exams.length} Scheduled</span>
           </div>
 
-          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "0.85rem 1rem", display: "flex", alignItems: "center", gap: "0.75rem", boxShadow: "0 1px 2px rgba(0,0,0,0.02)" }}>
-            <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#f0fdf4", color: "#16a34a", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <CheckCircle2 size={18} />
-            </div>
-            <div>
-              <div style={{ fontSize: "1.2rem", fontWeight: 800, color: "#16a34a" }}>
-                {exams.filter((e) => e.answer_key_text && e.answer_key_text.trim()).length}
-              </div>
-              <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600 }}>Answer Keys Approved</div>
-            </div>
+          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#15803d", padding: "0.25rem 0.65rem", borderRadius: "6px", fontSize: "0.76rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.35rem" }}>
+            <CheckCircle2 size={13} />
+            <span>{exams.filter((e) => e.answer_key_text && e.answer_key_text.trim()).length} Keys Approved</span>
           </div>
 
-          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "0.85rem 1rem", display: "flex", alignItems: "center", gap: "0.75rem", boxShadow: "0 1px 2px rgba(0,0,0,0.02)" }}>
-            <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#fffbeb", color: "#d97706", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <Clock size={18} />
-            </div>
-            <div>
-              <div style={{ fontSize: "1.2rem", fontWeight: 800, color: "#d97706" }}>
-                {exams.filter((e) => !e.answer_key_text || !e.answer_key_text.trim()).length}
-              </div>
-              <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600 }}>Pending Keys</div>
-            </div>
+          <div style={{ background: "#fffbeb", border: "1px solid #fde68a", color: "#b45309", padding: "0.25rem 0.65rem", borderRadius: "6px", fontSize: "0.76rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.35rem" }}>
+            <Clock size={13} />
+            <span>{exams.filter((e) => !e.answer_key_text || !e.answer_key_text.trim()).length} Pending Keys</span>
           </div>
 
-          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "0.85rem 1rem", display: "flex", alignItems: "center", gap: "0.75rem", boxShadow: "0 1px 2px rgba(0,0,0,0.02)" }}>
-            <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#f1f5f9", color: "#334155", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <FolderGit2 size={18} />
-            </div>
-            <div>
-              <div style={{ fontSize: "1.2rem", fontWeight: 800, color: "#0f172a" }}>{classes.length}</div>
-              <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600 }}>Classes / Batches</div>
-            </div>
+          <div style={{ background: "#f8fafc", border: "1px solid #cbd5e1", color: "#334155", padding: "0.25rem 0.65rem", borderRadius: "6px", fontSize: "0.76rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.35rem" }}>
+            <FolderGit2 size={13} />
+            <span>{classes.length} Classes</span>
           </div>
         </div>
 
-        {/* Fast-Track Student Copies & Rapid Grading Box */}
+        {/* Fast-Track Student Copies & Rapid Grading Bar */}
         {exams.length > 0 && (
           <div
             style={{
               background: "#ffffff",
               border: "1.5px dashed #3b82f6",
-              borderRadius: "14px",
-              padding: "1rem 1.25rem",
-              marginBottom: "1.25rem",
+              borderRadius: "10px",
+              padding: "0.55rem 0.85rem",
+              marginBottom: "0.75rem",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
               flexWrap: "wrap",
-              gap: "1rem"
+              gap: "0.65rem"
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
               <div
                 style={{
-                  width: "42px",
-                  height: "42px",
-                  borderRadius: "10px",
+                  width: "30px",
+                  height: "30px",
+                  borderRadius: "7px",
                   background: "#eff6ff",
                   color: "#2563eb",
                   display: "flex",
@@ -1539,31 +1516,31 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                   flexShrink: 0
                 }}
               >
-                <UploadCloud size={22} />
+                <UploadCloud size={16} />
               </div>
               <div>
-                <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#0f172a" }}>
+                <div style={{ fontSize: "0.86rem", fontWeight: 800, color: "#0f172a" }}>
                   Fast-Track Student Copies Evaluation
                 </div>
-                <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
-                  Select an examination to drop student booklet PDFs, run automated zero-temperature AI grading, and review student marks.
+                <div style={{ fontSize: "0.74rem", color: "#64748b" }}>
+                  Select an exam to drop booklet PDFs and evaluate student marks.
                 </div>
               </div>
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
               <select
                 value={quickGradingExamId || (exams[0]?.id || "")}
                 onChange={(e) => setQuickGradingExamId(e.target.value)}
                 style={{
-                  padding: "0.48rem 0.75rem",
-                  borderRadius: "8px",
+                  padding: "0.38rem 0.65rem",
+                  borderRadius: "6px",
                   border: "1px solid #cbd5e1",
-                  fontSize: "0.82rem",
+                  fontSize: "0.78rem",
                   background: "#ffffff",
                   color: "#1e293b",
                   fontWeight: 600,
-                  maxWidth: "260px"
+                  maxWidth: "240px"
                 }}
                 title="Select Exam to Grade"
               >
@@ -1582,15 +1559,15 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                 }}
                 className="btn btn-primary"
                 style={{
-                  fontSize: "0.82rem",
+                  fontSize: "0.78rem",
                   fontWeight: 700,
-                  padding: "0.5rem 0.95rem",
+                  padding: "0.4rem 0.8rem",
                   display: "flex",
                   alignItems: "center",
-                  gap: "0.4rem"
+                  gap: "0.35rem"
                 }}
               >
-                <Sparkles size={14} />
+                <Sparkles size={13} />
                 Grade Papers &amp; Upload Copies →
               </button>
             </div>
@@ -1602,26 +1579,26 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
           style={{
             background: "#ffffff",
             border: "1px solid #e2e8f0",
-            borderRadius: "12px",
-            padding: "0.75rem 1rem",
-            marginBottom: "1.5rem",
+            borderRadius: "10px",
+            padding: "0.5rem 0.75rem",
+            marginBottom: "0.85rem",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             flexWrap: "wrap",
-            gap: "0.75rem",
-            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.03)"
+            gap: "0.6rem",
+            boxShadow: "0 1px 2px rgba(0, 0, 0, 0.02)"
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flex: 1, minWidth: "260px" }}>
-            <div style={{ position: "relative", width: "100%", maxWidth: "340px" }}>
-              <Search size={16} style={{ position: "absolute", left: "0.75rem", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
+          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flex: 1, minWidth: "240px" }}>
+            <div style={{ position: "relative", width: "100%", maxWidth: "300px" }}>
+              <Search size={15} style={{ position: "absolute", left: "0.65rem", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
               <input
                 type="text"
                 placeholder="Search examination title..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ width: "100%", padding: "0.5rem 0.75rem 0.5rem 2.25rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem", outline: "none" }}
+                style={{ width: "100%", padding: "0.4rem 0.65rem 0.4rem 2rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.8rem", outline: "none" }}
               />
             </div>
 
@@ -1629,7 +1606,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
               <select
                 value={selectedSubjectId}
                 onChange={(e) => setSelectedSubjectId(e.target.value)}
-                style={{ padding: "0.5rem 0.75rem", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem", background: "#ffffff", color: "#1e293b", fontWeight: 500 }}
+                style={{ padding: "0.4rem 0.65rem", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.8rem", background: "#ffffff", color: "#1e293b", fontWeight: 500 }}
               >
                 <option value="">Subject: All Subjects</option>
                 {subjects.map((s) => (
@@ -1639,25 +1616,25 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
             </div>
           </div>
 
-          <button onClick={loadExams} style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 0.75rem", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", color: "#475569", fontSize: "0.85rem", cursor: "pointer", fontWeight: 500 }}>
-            <RefreshCw size={14} className={loading ? "spin" : ""} /> Refresh
+          <button onClick={loadExams} style={{ display: "flex", alignItems: "center", gap: "0.3rem", padding: "0.4rem 0.65rem", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "6px", color: "#475569", fontSize: "0.8rem", cursor: "pointer", fontWeight: 500 }}>
+            <RefreshCw size={13} className={loading ? "spin" : ""} /> Refresh
           </button>
         </div>
 
         {/* CLUSTERED BY CLASS EXAM BOXES */}
         {loading ? (
-          <div style={{ textAlign: "center", padding: "4rem", color: "#64748b" }}>Loading examinations...</div>
+          <div style={{ textAlign: "center", padding: "3rem", color: "#64748b" }}>Loading examinations...</div>
         ) : classes.length === 0 && unassignedExams.length === 0 ? (
-          <div style={{ background: "#ffffff", border: "2px dashed #cbd5e1", borderRadius: "16px", padding: "4rem 2rem", textAlign: "center" }}>
-            <FileSpreadsheet size={48} style={{ color: "#94a3b8", margin: "0 auto 1rem" }} />
-            <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.4rem" }}>No Examinations Scheduled</h3>
-            <p style={{ color: "#64748b", fontSize: "0.9rem", maxWidth: "460px", margin: "0 auto 1.5rem" }}>
+          <div style={{ background: "#ffffff", border: "2px dashed #cbd5e1", borderRadius: "14px", padding: "3rem 1.5rem", textAlign: "center" }}>
+            <FileSpreadsheet size={42} style={{ color: "#94a3b8", margin: "0 auto 0.75rem" }} />
+            <h3 style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.3rem" }}>No Examinations Scheduled</h3>
+            <p style={{ color: "#64748b", fontSize: "0.85rem", maxWidth: "440px", margin: "0 auto 1.25rem" }}>
               Upload your first question paper to scan with Gemini, create digital rubrics, and evaluate students.
             </p>
             <button onClick={() => handleStartUploadNewExam()} className="btn btn-primary">+ Create First Exam</button>
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
             {classes.map((cls) => {
               const classExams = (examsByClass.get(cls.id) || []).filter((ex) => {
                 if (!searchQuery) return true;
@@ -1670,43 +1647,43 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                   style={{
                     background: "#ffffff",
                     border: "1px solid #e2e8f0",
-                    borderRadius: "16px",
+                    borderRadius: "12px",
                     overflow: "hidden",
-                    boxShadow: "0 1px 4px rgba(0, 0, 0, 0.04)"
+                    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.03)"
                   }}
                 >
                   {/* Class Header */}
                   <div
                     style={{
-                      padding: "1.1rem 1.5rem",
+                      padding: "0.75rem 1rem",
                       background: "#f8fafc",
                       borderBottom: "1px solid #e2e8f0",
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
                       flexWrap: "wrap",
-                      gap: "0.75rem"
+                      gap: "0.6rem"
                     }}
                   >
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                      <div style={{ padding: "0.5rem", background: "#1e1b4b", color: "#ffffff", borderRadius: "10px" }}>
-                        <FolderGit2 size={18} />
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                      <div style={{ padding: "0.4rem", background: "#1e1b4b", color: "#ffffff", borderRadius: "8px" }}>
+                        <FolderGit2 size={16} />
                       </div>
                       <div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                          <h2 style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                          <h2 style={{ fontSize: "1.05rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
                             {cls.name}
                           </h2>
                           {cls.code && (
-                            <span style={{ fontSize: "0.75rem", fontWeight: 700, background: "#e2e8f0", color: "#334155", padding: "0.15rem 0.5rem", borderRadius: "4px" }}>
+                            <span style={{ fontSize: "0.72rem", fontWeight: 700, background: "#e2e8f0", color: "#334155", padding: "0.12rem 0.45rem", borderRadius: "4px" }}>
                               {cls.code}
                             </span>
                           )}
-                          <span style={{ fontSize: "0.75rem", fontWeight: 700, background: "#e0f2fe", color: "#0369a1", padding: "0.15rem 0.55rem", borderRadius: "9999px" }}>
+                          <span style={{ fontSize: "0.72rem", fontWeight: 700, background: "#e0f2fe", color: "#0369a1", padding: "0.12rem 0.45rem", borderRadius: "9999px" }}>
                             {classExams.length} {classExams.length === 1 ? "Exam" : "Exams"}
                           </span>
                         </div>
-                        <div style={{ fontSize: "0.8rem", color: "#64748b", marginTop: "0.2rem" }}>
+                        <div style={{ fontSize: "0.76rem", color: "#64748b", marginTop: "0.1rem" }}>
                           Department: {cls.department || "General"} • Academic Year: {cls.academic_year || "2026-2027"}
                         </div>
                       </div>
@@ -1715,19 +1692,19 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                     <button
                       onClick={() => handleStartUploadNewExam(cls.id)}
                       className="btn btn-secondary"
-                      style={{ fontSize: "0.82rem", display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.45rem 0.85rem" }}
+                      style={{ fontSize: "0.78rem", display: "flex", alignItems: "center", gap: "0.3rem", padding: "0.38rem 0.75rem" }}
                     >
-                      <Plus size={14} /> Add Exam for this Class
+                      <Plus size={13} /> Add Exam for this Class
                     </button>
                   </div>
 
                   {/* Exams Grid under this Class */}
                   {classExams.length === 0 ? (
-                    <div style={{ padding: "2.5rem 1.5rem", textAlign: "center", color: "#64748b", fontSize: "0.88rem" }}>
+                    <div style={{ padding: "1.75rem 1rem", textAlign: "center", color: "#64748b", fontSize: "0.84rem" }}>
                       No examinations scheduled under <strong>{cls.name}</strong>.
                     </div>
                   ) : (
-                    <div style={{ padding: "1.25rem", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: "1.25rem" }}>
+                    <div style={{ padding: "0.85rem", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "0.85rem" }}>
                       {classExams.map((exam) => {
                         const subj = subjects.find((s) => s.id === exam.subject_id);
                         const hasAnswerKey = Boolean(exam.answer_key_text && exam.answer_key_text.trim());
@@ -1739,54 +1716,66 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                             style={{
                               background: "#ffffff",
                               border: "1px solid #e2e8f0",
-                              borderRadius: "14px",
-                              padding: "1.25rem",
+                              borderRadius: "10px",
+                              padding: "0.85rem 1rem",
                               display: "flex",
                               flexDirection: "column",
                               justifyContent: "space-between",
-                              boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                              boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
                               cursor: "pointer"
                             }}
                           >
                             <div>
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.4rem", marginBottom: "0.5rem", flexWrap: "wrap" }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap" }}>
-                                  <span style={{ fontSize: "0.75rem", fontWeight: 700, background: "#f1f5f9", color: "#334155", padding: "0.2rem 0.5rem", borderRadius: "4px" }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.35rem", marginBottom: "0.4rem", flexWrap: "wrap" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "0.3rem", flexWrap: "wrap" }}>
+                                  <span style={{ fontSize: "0.72rem", fontWeight: 700, background: "#f1f5f9", color: "#334155", padding: "0.15rem 0.45rem", borderRadius: "4px" }}>
                                     {subj?.code || "SUBJ"} • {subj?.name || "Subject"}
                                   </span>
                                   {exam.target_section && (
-                                    <span style={{ fontSize: "0.72rem", fontWeight: 700, background: "#eff6ff", color: "#1d4ed8", padding: "0.18rem 0.45rem", borderRadius: "4px" }}>
-                                      Section {exam.target_section}
+                                    <span style={{ fontSize: "0.7rem", fontWeight: 700, background: "#eff6ff", color: "#1d4ed8", padding: "0.15rem 0.4rem", borderRadius: "4px" }}>
+                                      Sec {exam.target_section}
                                     </span>
                                   )}
                                 </div>
                                 {bgAnswerKeyJobs[exam.id]?.status === "running" ? (
-                                  <span style={{ fontSize: "0.73rem", fontWeight: 700, color: "#1d4ed8", display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                                    <RefreshCw size={12} className="spin" /> Generating Key...
+                                  <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#1d4ed8", display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                                    <RefreshCw size={11} className="spin" /> Key...
                                   </span>
                                 ) : (
-                                  <span style={{ fontSize: "0.75rem", fontWeight: 700, color: hasAnswerKey ? "#16a34a" : "#d97706", display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                                    {hasAnswerKey ? <CheckCircle2 size={13} /> : <Sparkles size={13} />}
-                                    {hasAnswerKey ? "Answer Key Approved" : "Needs Answer Key"}
+                                  <span style={{ fontSize: "0.72rem", fontWeight: 700, color: hasAnswerKey ? "#16a34a" : "#d97706", display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                                    {hasAnswerKey ? <CheckCircle2 size={12} /> : <Sparkles size={12} />}
+                                    {hasAnswerKey ? "Key Ready" : "Key Needed"}
                                   </span>
                                 )}
                               </div>
 
-                              <h3 style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.4rem" }}>
+                              <h3 style={{ fontSize: "1.02rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.35rem" }}>
                                 {exam.title}
                               </h3>
 
-                              <div style={{ fontSize: "0.8rem", color: "#64748b", display: "flex", gap: "0.75rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+                              <div style={{ fontSize: "0.76rem", color: "#64748b", display: "flex", gap: "0.6rem", flexWrap: "wrap", marginBottom: "0.55rem" }}>
                                 <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                                  <Calendar size={13} /> Date: {exam.exam_date || "Pending"}
+                                  <Calendar size={12} /> Date: {exam.exam_date || "Pending"}
                                 </span>
-                                <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                                  <Clock size={13} /> Due: {exam.correction_deadline || "Upcoming"}
+                                <span
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "0.25rem",
+                                    color: "#dc2626",
+                                    background: "#fef2f2",
+                                    border: "1px solid #fecaca",
+                                    padding: "0.12rem 0.45rem",
+                                    borderRadius: "4px",
+                                    fontWeight: 700
+                                  }}
+                                >
+                                  <Clock size={12} style={{ color: "#dc2626" }} /> Due: {exam.correction_deadline || "Upcoming"}
                                 </span>
                               </div>
 
-                              <div style={{ background: "#f8fafc", borderRadius: "8px", padding: "0.6rem 0.75rem", fontSize: "0.8rem", color: "#475569", marginBottom: "1rem" }}>
-                                <strong>{exam.questions?.length || 0}</strong> Questions • <strong>{exam.max_marks || 60}</strong> Max Marks • Pass: {exam.passing_marks || 24} Marks
+                              <div style={{ background: "#f8fafc", borderRadius: "6px", padding: "0.4rem 0.65rem", fontSize: "0.76rem", color: "#475569", marginBottom: "0.75rem" }}>
+                                <strong>{exam.questions?.length || 0}</strong> Qs • <strong>{exam.max_marks || 60}</strong> Max • Pass: {exam.passing_marks || 24}
                               </div>
                             </div>
 
@@ -1796,9 +1785,9 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                               style={{
                                 display: "grid",
                                 gridTemplateColumns: "1fr 1.35fr",
-                                gap: "0.55rem",
+                                gap: "0.45rem",
                                 borderTop: "1px solid #f1f5f9",
-                                paddingTop: "0.85rem"
+                                paddingTop: "0.65rem"
                               }}
                             >
                               <button
@@ -1806,16 +1795,16 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                                 onClick={() => loadExamIntoEditor(exam)}
                                 className="btn btn-secondary"
                                 style={{
-                                  fontSize: "0.82rem",
+                                  fontSize: "0.78rem",
                                   fontWeight: 700,
-                                  padding: "0.52rem 0.65rem",
+                                  padding: "0.42rem 0.55rem",
                                   display: "flex",
                                   alignItems: "center",
                                   justifyContent: "center",
-                                  gap: "0.35rem"
+                                  gap: "0.3rem"
                                 }}
                               >
-                                <Edit3 size={14} style={{ color: "#2563eb" }} />
+                                <Edit3 size={13} style={{ color: "#2563eb" }} />
                                 Edit Questions &amp; Key
                               </button>
 
@@ -1824,16 +1813,16 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                                 onClick={() => onNavigate("evaluation", { examId: exam.id })}
                                 className="btn btn-primary"
                                 style={{
-                                  fontSize: "0.82rem",
+                                  fontSize: "0.78rem",
                                   fontWeight: 700,
-                                  padding: "0.52rem 0.75rem",
+                                  padding: "0.42rem 0.65rem",
                                   display: "flex",
                                   alignItems: "center",
                                   justifyContent: "center",
-                                  gap: "0.35rem"
+                                  gap: "0.3rem"
                                 }}
                               >
-                                <Sparkles size={14} />
+                                <Sparkles size={13} />
                                 Grade Papers &amp; Upload Copies →
                               </button>
                             </div>
@@ -1852,35 +1841,35 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                 style={{
                   background: "#ffffff",
                   border: "1px solid #e2e8f0",
-                  borderRadius: "16px",
+                  borderRadius: "12px",
                   overflow: "hidden",
-                  boxShadow: "0 1px 4px rgba(0, 0, 0, 0.04)"
+                  boxShadow: "0 1px 3px rgba(0, 0, 0, 0.03)"
                 }}
               >
                 <div
                   style={{
-                    padding: "1.1rem 1.5rem",
+                    padding: "0.75rem 1rem",
                     background: "#f8fafc",
                     borderBottom: "1px solid #e2e8f0",
                     display: "flex",
                     alignItems: "center",
-                    gap: "0.75rem"
+                    gap: "0.6rem"
                   }}
                 >
-                  <div style={{ padding: "0.5rem", background: "#475569", color: "#ffffff", borderRadius: "10px" }}>
-                    <FolderGit2 size={18} />
+                  <div style={{ padding: "0.4rem", background: "#475569", color: "#ffffff", borderRadius: "8px" }}>
+                    <FolderGit2 size={16} />
                   </div>
                   <div>
-                    <h2 style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
+                    <h2 style={{ fontSize: "1.05rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
                       Other Scheduled Examinations ({unassignedExams.length})
                     </h2>
-                    <div style={{ fontSize: "0.8rem", color: "#64748b", marginTop: "0.2rem" }}>
+                    <div style={{ fontSize: "0.76rem", color: "#64748b", marginTop: "0.1rem" }}>
                       Examinations available for grading and paper customization
                     </div>
                   </div>
                 </div>
 
-                <div style={{ padding: "1.25rem", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: "1.25rem" }}>
+                <div style={{ padding: "0.85rem", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "0.85rem" }}>
                   {unassignedExams.map((exam) => {
                     const subj = subjects.find((s) => s.id === exam.subject_id);
                     const hasAnswerKey = Boolean(exam.answer_key_text && exam.answer_key_text.trim());
@@ -1892,41 +1881,53 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                         style={{
                           background: "#ffffff",
                           border: "1px solid #e2e8f0",
-                          borderRadius: "14px",
-                          padding: "1.25rem",
+                          borderRadius: "10px",
+                          padding: "0.85rem 1rem",
                           display: "flex",
                           flexDirection: "column",
                           justifyContent: "space-between",
-                          boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                          boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
                           cursor: "pointer"
                         }}
                       >
                         <div>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.4rem", marginBottom: "0.5rem", flexWrap: "wrap" }}>
-                            <span style={{ fontSize: "0.75rem", fontWeight: 700, background: "#f1f5f9", color: "#334155", padding: "0.2rem 0.5rem", borderRadius: "4px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.35rem", marginBottom: "0.4rem", flexWrap: "wrap" }}>
+                            <span style={{ fontSize: "0.72rem", fontWeight: 700, background: "#f1f5f9", color: "#334155", padding: "0.15rem 0.45rem", borderRadius: "4px" }}>
                               {subj?.code || "SUBJ"} • {subj?.name || "Subject"}
                             </span>
-                            <span style={{ fontSize: "0.75rem", fontWeight: 700, color: hasAnswerKey ? "#16a34a" : "#d97706", display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                              {hasAnswerKey ? <CheckCircle2 size={13} /> : <Sparkles size={13} />}
-                              {hasAnswerKey ? "Answer Key Approved" : "Needs Answer Key"}
+                            <span style={{ fontSize: "0.72rem", fontWeight: 700, color: hasAnswerKey ? "#16a34a" : "#d97706", display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                              {hasAnswerKey ? <CheckCircle2 size={12} /> : <Sparkles size={12} />}
+                              {hasAnswerKey ? "Key Ready" : "Key Needed"}
                             </span>
                           </div>
 
-                          <h3 style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.4rem" }}>
+                          <h3 style={{ fontSize: "1.02rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.35rem" }}>
                             {exam.title}
                           </h3>
 
-                          <div style={{ fontSize: "0.8rem", color: "#64748b", display: "flex", gap: "0.75rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+                          <div style={{ fontSize: "0.76rem", color: "#64748b", display: "flex", gap: "0.6rem", flexWrap: "wrap", marginBottom: "0.55rem" }}>
                             <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                              <Calendar size={13} /> Date: {exam.exam_date || "Pending"}
+                              <Calendar size={12} /> Date: {exam.exam_date || "Pending"}
                             </span>
-                            <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                              <Clock size={13} /> Due: {exam.correction_deadline || "Upcoming"}
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.25rem",
+                                color: "#dc2626",
+                                background: "#fef2f2",
+                                border: "1px solid #fecaca",
+                                padding: "0.12rem 0.45rem",
+                                borderRadius: "4px",
+                                fontWeight: 700
+                              }}
+                            >
+                              <Clock size={12} style={{ color: "#dc2626" }} /> Due: {exam.correction_deadline || "Upcoming"}
                             </span>
                           </div>
 
-                          <div style={{ background: "#f8fafc", borderRadius: "8px", padding: "0.6rem 0.75rem", fontSize: "0.8rem", color: "#475569", marginBottom: "1rem" }}>
-                            <strong>{exam.questions?.length || 0}</strong> Questions • <strong>{exam.max_marks || 60}</strong> Max Marks • Pass: {exam.passing_marks || 24} Marks
+                          <div style={{ background: "#f8fafc", borderRadius: "6px", padding: "0.4rem 0.65rem", fontSize: "0.76rem", color: "#475569", marginBottom: "0.75rem" }}>
+                            <strong>{exam.questions?.length || 0}</strong> Qs • <strong>{exam.max_marks || 60}</strong> Max • Pass: {exam.passing_marks || 24}
                           </div>
                         </div>
 
@@ -1935,9 +1936,9 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                           style={{
                             display: "grid",
                             gridTemplateColumns: "1fr 1.35fr",
-                            gap: "0.55rem",
+                            gap: "0.45rem",
                             borderTop: "1px solid #f1f5f9",
-                            paddingTop: "0.85rem"
+                            paddingTop: "0.65rem"
                           }}
                         >
                           <button
@@ -1945,16 +1946,16 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                             onClick={() => loadExamIntoEditor(exam)}
                             className="btn btn-secondary"
                             style={{
-                              fontSize: "0.82rem",
+                              fontSize: "0.78rem",
                               fontWeight: 700,
-                              padding: "0.52rem 0.65rem",
+                              padding: "0.42rem 0.55rem",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
-                              gap: "0.35rem"
+                              gap: "0.3rem"
                             }}
                           >
-                            <Edit3 size={14} style={{ color: "#2563eb" }} />
+                            <Edit3 size={13} style={{ color: "#2563eb" }} />
                             Edit Questions &amp; Key
                           </button>
 
@@ -1963,16 +1964,16 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                             onClick={() => onNavigate("evaluation", { examId: exam.id })}
                             className="btn btn-primary"
                             style={{
-                              fontSize: "0.82rem",
+                              fontSize: "0.78rem",
                               fontWeight: 700,
-                              padding: "0.52rem 0.75rem",
+                              padding: "0.42rem 0.65rem",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
-                              gap: "0.35rem"
+                              gap: "0.3rem"
                             }}
                           >
-                            <Sparkles size={14} />
+                            <Sparkles size={13} />
                             Grade Papers &amp; Upload Copies →
                           </button>
                         </div>

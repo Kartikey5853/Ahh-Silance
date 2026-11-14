@@ -134,6 +134,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     setRole("Teacher");
   };
 
+  const applyInstitutionPreset = () => {
+    setOrgName("National Institute of Technology");
+    setOrgType("institution");
+    setOrgCode("NIT-INST");
+    setRole("Teacher");
+  };
+
   return (
     <div
       style={{
@@ -352,7 +359,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 <div style={{ fontSize: "0.74rem", fontWeight: 700, color: "#64748b", marginBottom: "0.35rem" }}>
                   1-Click Organization Setup:
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.45rem" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.45rem" }}>
                   <button
                     type="button"
                     onClick={applySchoolPreset}
@@ -360,15 +367,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                       background: orgType === "school" ? "#eff6ff" : "#f8fafc",
                       border: `1px solid ${orgType === "school" ? "#2563eb" : "#cbd5e1"}`,
                       borderRadius: "6px",
-                      padding: "0.35rem 0.45rem",
-                      fontSize: "0.74rem",
+                      padding: "0.4rem 0.35rem",
+                      fontSize: "0.72rem",
                       fontWeight: 700,
                       color: orgType === "school" ? "#1d4ed8" : "#475569",
                       cursor: "pointer",
                       textAlign: "center"
                     }}
                   >
-                    🏫 School (CBSE)
+                    🏫 School
                   </button>
                   <button
                     type="button"
@@ -377,15 +384,32 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                       background: orgType === "college" ? "#eff6ff" : "#f8fafc",
                       border: `1px solid ${orgType === "college" ? "#2563eb" : "#cbd5e1"}`,
                       borderRadius: "6px",
-                      padding: "0.35rem 0.45rem",
-                      fontSize: "0.74rem",
+                      padding: "0.4rem 0.35rem",
+                      fontSize: "0.72rem",
                       fontWeight: 700,
                       color: orgType === "college" ? "#1d4ed8" : "#475569",
                       cursor: "pointer",
                       textAlign: "center"
                     }}
                   >
-                    🎓 College (B.Tech)
+                    🎓 College
+                  </button>
+                  <button
+                    type="button"
+                    onClick={applyInstitutionPreset}
+                    style={{
+                      background: orgType === "institution" ? "#eff6ff" : "#f8fafc",
+                      border: `1px solid ${orgType === "institution" ? "#2563eb" : "#cbd5e1"}`,
+                      borderRadius: "6px",
+                      padding: "0.4rem 0.35rem",
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                      color: orgType === "institution" ? "#1d4ed8" : "#475569",
+                      cursor: "pointer",
+                      textAlign: "center"
+                    }}
+                  >
+                    🏛️ Institution
                   </button>
                 </div>
               </div>

@@ -180,8 +180,20 @@ export const ExamDetailWorkspace: React.FC<ExamDetailWorkspaceProps> = ({
                 <span style={{ display: "inline-flex", alignItems: "center", gap: "0.28rem" }}>
                   <Calendar size={13} /> Date: {exam.exam_date || "Scheduled"}
                 </span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: "0.28rem" }}>
-                  <Clock size={13} /> Deadline: {exam.correction_deadline || "Open"}
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.28rem",
+                    color: "#dc2626",
+                    background: "#fef2f2",
+                    border: "1px solid #fecaca",
+                    padding: "0.12rem 0.45rem",
+                    borderRadius: "4px",
+                    fontWeight: 700
+                  }}
+                >
+                  <Clock size={13} style={{ color: "#dc2626" }} /> Deadline: {exam.correction_deadline || "Open"}
                 </span>
               </div>
             </div>
