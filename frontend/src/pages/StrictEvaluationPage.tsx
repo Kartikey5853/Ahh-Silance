@@ -173,6 +173,9 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
         } catch (err) {
           console.error("Failed to load initial evaluation:", err);
         }
+      } else if (exList.length > 0) {
+        const demoExam = exList.find((e) => e.id === "exam-demo-science-101" || e.id.includes("demo") || e.title.includes("Demo")) || exList[0];
+        setSelectedExamId(demoExam.id);
       }
     });
   }, [initialExamId, initialEvalId]);
@@ -2703,6 +2706,29 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
             </div>
 
             <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
+              {activeExam && (
+                <button
+                  type="button"
+                  onClick={() => onNavigate("exams", { examId: activeExam.id })}
+                  style={{
+                    background: "#ffffff",
+                    border: "1px solid #cbd5e1",
+                    color: "#0f172a",
+                    padding: "0.55rem 0.95rem",
+                    borderRadius: "8px",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.35rem"
+                  }}
+                  title="View question paper and marking schemes"
+                >
+                  <FileText size={14} style={{ color: "#2563eb" }} /> Question Paper ({activeExam?.questions?.length || 0} Qs)
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => handleOpenAnswerKeyStudio()}

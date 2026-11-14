@@ -1440,9 +1440,6 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                 {exams.length} Total Exams
               </span>
             </div>
-            <p style={{ color: "#64748b", fontSize: "0.8rem", marginTop: "0.15rem", margin: 0 }}>
-              Digitize question papers, edit rubrics and master answer keys, and evaluate student copies all in one unified desk.
-            </p>
           </div>
 
           <button
@@ -1481,7 +1478,6 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
           </div>
 
           <div style={{ background: "#f8fafc", border: "1px solid #cbd5e1", color: "#334155", padding: "0.25rem 0.65rem", borderRadius: "6px", fontSize: "0.76rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.35rem" }}>
-            <FolderGit2 size={13} />
             <span>{classes.length} Classes</span>
           </div>
         </div>
@@ -1665,27 +1661,19 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                       gap: "0.6rem"
                     }}
                   >
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                      <div style={{ padding: "0.4rem", background: "#1e1b4b", color: "#ffffff", borderRadius: "8px" }}>
-                        <FolderGit2 size={16} />
-                      </div>
-                      <div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
-                          <h2 style={{ fontSize: "1.05rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
-                            {cls.name}
-                          </h2>
-                          {cls.code && (
-                            <span style={{ fontSize: "0.72rem", fontWeight: 700, background: "#e2e8f0", color: "#334155", padding: "0.12rem 0.45rem", borderRadius: "4px" }}>
-                              {cls.code}
-                            </span>
-                          )}
-                          <span style={{ fontSize: "0.72rem", fontWeight: 700, background: "#e0f2fe", color: "#0369a1", padding: "0.12rem 0.45rem", borderRadius: "9999px" }}>
-                            {classExams.length} {classExams.length === 1 ? "Exam" : "Exams"}
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+                        <h2 style={{ fontSize: "1.05rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
+                          {cls.name}
+                        </h2>
+                        {cls.code && (
+                          <span style={{ fontSize: "0.72rem", fontWeight: 700, background: "#e2e8f0", color: "#334155", padding: "0.12rem 0.45rem", borderRadius: "4px" }}>
+                            {cls.code}
                           </span>
-                        </div>
-                        <div style={{ fontSize: "0.76rem", color: "#64748b", marginTop: "0.1rem" }}>
-                          Department: {cls.department || "General"} • Academic Year: {cls.academic_year || "2026-2027"}
-                        </div>
+                        )}
+                        <span style={{ fontSize: "0.72rem", fontWeight: 700, background: "#e0f2fe", color: "#0369a1", padding: "0.12rem 0.45rem", borderRadius: "9999px" }}>
+                          {classExams.length} {classExams.length === 1 ? "Exam" : "Exams"}
+                        </span>
                       </div>
                     </div>
 
@@ -1856,16 +1844,10 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                     gap: "0.6rem"
                   }}
                 >
-                  <div style={{ padding: "0.4rem", background: "#475569", color: "#ffffff", borderRadius: "8px" }}>
-                    <FolderGit2 size={16} />
-                  </div>
-                  <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
                     <h2 style={{ fontSize: "1.05rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
                       Other Scheduled Examinations ({unassignedExams.length})
                     </h2>
-                    <div style={{ fontSize: "0.76rem", color: "#64748b", marginTop: "0.1rem" }}>
-                      Examinations available for grading and paper customization
-                    </div>
                   </div>
                 </div>
 

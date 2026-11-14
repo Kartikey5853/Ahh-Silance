@@ -702,9 +702,6 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({
                 <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "#0f172a" }}>
                   Drop Question Paper Here or Click to Upload &amp; Grade
                 </div>
-                <div style={{ fontSize: "0.82rem", color: "#64748b", marginTop: "0.2rem" }}>
-                  AI extracts questions, generates answer keys, and evaluates student copies.
-                </div>
               </div>
             </div>
 
@@ -731,6 +728,48 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({
             </button>
           </div>
 
+          {/* Ready-to-Test Exam Quick Banner */}
+          <div
+            onClick={() => onNavigate("evaluation", { examId: "exam-demo-science-101" })}
+            style={{
+              background: "#ffffff",
+              border: "1px solid #bfdbfe",
+              borderRadius: "12px",
+              padding: "0.85rem 1.25rem",
+              marginBottom: "1.5rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "1rem",
+              flexWrap: "wrap",
+              cursor: "pointer",
+              boxShadow: "0 1px 3px rgba(37, 99, 235, 0.06)",
+              transition: "border-color 0.15s ease"
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+              <span style={{ fontSize: "0.75rem", fontWeight: 700, background: "#dbeafe", color: "#1e40af", padding: "0.2rem 0.55rem", borderRadius: "6px" }}>
+                Ready to Test
+              </span>
+              <div>
+                <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#0f172a" }}>
+                  Class 10 Science Demo Examination (3 Enrolled Students with Roll Numbers)
+                </div>
+                <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
+                  Question paper and approved answer key ready • Roll 101, 102, 103 evaluated with scorecards
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ padding: "0.45rem 0.85rem", fontSize: "0.8rem", pointerEvents: "none" }}
+            >
+              Open Test Desk &amp; Check Copies →
+            </button>
+          </div>
+
           {/* Classes Section Header */}
           <div
             style={{
@@ -746,9 +785,6 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({
               <h2 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#0f172a", margin: 0, letterSpacing: "-0.02em" }}>
                 My Classes ({classes.length})
               </h2>
-              <p style={{ margin: "2px 0 0 0", color: "#64748b", fontSize: "0.82rem" }}>
-                Click any class to view enrolled students, manage roster, and check recent exams
-              </p>
             </div>
 
             <div
