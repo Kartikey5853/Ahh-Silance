@@ -59,7 +59,7 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
   initialExamId,
   initialStudentId,
   initialEvalId,
-  onNavigate: _onNavigate
+  onNavigate
 }) => {
   const [exams, setExams] = useState<Exam[]>([]);
   const [selectedExamId, setSelectedExamId] = useState<string>(initialExamId || "");
@@ -605,7 +605,7 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
                 </span>
                 {scanElapsed >= 8 && (
                   <span style={{ color: "#6d28d9", fontWeight: 700, fontSize: "0.72rem" }}>
-                    🧠 Deep chain-of-thought verification in progress...
+                    Deep chain-of-thought verification in progress...
                   </span>
                 )}
               </div>
@@ -2249,6 +2249,43 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
     <div className="strict-evaluation-page pb-24">
       {renderLiveScannerModal()}
       {renderEvaluatingAllModal()}
+
+      {/* Unified Exams & Grading Switcher */}
+      <div style={{ display: "inline-flex", background: "#f1f5f9", padding: "0.25rem", borderRadius: "10px", marginBottom: "1.25rem", border: "1px solid #e2e8f0" }}>
+        <button
+          type="button"
+          onClick={() => onNavigate("exams")}
+          style={{
+            background: "transparent",
+            color: "#64748b",
+            border: "none",
+            borderRadius: "8px",
+            padding: "0.45rem 1rem",
+            fontSize: "0.82rem",
+            fontWeight: 600,
+            cursor: "pointer"
+          }}
+        >
+          All Exams &amp; Question Papers
+        </button>
+        <button
+          type="button"
+          style={{
+            background: "#ffffff",
+            color: "#0f172a",
+            border: "none",
+            borderRadius: "8px",
+            padding: "0.45rem 1rem",
+            fontSize: "0.82rem",
+            fontWeight: 700,
+            cursor: "pointer",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.06)"
+          }}
+        >
+          Student Grading Desk
+        </button>
+      </div>
+
       {/* INITIAL STATE: When no exam is selected - Deadlines Overview */}
       {!selectedExamId ? (
         <div>
@@ -2478,7 +2515,7 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
                   {subjects.find((s) => s.id === activeExam?.subject_id)?.name || "Subject"}
                 </span>
                 <span style={{ fontSize: "0.78rem", fontWeight: 700, background: hasAnswerKey ? "#f0fdf4" : "#fffbeb", color: hasAnswerKey ? "#16a34a" : "#d97706", padding: "0.25rem 0.6rem", borderRadius: "6px" }}>
-                  {hasAnswerKey ? "✓ Answer Key Approved" : "⚡ Answer Key Required"}
+                  {hasAnswerKey ? "Answer Key Approved" : "Answer Key Required"}
                 </span>
 
                 {/* Quick Exam Switcher Dropdown */}

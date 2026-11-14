@@ -1440,6 +1440,42 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
   if (viewMode === "list") {
     return (
       <div className="exam-management-page pb-28">
+        {/* Unified Exams & Grading Switcher */}
+        <div style={{ display: "inline-flex", background: "#f1f5f9", padding: "0.25rem", borderRadius: "10px", marginBottom: "1.25rem", border: "1px solid #e2e8f0" }}>
+          <button
+            type="button"
+            style={{
+              background: "#ffffff",
+              color: "#0f172a",
+              border: "none",
+              borderRadius: "8px",
+              padding: "0.45rem 1rem",
+              fontSize: "0.82rem",
+              fontWeight: 700,
+              cursor: "pointer",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.06)"
+            }}
+          >
+            All Exams &amp; Question Papers
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate("evaluation")}
+            style={{
+              background: "transparent",
+              color: "#64748b",
+              border: "none",
+              borderRadius: "8px",
+              padding: "0.45rem 1rem",
+              fontSize: "0.82rem",
+              fontWeight: 600,
+              cursor: "pointer"
+            }}
+          >
+            Student Grading Desk
+          </button>
+        </div>
+
         {/* Header Bar */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem", marginBottom: "1.5rem" }}>
           <div>

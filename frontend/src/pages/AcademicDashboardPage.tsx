@@ -277,77 +277,28 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({
           background: "#ffffff",
           border: "1px solid #e2e8f0",
           borderRadius: "14px",
-          padding: "1.5rem 1.75rem",
-          marginBottom: "1.5rem",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-          gap: "1.25rem"
+          padding: "1.25rem 1.5rem",
+          marginBottom: "1.25rem"
         }}
       >
-        <div>
-          <h1
-            style={{
-              fontSize: "1.5rem",
-              fontWeight: 800,
-              color: "#0f172a",
-              letterSpacing: "-0.03em",
-              margin: 0
-            }}
-          >
-            Namaste, {profile?.full_name || "Faculty"}
-          </h1>
-          <p style={{ color: "#64748b", fontSize: "0.88rem", margin: "3px 0 0 0" }}>
-            {currentOrg?.name ? `${currentOrg.name} • ` : ""}Upload papers, parse question schemes, and evaluate student copies.
-          </p>
-        </div>
-
-        {/* Action Buttons */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
-          <button
-            type="button"
-            onClick={() => onNavigate("exams", { mode: "create" })}
-            style={{
-              background: "#2563eb",
-              color: "#ffffff",
-              border: "none",
-              borderRadius: "8px",
-              padding: "0.65rem 1.15rem",
-              fontSize: "0.88rem",
-              fontWeight: 700,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.45rem",
-              boxShadow: "0 2px 6px rgba(37, 99, 235, 0.25)"
-            }}
-          >
-            <Sparkles size={16} />
-            <span>+ Check New Exam</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowSubjModal(true)}
-            style={{
-              background: "#ffffff",
-              border: "1px solid #cbd5e1",
-              color: "#334155",
-              borderRadius: "8px",
-              padding: "0.65rem 1rem",
-              fontSize: "0.85rem",
-              fontWeight: 700,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.35rem"
-            }}
-          >
-            <Plus size={15} />
-            <span>Add Subject</span>
-          </button>
-        </div>
+        <h1
+          style={{
+            fontSize: "1.45rem",
+            fontWeight: 800,
+            color: "#0f172a",
+            letterSpacing: "-0.03em",
+            margin: 0,
+            display: "flex",
+            alignItems: "center",
+            gap: "0.45rem"
+          }}
+        >
+          <span>Namaste, {profile?.full_name || "Faculty"}</span>
+          <Sparkles size={18} style={{ color: "#2563eb" }} />
+        </h1>
+        <p style={{ color: "#64748b", fontSize: "0.85rem", margin: "4px 0 0 0", fontWeight: 600 }}>
+          {currentOrg?.name || "Academic Portal"}
+        </p>
       </div>
 
       {selectedClassDetail ? (
@@ -514,7 +465,7 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({
                   title="Add List of Students via bulk text/CSV"
                 >
                   <ClipboardList size={14} />
-                  <span>📋 Add List of Students</span>
+                  <span>Add List of Students</span>
                 </button>
               </div>
             </div>
@@ -553,7 +504,7 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({
                     onClick={() => setShowBulkImportModal(true)}
                     style={{ background: "#ffffff", border: "1px solid #cbd5e1", color: "#334155", borderRadius: "6px", padding: "0.45rem 1rem", fontSize: "0.82rem", fontWeight: 700, cursor: "pointer" }}
                   >
-                    📋 Add List of Students
+                    Add List of Students
                   </button>
                 </div>
               </div>
@@ -735,8 +686,9 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({
         /* MAIN DASHBOARD: CLASSES OVERVIEW & HERO PAPER UPLOAD           */
         /* ============================================================== */
         <div>
-          {/* Hero Upload Paper Box */}
+          {/* Clean Drag and Drop / Upload Question Paper Section */}
           <div
+            onClick={() => onNavigate("exams", { mode: "create" })}
             style={{
               background: "#f8faff",
               border: "1.5px dashed #3b82f6",
@@ -747,68 +699,66 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({
               alignItems: "center",
               justifyContent: "space-between",
               gap: "1.25rem",
-              flexWrap: "wrap"
+              flexWrap: "wrap",
+              cursor: "pointer",
+              transition: "all 0.15s ease"
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = "#1d4ed8";
+              e.currentTarget.style.background = "#eff6ff";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = "#3b82f6";
+              e.currentTarget.style.background = "#f8faff";
             }}
           >
-            <div style={{ flex: 1, minWidth: "260px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", color: "#2563eb", marginBottom: "0.3rem" }}>
-                <Sparkles size={16} />
-                <span style={{ fontSize: "0.78rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  Effortless Question Paper Grading
-                </span>
+            <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+              <div
+                style={{
+                  width: "42px",
+                  height: "42px",
+                  borderRadius: "10px",
+                  background: "#eff6ff",
+                  color: "#2563eb",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0
+                }}
+              >
+                <UploadCloud size={22} />
               </div>
-              <h3 style={{ fontSize: "1.2rem", fontWeight: 800, color: "#0f172a", margin: "0 0 0.25rem 0" }}>
-                Upload Question Papers &amp; Grade Student Copies
-              </h3>
-              <p style={{ color: "#64748b", fontSize: "0.84rem", margin: 0, maxWidth: "560px" }}>
-                Upload exam papers to parse schemes and rubrics, approve answer keys, and evaluate student copies automatically.
-              </p>
+              <div>
+                <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "#0f172a" }}>
+                  Drop Question Paper Here or Click to Upload &amp; Grade
+                </div>
+                <div style={{ fontSize: "0.82rem", color: "#64748b", marginTop: "0.2rem" }}>
+                  AI extracts questions, generates answer keys, and evaluates student copies.
+                </div>
+              </div>
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
-              <button
-                type="button"
-                onClick={() => onNavigate("exams", { mode: "create" })}
-                style={{
-                  background: "#2563eb",
-                  color: "#ffffff",
-                  border: "none",
-                  borderRadius: "10px",
-                  padding: "0.7rem 1.35rem",
-                  fontSize: "0.88rem",
-                  fontWeight: 800,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.45rem",
-                  boxShadow: "0 4px 12px rgba(37, 99, 235, 0.25)"
-                }}
-              >
-                <UploadCloud size={16} />
-                <span>+ Upload Question Paper &amp; Grade</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setShowClassModal(true)}
-                style={{
-                  background: "#ffffff",
-                  border: "1px solid #cbd5e1",
-                  color: "#334155",
-                  borderRadius: "10px",
-                  padding: "0.7rem 1.15rem",
-                  fontSize: "0.85rem",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.35rem"
-                }}
-              >
-                <FolderGit2 size={15} />
-                <span>+ Add Class</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              style={{
+                background: "#2563eb",
+                color: "#ffffff",
+                border: "none",
+                borderRadius: "8px",
+                padding: "0.6rem 1.25rem",
+                fontSize: "0.85rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.4rem",
+                boxShadow: "0 2px 8px rgba(37, 99, 235, 0.25)",
+                pointerEvents: "none"
+              }}
+            >
+              <UploadCloud size={15} />
+              <span>+ Upload Question Paper &amp; Grade</span>
+            </button>
           </div>
 
           {/* Classes Section Header */}

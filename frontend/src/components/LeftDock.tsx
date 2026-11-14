@@ -2,13 +2,13 @@ import React, { useState, useEffect } from "react";
 import {
   BookOpen,
   FileSpreadsheet,
-  CheckCircle2,
   Users,
   Settings,
-  Sparkles,
   LogOut,
   Menu,
-  X
+  X,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { academicApi } from "../api/academicApi";
 import type { Institution } from "../types/academic";
@@ -36,11 +36,11 @@ export const LeftDock: React.FC<LeftDockProps> = ({
   onTabChange,
   onLogout,
   userName = "Faculty",
-  institutionName: propInstitutionName,
-  onOpenQuickCheck
+  institutionName: propInstitutionName
 }) => {
   const [localInstitutionName, setLocalInstitutionName] = useState<string>("");
   const [mobileOpen, setMobileOpen] = useState<boolean>(false);
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
 
   useEffect(() => {
     Promise.all([
@@ -62,6 +62,7 @@ export const LeftDock: React.FC<LeftDockProps> = ({
 
   const displayOrgName = propInstitutionName || localInstitutionName || "Academic Portal";
 
+  // Unified, uncluttered navigation items
   const navItems: {
     id: NavTab;
     label: string;
@@ -74,13 +75,8 @@ export const LeftDock: React.FC<LeftDockProps> = ({
     },
     {
       id: "exams",
-      label: "Exams & Papers",
+      label: "Exams & Grading",
       icon: <FileSpreadsheet size={19} />
-    },
-    {
-      id: "evaluation",
-      label: "Evaluation Desk",
-      icon: <CheckCircle2 size={19} />
     },
     {
       id: "students",
@@ -141,126 +137,159 @@ export const LeftDock: React.FC<LeftDockProps> = ({
         />
       )}
 
-      {/* Persistent Left Dock */}
+      {/* Persistent Rounded & Collapsible Left Dock */}
       <aside
         className={`niera-left-dock ${mobileOpen ? "mobile-open" : ""}`}
         style={{
-          width: "250px",
-          minWidth: "250px",
-          height: "100vh",
+          width: isCollapsed ? "72px" : "240px",
+          minWidth: isCollapsed ? "72px" : "240px",
+          height: "calc(100vh - 1.5rem)",
+          margin: "0.75rem 0 0.75rem 0.75rem",
           position: "sticky",
-          top: 0,
+          top: "0.75rem",
           background: "#ffffff",
-          borderRight: "1px solid #e2e8f0",
+          border: "1px solid #e2e8f0",
+          borderRadius: "16px",
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
           zIndex: 100,
-          userSelect: "none"
+          userSelect: "none",
+          transition: "width 0.2s ease, min-width 0.2s ease",
+          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.04)"
         }}
       >
-        {/* Top: Brand & Action */}
-        <div style={{ padding: "1.25rem 1rem 0.75rem 1rem" }}>
-          {/* Logo & Title */}
+        {/* Top: Brand Header & Collapse Toggle */}
+        <div style={{ padding: isCollapsed ? "1rem 0.5rem" : "1.1rem 1rem 0.75rem 1rem" }}>
           <div
-            onClick={() => handleItemClick("dashboard")}
             style={{
               display: "flex",
               alignItems: "center",
-              gap: "0.65rem",
-              cursor: "pointer",
-              marginBottom: "1.25rem"
+              justifyContent: isCollapsed ? "center" : "space-between",
+              marginBottom: "0.75rem"
             }}
           >
+            {/* Logo & Title */}
             <div
+              onClick={() => handleItemClick("dashboard")}
               style={{
-                width: "36px",
-                height: "36px",
-                borderRadius: "8px",
-                background: "#2563eb",
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "center",
-                color: "#ffffff",
-                overflow: "hidden"
+                gap: "0.65rem",
+                cursor: "pointer",
+                minWidth: 0
               }}
+              title="Niera Academic Portal"
             >
-              <img
-                src="/niera-logo.png"
-                alt="Niera"
-                style={{ width: "24px", height: "24px", objectFit: "contain" }}
-              />
-            </div>
-            <div>
+              {/* White background logo box because the logo itself is blue */}
               <div
                 style={{
-                  fontWeight: 800,
-                  fontSize: "1.2rem",
-                  letterSpacing: "-0.03em",
-                  color: "#0f172a",
-                  lineHeight: 1.1
-                }}
-              >
-                Niera
-              </div>
-              <div
-                style={{
-                  fontSize: "0.72rem",
-                  color: "#64748b",
-                  whiteSpace: "nowrap",
+                  width: "38px",
+                  height: "38px",
+                  borderRadius: "10px",
+                  background: "#ffffff",
+                  border: "1px solid #e2e8f0",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                   overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  maxWidth: "170px",
-                  marginTop: "0.1rem",
-                  fontWeight: 600
+                  boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
+                  flexShrink: 0
                 }}
-                title={displayOrgName}
               >
-                {displayOrgName}
+                <img
+                  src="/niera-logo.png"
+                  alt="Niera"
+                  style={{ width: "26px", height: "26px", objectFit: "contain" }}
+                />
               </div>
+
+              {!isCollapsed && (
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontWeight: 800,
+                      fontSize: "1.18rem",
+                      letterSpacing: "-0.03em",
+                      color: "#0f172a",
+                      lineHeight: 1.1
+                    }}
+                  >
+                    Niera
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "0.72rem",
+                      color: "#64748b",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      maxWidth: "140px",
+                      marginTop: "0.1rem",
+                      fontWeight: 600
+                    }}
+                    title={displayOrgName}
+                  >
+                    {displayOrgName}
+                  </div>
+                </div>
+              )}
             </div>
+
+            {/* Collapse / Expand Toggle Button */}
+            {!isCollapsed && (
+              <button
+                type="button"
+                onClick={() => setIsCollapsed(true)}
+                title="Collapse Sidebar"
+                style={{
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "6px",
+                  padding: "0.3rem",
+                  color: "#64748b",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}
+              >
+                <ChevronLeft size={15} />
+              </button>
+            )}
           </div>
 
-          {/* Primary Action Button */}
-          <button
-            type="button"
-            onClick={() => {
-              if (onOpenQuickCheck) {
-                onOpenQuickCheck();
-              } else {
-                handleItemClick("exams");
-              }
-            }}
-            style={{
-              width: "100%",
-              background: "#2563eb",
-              color: "#ffffff",
-              border: "none",
-              borderRadius: "8px",
-              padding: "0.65rem 0.85rem",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.5rem",
-              fontWeight: 700,
-              fontSize: "0.85rem",
-              cursor: "pointer",
-              transition: "background 0.15s ease"
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "#1d4ed8")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "#2563eb")}
-          >
-            <Sparkles size={15} />
-            <span>+ Check New Exam</span>
-          </button>
+          {isCollapsed && (
+            <div style={{ display: "flex", justifyContent: "center", marginTop: "0.4rem" }}>
+              <button
+                type="button"
+                onClick={() => setIsCollapsed(false)}
+                title="Expand Sidebar"
+                style={{
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "6px",
+                  padding: "0.3rem",
+                  color: "#64748b",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}
+              >
+                <ChevronRight size={15} />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Navigation Menu */}
-        <div style={{ flex: 1, padding: "0.5rem 0.75rem", overflowY: "auto" }}>
-          <nav style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+        <div style={{ flex: 1, padding: isCollapsed ? "0.5rem 0.4rem" : "0.5rem 0.75rem", overflowY: "auto" }}>
+          <nav style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
             {navItems.map((item) => {
               const isActive =
                 activeTab === item.id ||
+                (item.id === "exams" && activeTab === "evaluation") ||
                 (item.id === "dashboard" && activeTab === "subject-detail") ||
                 (item.id === "students" && activeTab === "academics");
 
@@ -269,12 +298,14 @@ export const LeftDock: React.FC<LeftDockProps> = ({
                   key={item.id}
                   type="button"
                   onClick={() => handleItemClick(item.id)}
+                  title={item.label}
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: "0.75rem",
-                    padding: "0.6rem 0.75rem",
-                    borderRadius: "8px",
+                    justifyContent: isCollapsed ? "center" : "flex-start",
+                    gap: isCollapsed ? "0" : "0.75rem",
+                    padding: isCollapsed ? "0.65rem" : "0.65rem 0.75rem",
+                    borderRadius: "10px",
                     border: "none",
                     background: isActive ? "#eff6ff" : "transparent",
                     color: isActive ? "#1d4ed8" : "#475569",
@@ -302,12 +333,13 @@ export const LeftDock: React.FC<LeftDockProps> = ({
                     style={{
                       display: "flex",
                       alignItems: "center",
+                      justifyContent: "center",
                       color: isActive ? "#2563eb" : "#64748b"
                     }}
                   >
                     {item.icon}
                   </span>
-                  <span>{item.label}</span>
+                  {!isCollapsed && <span>{item.label}</span>}
                 </button>
               );
             })}
@@ -317,7 +349,7 @@ export const LeftDock: React.FC<LeftDockProps> = ({
         {/* Bottom Section: Single User Profile & Sign Out */}
         <div
           style={{
-            padding: "0.85rem 1rem",
+            padding: isCollapsed ? "0.75rem 0.4rem" : "0.85rem 1rem",
             borderTop: "1px solid #e2e8f0"
           }}
         >
@@ -325,7 +357,8 @@ export const LeftDock: React.FC<LeftDockProps> = ({
             style={{
               display: "flex",
               alignItems: "center",
-              justifyContent: "space-between"
+              justifyContent: isCollapsed ? "center" : "space-between",
+              gap: isCollapsed ? "0" : "0.5rem"
             }}
           >
             <div
@@ -336,7 +369,7 @@ export const LeftDock: React.FC<LeftDockProps> = ({
                 gap: "0.55rem",
                 cursor: "pointer",
                 minWidth: 0,
-                flex: 1
+                flex: isCollapsed ? "none" : 1
               }}
               title="View profile & settings"
             >
@@ -357,46 +390,50 @@ export const LeftDock: React.FC<LeftDockProps> = ({
               >
                 {userName.charAt(0).toUpperCase()}
               </div>
-              <div style={{ minWidth: 0 }}>
-                <div
-                  style={{
-                    fontSize: "0.82rem",
-                    fontWeight: 700,
-                    color: "#0f172a",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis"
-                  }}
-                >
-                  {userName}
+              {!isCollapsed && (
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: "0.82rem",
+                      fontWeight: 700,
+                      color: "#0f172a",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis"
+                    }}
+                  >
+                    {userName}
+                  </div>
+                  <div style={{ fontSize: "0.68rem", color: "#64748b" }}>
+                    Educator
+                  </div>
                 </div>
-                <div style={{ fontSize: "0.68rem", color: "#64748b" }}>
-                  Educator
-                </div>
-              </div>
+              )}
             </div>
 
-            <button
-              type="button"
-              onClick={onLogout}
-              title="Sign Out"
-              style={{
-                background: "transparent",
-                border: "none",
-                color: "#94a3b8",
-                cursor: "pointer",
-                padding: "0.35rem",
-                borderRadius: "6px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                transition: "color 0.15s ease"
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = "#dc2626")}
-              onMouseLeave={(e) => (e.currentTarget.style.color = "#94a3b8")}
-            >
-              <LogOut size={16} />
-            </button>
+            {!isCollapsed && (
+              <button
+                type="button"
+                onClick={onLogout}
+                title="Sign Out"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#94a3b8",
+                  cursor: "pointer",
+                  padding: "0.35rem",
+                  borderRadius: "6px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  transition: "color 0.15s ease"
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "#dc2626")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "#94a3b8")}
+              >
+                <LogOut size={16} />
+              </button>
+            )}
           </div>
         </div>
       </aside>
