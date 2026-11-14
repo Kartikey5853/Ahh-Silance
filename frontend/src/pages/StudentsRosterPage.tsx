@@ -8,8 +8,9 @@ import {
   Search,
   Users,
   X,
-  Download,
-  Printer,
+  Camera,
+  CheckCircle2,
+  RefreshCw,
   FileSpreadsheet,
   Award
 } from "lucide-react";
@@ -51,6 +52,60 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
   const [modalClassId, setModalClassId] = useState("");
   const [isAdding, setIsAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+
+  // Scanned Register State
+  const [isScanningRegister, setIsScanningRegister] = useState(false);
+  const [showRegisterScanModal, setShowRegisterScanModal] = useState(false);
+  const [isImportingScanned, setIsImportingScanned] = useState(false);
+  const [scannedRegisterData, setScannedRegisterData] = useState<{
+    register_title: string;
+    filename: string;
+    preview_url: string;
+    total_detected: number;
+    students: Array<{
+      roll_number: string;
+      name: string;
+      section?: string;
+      parent_name?: string;
+      parent_phone?: string;
+      detected_marks?: string;
+    }>;
+  } | null>(null);
+
+  const handleScanRegisterFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsScanningRegister(true);
+    try {
+      const res = await academicApi.scanRegister(file, subjects[0]?.id, classes[0]?.id);
+      setScannedRegisterData(res);
+      setShowRegisterScanModal(true);
+    } catch (err: any) {
+      alert("Register scan error: " + (err?.response?.data?.detail || err?.message || "Failed to scan physical register"));
+    } finally {
+      setIsScanningRegister(false);
+      if (e.target) e.target.value = "";
+    }
+  };
+
+  const handleImportScannedStudents = async () => {
+    if (!scannedRegisterData || scannedRegisterData.students.length === 0) return;
+    setIsImportingScanned(true);
+    try {
+      const res = await academicApi.batchImportStudents({
+        subject_id: subjects[0]?.id,
+        class_id: classes[0]?.id,
+        students: scannedRegisterData.students
+      });
+      alert(`Successfully enrolled ${res.imported_count} students from scanned register!`);
+      setShowRegisterScanModal(false);
+      await loadInitialData();
+    } catch (err: any) {
+      alert("Batch import error: " + (err?.message || "Failed to import students"));
+    } finally {
+      setIsImportingScanned(false);
+    }
+  };
 
   const loadInitialData = async () => {
     try {
@@ -185,28 +240,6 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
     );
   });
 
-  // Export to Excel / CSV
-  const handleExportCsv = () => {
-    if (!activeExam) return;
-    const headers = ["Roll No", "Student Name", "Section", "Score", "Max Marks", "Percentage", "Status"];
-    const rows = filteredConsolidatedList.map((g) => {
-      const ev = evalByStudentId.get(g.primary.id);
-      const score = ev ? ev.total_score : 0;
-      const pct = ev ? ev.percentage.toFixed(1) : "0.0";
-      const status = ev ? (ev.total_score >= activeExam.passing_marks ? "PASS" : "NEEDS IMPROVEMENT") : "PENDING";
-      return [g.primary.roll_number, `"${g.primary.name}"`, g.sections.join(",") || "A", score, activeExam.max_marks, `${pct}%`, status];
-    });
-
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `Marks_Register_${activeExam.title.replace(/\s+/g, "_")}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   return (
     <div className="students-roster-page" style={{ maxWidth: "1280px", margin: "0 auto", paddingBottom: "4rem" }}>
       {/* Top Header & Action Controls */}
@@ -269,49 +302,107 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
             <span>+ Add Student</span>
           </button>
 
-          <button
-            type="button"
-            onClick={handleExportCsv}
+          <label
             style={{
               background: "#16a34a",
               color: "#ffffff",
               border: "none",
               borderRadius: "8px",
-              padding: "0.5rem 0.85rem",
+              padding: "0.5rem 0.95rem",
               fontSize: "0.82rem",
               fontWeight: 700,
-              cursor: "pointer",
+              cursor: isScanningRegister ? "not-allowed" : "pointer",
               display: "flex",
               alignItems: "center",
-              gap: "0.35rem"
+              gap: "0.4rem",
+              boxShadow: "0 2px 6px rgba(22,163,74,0.25)"
             }}
+            title="Upload photo or scan of a physical student register sheet to extract and enroll all students"
           >
-            <Download size={14} />
-            <span>Export Excel</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => window.print()}
-            style={{
-              background: "#f1f5f9",
-              border: "1px solid #cbd5e1",
-              color: "#334155",
-              borderRadius: "8px",
-              padding: "0.5rem 0.85rem",
-              fontSize: "0.82rem",
-              fontWeight: 600,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.35rem"
-            }}
-          >
-            <Printer size={14} />
-            <span>Print</span>
-          </button>
+            {isScanningRegister ? (
+              <RefreshCw size={14} className="spin" />
+            ) : (
+              <Camera size={15} />
+            )}
+            <span>{isScanningRegister ? "Scanning Register Image..." : "Scan Register Image"}</span>
+            <input
+              type="file"
+              accept="image/*,application/pdf"
+              disabled={isScanningRegister}
+              onChange={handleScanRegisterFile}
+              style={{ display: "none" }}
+            />
+          </label>
         </div>
       </div>
+
+      {/* Scanned Register Banner */}
+      {scannedRegisterData && (
+        <div
+          style={{
+            background: "#f0fdf4",
+            border: "1px solid #bbf7d0",
+            borderRadius: "12px",
+            padding: "0.85rem 1.25rem",
+            marginBottom: "1rem",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "0.75rem"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
+            <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "#dcfce7", color: "#16a34a", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Camera size={16} />
+            </div>
+            <div>
+              <div style={{ fontSize: "0.88rem", fontWeight: 700, color: "#166534" }}>
+                Scanned Register: {scannedRegisterData.register_title}
+              </div>
+              <div style={{ fontSize: "0.75rem", color: "#15803d" }}>
+                {scannedRegisterData.students.length} students detected from {scannedRegisterData.filename}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <button
+              type="button"
+              onClick={() => setShowRegisterScanModal(true)}
+              style={{
+                background: "#ffffff",
+                border: "1px solid #86efac",
+                color: "#166534",
+                borderRadius: "6px",
+                padding: "0.35rem 0.75rem",
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                cursor: "pointer"
+              }}
+            >
+              View Scanned Register ({scannedRegisterData.students.length})
+            </button>
+            <button
+              type="button"
+              onClick={handleImportScannedStudents}
+              disabled={isImportingScanned}
+              style={{
+                background: "#16a34a",
+                color: "#ffffff",
+                border: "none",
+                borderRadius: "6px",
+                padding: "0.35rem 0.85rem",
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                cursor: "pointer"
+              }}
+            >
+              {isImportingScanned ? "Importing..." : "+ Import to Roster"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* COMBINED MARKS REGISTER & STUDENT ROSTER */}
       <div
@@ -703,6 +794,216 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Scanned Register Inspector Modal */}
+      {showRegisterScanModal && scannedRegisterData && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(15, 23, 42, 0.65)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "1.5rem"
+          }}
+        >
+          <div
+            style={{
+              background: "#ffffff",
+              borderRadius: "16px",
+              maxWidth: "960px",
+              width: "100%",
+              maxHeight: "90vh",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 25px 50px -12px rgba(15, 23, 42, 0.3)",
+              overflow: "hidden"
+            }}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: "1.25rem 1.5rem",
+                borderBottom: "1px solid #e2e8f0",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between"
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#f0fdf4", color: "#16a34a", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Camera size={18} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
+                    {scannedRegisterData.register_title}
+                  </h3>
+                  <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
+                    Scanned from {scannedRegisterData.filename} • {scannedRegisterData.students.length} students detected
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowRegisterScanModal(false)}
+                style={{ background: "#f1f5f9", border: "none", borderRadius: "8px", padding: "0.4rem", cursor: "pointer", color: "#64748b" }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Modal Body: Scanned Students Table */}
+            <div style={{ padding: "1.25rem 1.5rem", overflowY: "auto", flex: 1 }}>
+              {scannedRegisterData.preview_url && (
+                <div style={{ marginBottom: "1rem", padding: "0.75rem", background: "#f8fafc", borderRadius: "10px", border: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                  <img
+                    src={scannedRegisterData.preview_url}
+                    alt="Scanned Register"
+                    style={{ width: "70px", height: "70px", objectFit: "cover", borderRadius: "6px", border: "1px solid #cbd5e1" }}
+                  />
+                  <div>
+                    <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#0f172a" }}>
+                      Physical Register Sheet Preview
+                    </div>
+                    <div style={{ fontSize: "0.74rem", color: "#64748b" }}>
+                      Gemini OCR parsed tabular columns, roll numbers, names, and recorded scores.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ border: "1px solid #e2e8f0", borderRadius: "10px", overflow: "hidden" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem", textAlign: "left" }}>
+                  <thead>
+                    <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                      <th style={{ padding: "0.6rem 0.85rem", color: "#64748b", fontWeight: 700 }}>Roll No</th>
+                      <th style={{ padding: "0.6rem 0.85rem", color: "#64748b", fontWeight: 700 }}>Student Name</th>
+                      <th style={{ padding: "0.6rem 0.85rem", color: "#64748b", fontWeight: 700 }}>Section</th>
+                      <th style={{ padding: "0.6rem 0.85rem", color: "#64748b", fontWeight: 700 }}>Parent Details</th>
+                      <th style={{ padding: "0.6rem 0.85rem", color: "#64748b", fontWeight: 700 }}>Detected Marks / Attendance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {scannedRegisterData.students.map((st, sIdx) => (
+                      <tr key={sIdx} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                        <td style={{ padding: "0.65rem 0.85rem" }}>
+                          <input
+                            type="text"
+                            value={st.roll_number}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setScannedRegisterData((prev) => {
+                                if (!prev) return null;
+                                const next = [...prev.students];
+                                next[sIdx] = { ...next[sIdx], roll_number: val };
+                                return { ...prev, students: next };
+                              });
+                            }}
+                            style={{
+                              fontFamily: "monospace",
+                              fontWeight: 700,
+                              background: "#f1f5f9",
+                              border: "1px solid #cbd5e1",
+                              padding: "0.2rem 0.45rem",
+                              borderRadius: "4px",
+                              fontSize: "0.78rem",
+                              width: "80px"
+                            }}
+                          />
+                        </td>
+                        <td style={{ padding: "0.65rem 0.85rem" }}>
+                          <input
+                            type="text"
+                            value={st.name}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setScannedRegisterData((prev) => {
+                                if (!prev) return null;
+                                const next = [...prev.students];
+                                next[sIdx] = { ...next[sIdx], name: val };
+                                return { ...prev, students: next };
+                              });
+                            }}
+                            style={{
+                              fontWeight: 700,
+                              color: "#0f172a",
+                              border: "1px solid #cbd5e1",
+                              borderRadius: "4px",
+                              padding: "0.2rem 0.45rem",
+                              fontSize: "0.82rem",
+                              width: "100%",
+                              maxWidth: "200px"
+                            }}
+                          />
+                        </td>
+                        <td style={{ padding: "0.65rem 0.85rem" }}>
+                          <span style={{ background: "#eff6ff", color: "#1d4ed8", padding: "0.15rem 0.45rem", borderRadius: "4px", fontWeight: 700, fontSize: "0.74rem" }}>
+                            Section {st.section || "A"}
+                          </span>
+                        </td>
+                        <td style={{ padding: "0.65rem 0.85rem", color: "#64748b", fontSize: "0.76rem" }}>
+                          {st.parent_name ? `${st.parent_name} (${st.parent_phone || "No phone"})` : (st.parent_phone || "—")}
+                        </td>
+                        <td style={{ padding: "0.65rem 0.85rem" }}>
+                          {st.detected_marks ? (
+                            <span style={{ background: "#f0fdf4", color: "#166534", padding: "0.15rem 0.5rem", borderRadius: "4px", fontWeight: 700, fontSize: "0.76rem" }}>
+                              {st.detected_marks}
+                            </span>
+                          ) : (
+                            <span style={{ color: "#94a3b8", fontSize: "0.76rem" }}>—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div
+              style={{
+                padding: "1rem 1.5rem",
+                borderTop: "1px solid #e2e8f0",
+                background: "#f8fafc",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between"
+              }}
+            >
+              <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                Verify names and roll numbers, then click import to enroll into roster.
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowRegisterScanModal(false)}
+                  style={{ background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "8px", padding: "0.45rem 0.95rem", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer", color: "#334155" }}
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={handleImportScannedStudents}
+                  disabled={isImportingScanned}
+                  style={{ background: "#16a34a", color: "#ffffff", border: "none", borderRadius: "8px", padding: "0.45rem 1.15rem", fontSize: "0.82rem", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: "0.35rem", boxShadow: "0 2px 6px rgba(22,163,74,0.25)" }}
+                >
+                  <CheckCircle2 size={15} />
+                  <span>{isImportingScanned ? "Enrolling..." : `Import All ${scannedRegisterData.students.length} Students`}</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

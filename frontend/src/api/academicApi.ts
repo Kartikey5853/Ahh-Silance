@@ -156,6 +156,52 @@ export const academicApi = {
     await apiClient.delete(`/academic/students/${studentId}`);
   },
 
+  scanRegister: async (
+    file: File,
+    subjectId?: string,
+    classId?: string
+  ): Promise<{
+    status: string;
+    register_title: string;
+    filename: string;
+    preview_url: string;
+    total_detected: number;
+    students: Array<{
+      roll_number: string;
+      name: string;
+      section?: string;
+      parent_name?: string;
+      parent_phone?: string;
+      detected_marks?: string;
+    }>;
+  }> => {
+    const formData = new FormData();
+    formData.append("register_image", file);
+    if (subjectId) formData.append("subject_id", subjectId);
+    if (classId) formData.append("class_id", classId);
+    const res = await apiClient.post("/academic/students/scan-register", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 120000
+    });
+    return res.data;
+  },
+
+  batchImportStudents: async (payload: {
+    subject_id?: string;
+    class_id?: string;
+    students: Array<{
+      name: string;
+      roll_number: string;
+      section?: string;
+      parent_name?: string;
+      parent_phone?: string;
+      detected_marks?: string;
+    }>;
+  }): Promise<{ status: string; imported_count: number; students: Student[] }> => {
+    const res = await apiClient.post("/academic/students/batch-import", payload);
+    return res.data;
+  },
+
   // Exams
   listExams: async (subjectId?: string): Promise<Exam[]> => {
     const params: any = {};

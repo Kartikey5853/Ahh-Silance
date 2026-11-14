@@ -81,6 +81,13 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
   const [batchAnswerFiles, setBatchAnswerFiles] = useState<File[]>([]);
   const [batchFallbacks, setBatchFallbacks] = useState<Record<string, { name: string; roll: string }>>({});
   const [isGradingBatch, setIsGradingBatch] = useState(false);
+  const [batchGradingProgress, setBatchGradingProgress] = useState<{
+    current: number;
+    total: number;
+    currentFile: string;
+    studentName: string;
+    message: string;
+  } | null>(null);
   const [hideAnswerSheet, setHideAnswerSheet] = useState(false);
   const [sheetZoom, setSheetZoom] = useState(100);
   const [magicInk, setMagicInk] = useState(true);
@@ -344,6 +351,158 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
     const file = sheetData?.file || null;
     const text = sheetData?.text || "Candidate submitted examination answer booklet.";
     await startAsyncStudentEvaluation(selectedExamId, student.id, student.name, file, text, false);
+  };
+
+  const handleStartBatchGrading = async () => {
+    if (!selectedExamId || batchAnswerFiles.length === 0) return;
+    if (!hasAnswerKey) {
+      alert("An approved answer key is required to grade copies. Opening Answer Key Studio...");
+      handleOpenAnswerKeyStudio();
+      return;
+    }
+
+    setIsGradingBatch(true);
+    let updatedStudents = [...students];
+    const newEvaluationsMap: Record<string, AcademicEvaluation> = { ...evaluations };
+    let lastEvaluatedScorecard: AcademicEvaluation | null = null;
+    const totalFiles = batchAnswerFiles.length;
+
+    try {
+      for (let i = 0; i < totalFiles; i++) {
+        const file = batchAnswerFiles[i];
+        const fb = batchFallbacks[file.name] || { name: "", roll: "" };
+
+        // 1. Locate student or auto-create student if not found
+        let targetStudent = updatedStudents.find(
+          (s) =>
+            (fb.roll && s.roll_number.toLowerCase() === fb.roll.toLowerCase()) ||
+            (fb.name && s.name.toLowerCase() === fb.name.toLowerCase()) ||
+            file.name.toLowerCase().includes(s.roll_number.toLowerCase()) ||
+            file.name.toLowerCase().includes(s.name.toLowerCase().split(" ")[0])
+        );
+
+        // Fallback: check if an un-evaluated student exists at index
+        if (!targetStudent) {
+          const unassigned = updatedStudents.find((s) => !newEvaluationsMap[s.id]);
+          if (unassigned) {
+            targetStudent = unassigned;
+          }
+        }
+
+        // If STILL no target student (empty class or more files than students), create student on the fly
+        if (!targetStudent) {
+          const cleanName = fb.name.trim() || file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+          const cleanRoll = fb.roll.trim() || `ROLL-${String(updatedStudents.length + 1).padStart(3, "0")}`;
+          try {
+            if (activeExam?.subject_id) {
+              const created = await academicApi.addStudent(activeExam.subject_id, {
+                name: cleanName,
+                roll_number: cleanRoll,
+                section: activeExam.target_section || "A",
+                status: "Active"
+              });
+              targetStudent = created;
+            } else {
+              targetStudent = {
+                id: `stud-${Date.now()}-${i}`,
+                subject_id: activeExam?.subject_id || "",
+                name: cleanName,
+                roll_number: cleanRoll,
+                section: activeExam?.target_section || "A"
+              };
+            }
+          } catch {
+            targetStudent = {
+              id: `stud-${Date.now()}-${i}`,
+              subject_id: activeExam?.subject_id || "",
+              name: cleanName,
+              roll_number: cleanRoll,
+              section: activeExam?.target_section || "A"
+            };
+          }
+          if (targetStudent) {
+            updatedStudents.push(targetStudent);
+            setStudents([...updatedStudents]);
+          }
+        }
+
+        if (!targetStudent) continue;
+
+        // 2. Set file in state for this student
+        setStudentSheets((prev) => ({
+          ...prev,
+          [targetStudent.id]: { file, filename: file.name }
+        }));
+
+        setBatchGradingProgress({
+          current: i + 1,
+          total: totalFiles,
+          currentFile: file.name,
+          studentName: fb.name || targetStudent.name,
+          message: "Rasterizing pages & starting Prompt 1 spatial OCR..."
+        });
+
+        // 3. Dispatch async evaluation to backend
+        const accepted = await academicApi.evaluateStudentAsync(
+          selectedExamId,
+          targetStudent.id,
+          file
+        );
+
+        // 4. Poll job status until completed or failed
+        let pollCount = 0;
+        let jobCompleted = false;
+        while (!jobCompleted && pollCount < 90) {
+          await new Promise((resolve) => setTimeout(resolve, 1100));
+          pollCount++;
+          try {
+            const job = await academicApi.getJobStatus(accepted.job_id);
+            if (job.message) {
+              setBatchGradingProgress((prev) =>
+                prev ? { ...prev, message: job.message || prev.message } : prev
+              );
+            }
+            if (job.status === "completed" && job.result) {
+              const scorecard = job.result as AcademicEvaluation;
+              newEvaluationsMap[targetStudent.id] = scorecard;
+              setEvaluations({ ...newEvaluationsMap });
+              lastEvaluatedScorecard = scorecard;
+              jobCompleted = true;
+            } else if (job.status === "failed") {
+              console.error(`Evaluation failed for ${targetStudent.name}: ${job.error}`);
+              jobCompleted = true; // continue to next file
+            }
+          } catch (pollErr) {
+            // keep polling quietly across transient hiccups
+          }
+        }
+      }
+
+      // 5. Complete batch
+      setBatchAnswerFiles([]);
+      setBatchFallbacks({});
+      if (lastEvaluatedScorecard) {
+        setActiveScorecard(lastEvaluatedScorecard);
+        setCurrentSheetPage(1);
+        setActiveQuestionIdx(0);
+        setSheetImageMissing({});
+      }
+
+      // 6. Reload full evaluation list from database
+      const refreshedEvals = await academicApi.listEvaluations(selectedExamId);
+      const evalMap: Record<string, AcademicEvaluation> = {};
+      refreshedEvals.forEach((ev) => {
+        if (!evalMap[ev.student_id]) evalMap[ev.student_id] = ev;
+      });
+      setEvaluations(evalMap);
+
+      alert(`Batch Grading Complete! Successfully evaluated ${totalFiles} student copies.`);
+    } catch (err: any) {
+      alert("Batch evaluation error: " + (err?.response?.data?.detail || err?.message || "Check server connection"));
+    } finally {
+      setIsGradingBatch(false);
+      setBatchGradingProgress(null);
+    }
   };
 
   const handleReEvaluateScorecardFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2635,64 +2794,51 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
                   <button
                     type="button"
                     disabled={isGradingBatch}
-                    onClick={async () => {
-                      if (!selectedExamId || batchAnswerFiles.length === 0) return;
-                      setIsGradingBatch(true);
-                      try {
-                        for (let i = 0; i < batchAnswerFiles.length; i++) {
-                          const file = batchAnswerFiles[i];
-                          const fb = batchFallbacks[file.name] || { name: "", roll: "" };
-                          let targetStudent = students.find(
-                            (s) =>
-                              (fb.roll && s.roll_number.toLowerCase() === fb.roll.toLowerCase()) ||
-                              (fb.name && s.name.toLowerCase() === fb.name.toLowerCase()) ||
-                              file.name.toLowerCase().includes(s.roll_number.toLowerCase()) ||
-                              file.name.toLowerCase().includes(s.name.toLowerCase().split(" ")[0])
-                          );
-                          if (!targetStudent && i < students.length) {
-                            targetStudent = students[i];
-                          }
-                          if (targetStudent) {
-                            setStudentSheets((prev) => ({
-                              ...prev,
-                              [targetStudent!.id]: { file, filename: file.name }
-                            }));
-                            await startAsyncStudentEvaluation(
-                              selectedExamId,
-                              targetStudent.id,
-                              fb.name || targetStudent.name,
-                              file,
-                              undefined,
-                              false
-                            );
-                            break;
-                          }
-                        }
-                      } catch (err: any) {
-                        alert("Batch evaluation error: " + (err?.message || "Check server connection"));
-                      } finally {
-                        setIsGradingBatch(false);
-                      }
-                    }}
+                    onClick={handleStartBatchGrading}
                     style={{
-                      background: "#16a34a",
+                      background: isGradingBatch ? "#94a3b8" : "#16a34a",
                       color: "#ffffff",
                       border: "none",
                       borderRadius: "8px",
                       padding: "0.45rem 1.15rem",
                       fontSize: "0.82rem",
                       fontWeight: 800,
-                      cursor: "pointer",
+                      cursor: isGradingBatch ? "not-allowed" : "pointer",
                       display: "flex",
                       alignItems: "center",
                       gap: "0.4rem",
                       boxShadow: "0 2px 6px rgba(22, 163, 74, 0.25)"
                     }}
                   >
-                    <Sparkles size={14} />
-                    <span>{isGradingBatch ? "Grading Copies..." : `Grade Dropped Copies (${batchAnswerFiles.length})`}</span>
+                    {isGradingBatch ? <RefreshCw size={14} className="spin" /> : <Sparkles size={14} />}
+                    <span>{isGradingBatch ? `Grading Copy ${batchGradingProgress?.current || 1} of ${batchGradingProgress?.total || batchAnswerFiles.length}...` : `Grade Dropped Copies (${batchAnswerFiles.length})`}</span>
                   </button>
                 </div>
+
+                {batchGradingProgress && (
+                  <div
+                    style={{
+                      background: "#eff6ff",
+                      border: "1px solid #bfdbfe",
+                      borderRadius: "8px",
+                      padding: "0.6rem 0.85rem",
+                      marginBottom: "0.75rem",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.65rem"
+                    }}
+                  >
+                    <RefreshCw size={16} className="spin" style={{ color: "#2563eb", flexShrink: 0 }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#1e40af" }}>
+                        Grading Copy {batchGradingProgress.current} of {batchGradingProgress.total}: {batchGradingProgress.studentName} ({batchGradingProgress.currentFile})
+                      </div>
+                      <div style={{ fontSize: "0.74rem", color: "#3b82f6", marginTop: "2px" }}>
+                        {batchGradingProgress.message}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                   {batchAnswerFiles.map((f, fIdx) => {
