@@ -32,7 +32,9 @@ import {
   RefreshCw,
   ScanLine,
   Sparkles,
-  Users
+  Users,
+  FileText,
+  X
 } from "lucide-react";
 
 interface ScanningJobState {
@@ -75,6 +77,9 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
   // Active evaluation report (White Theme)
   const [activeScorecard, setActiveScorecard] = useState<AcademicEvaluation | null>(null);
   const [profileModalStudent, setProfileModalStudent] = useState<Student | null>(null);
+  const [batchAnswerFiles, setBatchAnswerFiles] = useState<File[]>([]);
+  const [batchFallbacks, setBatchFallbacks] = useState<Record<string, { name: string; roll: string }>>({});
+  const [isGradingBatch, setIsGradingBatch] = useState(false);
   const [hideAnswerSheet, setHideAnswerSheet] = useState(false);
   const [sheetZoom, setSheetZoom] = useState(100);
   const [magicInk, setMagicInk] = useState(true);
@@ -2533,6 +2538,203 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
             </div>
           </div>
 
+          {/* Prominent Top Student Answer Copies Dropzone */}
+          <div
+            style={{
+              background: "#ffffff",
+              border: "1px solid #e2e8f0",
+              borderRadius: "14px",
+              padding: "1.25rem",
+              marginBottom: "1.25rem",
+              boxShadow: "0 1px 3px rgba(0, 0, 0, 0.03)"
+            }}
+          >
+            <label
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "2.5rem 1.5rem",
+                border: "2px dashed #3b82f6",
+                borderRadius: "12px",
+                background: "#f8faff",
+                cursor: "pointer",
+                textAlign: "center",
+                transition: "all 0.2s ease"
+              }}
+            >
+              <UploadCloud size={40} style={{ color: "#2563eb", marginBottom: "0.6rem" }} />
+              <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "#0f172a" }}>
+                Drop any number of PDFs here and AI will start grading
+              </div>
+              <div style={{ fontSize: "0.84rem", color: "#64748b", marginTop: "0.3rem", maxWidth: "580px" }}>
+                AI extracts student names &amp; roll numbers from the paper header automatically, with fallback for unclear handwriting.
+              </div>
+              <div style={{ marginTop: "0.75rem", fontSize: "0.76rem", color: "#94a3b8" }}>
+                Click to browse files or drag and drop student booklet PDFs
+              </div>
+              <input
+                type="file"
+                multiple
+                accept=".pdf,.png,.jpg,.jpeg"
+                onChange={(e) => {
+                  if (e.target.files) {
+                    const newFiles = Array.from(e.target.files);
+                    setBatchAnswerFiles((prev) => [...prev, ...newFiles]);
+                  }
+                }}
+                style={{ display: "none" }}
+              />
+            </label>
+
+            {batchAnswerFiles.length > 0 && (
+              <div style={{ marginTop: "1rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
+                  <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#166534" }}>
+                    ✓ {batchAnswerFiles.length} Cop{batchAnswerFiles.length === 1 ? "y" : "ies"} Ready for AI Grading
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isGradingBatch}
+                    onClick={async () => {
+                      if (!selectedExamId || batchAnswerFiles.length === 0) return;
+                      setIsGradingBatch(true);
+                      try {
+                        for (let i = 0; i < batchAnswerFiles.length; i++) {
+                          const file = batchAnswerFiles[i];
+                          const fb = batchFallbacks[file.name] || { name: "", roll: "" };
+                          let targetStudent = students.find(
+                            (s) =>
+                              (fb.roll && s.roll_number.toLowerCase() === fb.roll.toLowerCase()) ||
+                              (fb.name && s.name.toLowerCase() === fb.name.toLowerCase()) ||
+                              file.name.toLowerCase().includes(s.roll_number.toLowerCase()) ||
+                              file.name.toLowerCase().includes(s.name.toLowerCase().split(" ")[0])
+                          );
+                          if (!targetStudent && i < students.length) {
+                            targetStudent = students[i];
+                          }
+                          if (targetStudent) {
+                            setStudentSheets((prev) => ({
+                              ...prev,
+                              [targetStudent!.id]: { file, filename: file.name }
+                            }));
+                            await startAsyncStudentEvaluation(
+                              selectedExamId,
+                              targetStudent.id,
+                              fb.name || targetStudent.name,
+                              file,
+                              undefined,
+                              false
+                            );
+                            break;
+                          }
+                        }
+                      } catch (err: any) {
+                        alert("Batch evaluation error: " + (err?.message || "Check server connection"));
+                      } finally {
+                        setIsGradingBatch(false);
+                      }
+                    }}
+                    style={{
+                      background: "#16a34a",
+                      color: "#ffffff",
+                      border: "none",
+                      borderRadius: "8px",
+                      padding: "0.45rem 1.15rem",
+                      fontSize: "0.82rem",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                      boxShadow: "0 2px 6px rgba(22, 163, 74, 0.25)"
+                    }}
+                  >
+                    <Sparkles size={14} />
+                    <span>{isGradingBatch ? "Grading Copies..." : `Grade Dropped Copies (${batchAnswerFiles.length})`}</span>
+                  </button>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  {batchAnswerFiles.map((f, fIdx) => {
+                    const fb = batchFallbacks[f.name] || { name: "", roll: "" };
+                    return (
+                      <div
+                        key={fIdx}
+                        style={{
+                          background: "#f8fafc",
+                          border: "1px solid #e2e8f0",
+                          borderRadius: "8px",
+                          padding: "0.65rem 0.85rem",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "0.75rem",
+                          flexWrap: "wrap"
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: "200px" }}>
+                          <FileText size={16} style={{ color: "#2563eb" }} />
+                          <div>
+                            <div style={{ fontSize: "0.84rem", fontWeight: 700, color: "#0f172a" }}>{f.name}</div>
+                            <div style={{ fontSize: "0.72rem", color: "#64748b" }}>{(f.size / 1024).toFixed(1)} KB • Auto-detecting name &amp; roll</div>
+                          </div>
+                        </div>
+
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flex: 1, justifyContent: "flex-end", flexWrap: "wrap" }}>
+                          <input
+                            type="text"
+                            placeholder="Fallback Student Name (optional)"
+                            value={fb.name}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setBatchFallbacks((prev) => ({ ...prev, [f.name]: { ...fb, name: val } }));
+                            }}
+                            style={{
+                              padding: "0.35rem 0.6rem",
+                              borderRadius: "6px",
+                              border: "1px solid #cbd5e1",
+                              fontSize: "0.76rem",
+                              minWidth: "160px",
+                              background: "#ffffff"
+                            }}
+                            title="Fill if handwriting on header is unclear"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Fallback Roll No"
+                            value={fb.roll}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setBatchFallbacks((prev) => ({ ...prev, [f.name]: { ...fb, roll: val } }));
+                            }}
+                            style={{
+                              padding: "0.35rem 0.6rem",
+                              borderRadius: "6px",
+                              border: "1px solid #cbd5e1",
+                              fontSize: "0.76rem",
+                              width: "110px",
+                              background: "#ffffff"
+                            }}
+                            title="Fill if student roll number is unclear"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setBatchAnswerFiles((prev) => prev.filter((_, idx) => idx !== fIdx))}
+                            style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626", borderRadius: "6px", padding: "0.35rem", cursor: "pointer" }}
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Student Filter & Search Toolbar */}
           <div
             style={{
@@ -2646,11 +2848,15 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
                     return (
                       <tr key={stud.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
                         <td style={{ padding: "0.85rem 1.25rem" }}>
-                          <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.92rem" }}>
+                          <div
+                            onClick={() => setProfileModalStudent(stud)}
+                            style={{ fontWeight: 700, color: "#2563eb", fontSize: "0.92rem", cursor: "pointer", textDecoration: "underline", textUnderlineOffset: "3px" }}
+                            title="Click to view Student & Parent Profile and previous marks"
+                          >
                             {stud.name}
                           </div>
                           <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
-                            Section {stud.section || "A"}
+                            Section {stud.section || "A"} • Click for Parent Profile
                           </div>
                         </td>
                         <td style={{ padding: "0.85rem 1.25rem" }}>

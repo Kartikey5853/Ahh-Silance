@@ -150,6 +150,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
   const [showAnswerSheetModal, setShowAnswerSheetModal] = useState(false);
   const [sheetModalExam, setSheetModalExam] = useState<Exam | null>(null);
   const [uploadedAnswerFiles, setUploadedAnswerFiles] = useState<File[]>([]);
+  const [fileFallbacks, setFileFallbacks] = useState<Record<string, { name: string; roll: string }>>({});
 
   // Digital Paper Header
   const [digitalHeader, setDigitalHeader] = useState<DigitalPaperHeader>({
@@ -1105,7 +1106,9 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
         setExamDetails(det);
       }
       if (approveAndExit) {
-        setViewMode(answerKeyReturnView === "create" ? "list" : answerKeyReturnView);
+        const targetExam = res?.exam || activeExam;
+        setViewMode("list");
+        onNavigate("evaluation", { examId: targetExam.id });
       }
     } catch (err: any) {
       alert("Failed to save answer key: " + (err?.response?.data?.detail || err.message));
@@ -1137,44 +1140,49 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
           style={{
             maxWidth: "1050px",
             minHeight: "560px",
-            background: "#0b132b",
-            color: "#ffffff",
-            border: "1px solid #1e293b",
-            borderRadius: "14px",
+            background: "#ffffff",
+            color: "#0f172a",
+            border: "1px solid #e2e8f0",
+            borderRadius: "16px",
             overflow: "hidden",
             display: "flex",
-            flexDirection: "column"
+            flexDirection: "column",
+            boxShadow: "0 25px 50px -12px rgba(15, 23, 42, 0.25)"
           }}
         >
           {/* Modal Top Bar */}
-          <div style={{ padding: "1.25rem 1.75rem", borderBottom: "1px solid #1e293b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ padding: "1.25rem 1.75rem", borderBottom: "1px solid #e2e8f0", background: "#ffffff", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
-              <h3 style={{ fontSize: "1.25rem", fontWeight: 800, margin: 0, color: "#ffffff" }}>
+              <h3 style={{ fontSize: "1.25rem", fontWeight: 800, margin: 0, color: "#0f172a" }}>
                 Student Copies &amp; Evaluation Desk
               </h3>
-              <div style={{ fontSize: "0.8rem", color: "#94a3b8", marginTop: "0.2rem" }}>
+              <div style={{ fontSize: "0.8rem", color: "#64748b", marginTop: "0.2rem" }}>
                 {sheetModalExam.title} • {subjects.find((s) => s.id === sheetModalExam.subject_id)?.name || "Subject"}
               </div>
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-              <button onClick={() => setShowAnswerSheetModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }}>
-                <X size={20} />
+              <button
+                onClick={() => setShowAnswerSheetModal(false)}
+                style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: "8px", color: "#64748b", cursor: "pointer", padding: "0.4rem" }}
+              >
+                <X size={18} />
               </button>
             </div>
           </div>
 
           {/* Sub-Header Actions & Section Tag */}
-          <div style={{ padding: "1rem 1.75rem", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #1e293b" }}>
-            <div style={{ fontSize: "0.85rem", color: "#94a3b8" }}>
-              Upload handwritten student answer copies (PDFs or images). Gemini AI evaluates each student's copy against the rubrics.
+          <div style={{ padding: "1rem 1.75rem", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #f1f5f9", background: "#f8fafc" }}>
+            <div style={{ fontSize: "0.85rem", color: "#64748b" }}>
+              Drop or select handwritten student answer copies (PDFs). AI extracts names and roll numbers automatically.
             </div>
 
             <div style={{ display: "flex", gap: "0.6rem" }}>
               <label
                 style={{
-                  background: "#2563eb",
-                  color: "#ffffff",
+                  background: "#ffffff",
+                  border: "1px solid #cbd5e1",
+                  color: "#334155",
                   padding: "0.45rem 1rem",
                   borderRadius: "8px",
                   fontSize: "0.82rem",
@@ -1185,7 +1193,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                   gap: "0.35rem"
                 }}
               >
-                <UploadCloud size={15} /> Select Student Copies
+                <UploadCloud size={15} /> Select More Copies
                 <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg" onChange={handleAnswerSheetsSelected} style={{ display: "none" }} />
               </label>
 
@@ -1207,7 +1215,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                   display: "flex",
                   alignItems: "center",
                   gap: "0.45rem",
-                  boxShadow: "0 2px 6px rgba(22, 163, 74, 0.3)"
+                  boxShadow: "0 2px 6px rgba(22, 163, 74, 0.25)"
                 }}
               >
                 <Sparkles size={15} />
@@ -1217,78 +1225,162 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
           </div>
 
           {/* Modal Body: Upload Area */}
-          <div style={{ padding: "1.5rem 1.75rem", flex: 1, overflowY: "auto" }}>
+          <div style={{ padding: "1.5rem 1.75rem", flex: 1, overflowY: "auto", background: "#fcfdfe" }}>
             <label
               style={{
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
-                padding: "3.5rem 2rem",
-                border: "2px dashed #334155",
+                padding: "3rem 2rem",
+                border: "2px dashed #3b82f6",
                 borderRadius: "14px",
-                background: "rgba(15, 23, 42, 0.4)",
+                background: "#f0f7ff",
                 cursor: "pointer",
-                textAlign: "center"
+                textAlign: "center",
+                transition: "all 0.2s ease"
               }}
             >
-              <UploadCloud size={40} style={{ color: "#60a5fa", marginBottom: "0.75rem" }} />
-              <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "#ffffff" }}>
-                Drop student handwritten answer sheets here, or click to browse
+              <UploadCloud size={44} style={{ color: "#2563eb", marginBottom: "0.75rem" }} />
+              <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "#0f172a" }}>
+                Drop any number of PDFs here and it will start grading
               </div>
-              <div style={{ fontSize: "0.8rem", color: "#94a3b8", marginTop: "0.25rem" }}>
-                PDF, JPG, or PNG files · Select multiple copies
+              <div style={{ fontSize: "0.85rem", color: "#64748b", marginTop: "0.35rem", maxWidth: "600px" }}>
+                AI takes student names and roll numbers from the paper header automatically, with fallback for unclear handwriting.
+              </div>
+              <div style={{ marginTop: "1rem", fontSize: "0.75rem", color: "#94a3b8" }}>
+                Click to browse files or drag and drop PDFs directly
               </div>
               <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg" onChange={handleAnswerSheetsSelected} style={{ display: "none" }} />
             </label>
 
             {uploadedAnswerFiles.length > 0 && (
-              <div style={{ marginTop: "1.25rem" }}>
-                <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#4ade80", marginBottom: "0.5rem" }}>
-                  ✓ {uploadedAnswerFiles.length} Student Answer Copies Attached:
+              <div style={{ marginTop: "1.5rem" }}>
+                <div style={{ fontSize: "0.88rem", fontWeight: 700, color: "#166534", marginBottom: "0.75rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                  <span>✓</span>
+                  <span>{uploadedAnswerFiles.length} Student Answer Copies Attached:</span>
                 </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem" }}>
-                  {uploadedAnswerFiles.map((file, fIdx) => (
-                    <div
-                      key={fIdx}
-                      style={{
-                        background: "#1e293b",
-                        border: "1px solid #334155",
-                        borderRadius: "6px",
-                        padding: "0.3rem 0.65rem",
-                        fontSize: "0.78rem",
-                        color: "#e2e8f0",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.35rem"
-                      }}
-                    >
-                      <FileText size={13} style={{ color: "#60a5fa" }} />
-                      <span>{file.name}</span>
-                    </div>
-                  ))}
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
+                  {uploadedAnswerFiles.map((file, fIdx) => {
+                    const fb = fileFallbacks[file.name] || { name: "", roll: "" };
+                    return (
+                      <div
+                        key={fIdx}
+                        style={{
+                          background: "#ffffff",
+                          border: "1px solid #e2e8f0",
+                          borderRadius: "10px",
+                          padding: "0.85rem 1rem",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "1rem",
+                          flexWrap: "wrap",
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.02)"
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", minWidth: "220px" }}>
+                          <div style={{ width: "32px", height: "32px", borderRadius: "6px", background: "#eff6ff", color: "#2563eb", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <FileText size={16} />
+                          </div>
+                          <div>
+                            <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#0f172a" }}>
+                              {file.name}
+                            </div>
+                            <div style={{ fontSize: "0.72rem", color: "#94a3b8" }}>
+                              {(file.size / 1024).toFixed(1)} KB • Auto-extracting header
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Fallback inputs for unclear handwriting */}
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flex: 1, justifyContent: "flex-end", flexWrap: "wrap" }}>
+                          <input
+                            type="text"
+                            placeholder="Fallback Student Name (optional)"
+                            value={fb.name}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setFileFallbacks((prev) => ({
+                                ...prev,
+                                [file.name]: { ...fb, name: val }
+                              }));
+                            }}
+                            style={{
+                              padding: "0.4rem 0.65rem",
+                              borderRadius: "6px",
+                              border: "1px solid #cbd5e1",
+                              fontSize: "0.78rem",
+                              minWidth: "180px",
+                              background: "#ffffff"
+                            }}
+                            title="Fill only if student handwriting on the header is unclear"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Fallback Roll No"
+                            value={fb.roll}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setFileFallbacks((prev) => ({
+                                ...prev,
+                                [file.name]: { ...fb, roll: val }
+                              }));
+                            }}
+                            style={{
+                              padding: "0.4rem 0.65rem",
+                              borderRadius: "6px",
+                              border: "1px solid #cbd5e1",
+                              fontSize: "0.78rem",
+                              width: "120px",
+                              background: "#ffffff"
+                            }}
+                            title="Fill only if student roll number is unclear"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setUploadedAnswerFiles((prev) => prev.filter((_, idx) => idx !== fIdx));
+                            }}
+                            style={{
+                              background: "#fef2f2",
+                              border: "1px solid #fecaca",
+                              color: "#dc2626",
+                              borderRadius: "6px",
+                              padding: "0.4rem",
+                              cursor: "pointer"
+                            }}
+                            title="Remove file"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
           </div>
 
           {/* Modal Footer */}
-          <div style={{ padding: "1rem 1.75rem", borderTop: "1px solid #1e293b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "0.8rem", color: "#94a3b8" }}>
-              {uploadedAnswerFiles.length} file(s) attached
+          <div style={{ padding: "1rem 1.75rem", borderTop: "1px solid #e2e8f0", background: "#ffffff", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "0.82rem", color: "#64748b" }}>
+              {uploadedAnswerFiles.length} student answer cop{uploadedAnswerFiles.length === 1 ? "y" : "ies"} attached
             </span>
             <div style={{ display: "flex", gap: "0.75rem" }}>
               <button
                 type="button"
                 onClick={() => setShowAnswerSheetModal(false)}
                 style={{
-                  background: "#1e293b",
-                  border: "1px solid #334155",
-                  color: "#cbd5e1",
+                  background: "#ffffff",
+                  border: "1px solid #cbd5e1",
+                  color: "#475569",
                   padding: "0.55rem 1rem",
                   borderRadius: "8px",
                   fontSize: "0.85rem",
-                  cursor: "pointer"
+                  cursor: "pointer",
+                  fontWeight: 600
                 }}
               >
                 Close
@@ -1311,11 +1403,11 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                   display: "flex",
                   alignItems: "center",
                   gap: "0.45rem",
-                  boxShadow: "0 2px 8px rgba(22, 163, 74, 0.3)"
+                  boxShadow: "0 2px 8px rgba(22, 163, 74, 0.25)"
                 }}
               >
                 <Sparkles size={16} />
-                <span>Launch Evaluation Desk</span>
+                <span>Launch Evaluation Desk →</span>
               </button>
             </div>
           </div>
