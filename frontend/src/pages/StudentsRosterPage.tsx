@@ -30,9 +30,6 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
   initialSubjectId,
   onNavigate
 }) => {
-  // Active Tab: "register" (Marksheet) or "roster" (Students Directory)
-  const [activeTab, setActiveTab] = useState<"register" | "roster">("register");
-
   // Hierarchy Data
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -179,11 +176,20 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
     evalByStudentId.set(ev.student_id, ev);
   });
 
+  const filteredConsolidatedList = consolidatedList.filter((g) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    return (
+      g.primary.name.toLowerCase().includes(q) ||
+      (g.primary.roll_number && g.primary.roll_number.toLowerCase().includes(q))
+    );
+  });
+
   // Export to Excel / CSV
   const handleExportCsv = () => {
     if (!activeExam) return;
     const headers = ["Roll No", "Student Name", "Section", "Score", "Max Marks", "Percentage", "Status"];
-    const rows = consolidatedList.map((g) => {
+    const rows = filteredConsolidatedList.map((g) => {
       const ev = evalByStudentId.get(g.primary.id);
       const score = ev ? ev.total_score : 0;
       const pct = ev ? ev.percentage.toFixed(1) : "0.0";
@@ -203,7 +209,7 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
 
   return (
     <div className="students-roster-page" style={{ maxWidth: "1280px", margin: "0 auto", paddingBottom: "4rem" }}>
-      {/* Tab Switcher Header */}
+      {/* Top Header & Action Controls */}
       <div
         style={{
           display: "flex",
@@ -214,280 +220,285 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
           gap: "1rem"
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            background: "#e2e8f0",
-            padding: "0.25rem",
-            borderRadius: "10px"
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => setActiveTab("register")}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <div
             style={{
-              background: activeTab === "register" ? "#ffffff" : "transparent",
-              color: activeTab === "register" ? "#0f172a" : "#64748b",
-              border: "none",
-              borderRadius: "8px",
-              padding: "0.5rem 1rem",
-              fontSize: "0.85rem",
-              fontWeight: 700,
-              cursor: "pointer",
-              boxShadow: activeTab === "register" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+              width: "40px",
+              height: "40px",
+              borderRadius: "10px",
+              background: "#eff6ff",
+              color: "#2563eb",
               display: "flex",
               alignItems: "center",
-              gap: "0.45rem"
+              justifyContent: "center"
             }}
           >
-            <Award size={15} />
-            <span>Marks Register</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("roster")}
-            style={{
-              background: activeTab === "roster" ? "#ffffff" : "transparent",
-              color: activeTab === "roster" ? "#0f172a" : "#64748b",
-              border: "none",
-              borderRadius: "8px",
-              padding: "0.5rem 1rem",
-              fontSize: "0.85rem",
-              fontWeight: 700,
-              cursor: "pointer",
-              boxShadow: activeTab === "roster" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.45rem"
-            }}
-          >
-            <Users size={15} />
-            <span>Students Enrolled ({consolidatedList.length})</span>
-          </button>
+            <Award size={22} />
+          </div>
+          <div>
+            <h1 style={{ fontSize: "1.35rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
+              Marks Register &amp; Student Roster
+            </h1>
+            <div style={{ fontSize: "0.8rem", color: "#64748b", marginTop: "2px" }}>
+              Unified student registry with live examination performance ({filteredConsolidatedList.length} students)
+            </div>
+          </div>
         </div>
 
         {/* Action Buttons */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
-          {activeTab === "register" ? (
-            <>
-              <button
-                type="button"
-                onClick={handleExportCsv}
-                style={{
-                  background: "#16a34a",
-                  color: "#ffffff",
-                  border: "none",
-                  borderRadius: "8px",
-                  padding: "0.5rem 0.85rem",
-                  fontSize: "0.82rem",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.35rem"
-                }}
-              >
-                <Download size={14} />
-                <span>Export Excel</span>
-              </button>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={() => handleOpenAddModal()}
+            style={{
+              background: "#2563eb",
+              color: "#ffffff",
+              border: "none",
+              borderRadius: "8px",
+              padding: "0.5rem 1rem",
+              fontSize: "0.85rem",
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.35rem",
+              boxShadow: "0 1px 3px rgba(37,99,235,0.2)"
+            }}
+          >
+            <UserPlus size={15} />
+            <span>+ Add Student</span>
+          </button>
 
-              <button
-                type="button"
-                onClick={() => window.print()}
-                style={{
-                  background: "#f1f5f9",
-                  border: "1px solid #cbd5e1",
-                  color: "#334155",
-                  borderRadius: "8px",
-                  padding: "0.5rem 0.85rem",
-                  fontSize: "0.82rem",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.35rem"
-                }}
-              >
-                <Printer size={14} />
-                <span>Print</span>
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={() => handleOpenAddModal()}
-              style={{
-                background: "#2563eb",
-                color: "#ffffff",
-                border: "none",
-                borderRadius: "8px",
-                padding: "0.5rem 1rem",
-                fontSize: "0.85rem",
-                fontWeight: 700,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.35rem"
-              }}
-            >
-              <UserPlus size={15} />
-              <span>+ Add Student</span>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            style={{
+              background: "#16a34a",
+              color: "#ffffff",
+              border: "none",
+              borderRadius: "8px",
+              padding: "0.5rem 0.85rem",
+              fontSize: "0.82rem",
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.35rem"
+            }}
+          >
+            <Download size={14} />
+            <span>Export Excel</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => window.print()}
+            style={{
+              background: "#f1f5f9",
+              border: "1px solid #cbd5e1",
+              color: "#334155",
+              borderRadius: "8px",
+              padding: "0.5rem 0.85rem",
+              fontSize: "0.82rem",
+              fontWeight: 600,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.35rem"
+            }}
+          >
+            <Printer size={14} />
+            <span>Print</span>
+          </button>
         </div>
       </div>
 
-      {/* ================= TAB 1: MARKS REGISTER ================= */}
-      {activeTab === "register" && (
+      {/* COMBINED MARKS REGISTER & STUDENT ROSTER */}
+      <div
+        style={{
+          background: "#ffffff",
+          border: "1px solid #e2e8f0",
+          borderRadius: "14px",
+          padding: "1.5rem",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.02)"
+        }}
+      >
+        {/* Controls Bar: Exam Selector + Search */}
         <div
           style={{
-            background: "#ffffff",
-            border: "1px solid #e2e8f0",
-            borderRadius: "14px",
-            padding: "1.5rem",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.02)"
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            paddingBottom: "1.25rem",
+            borderBottom: "1px solid #e2e8f0",
+            marginBottom: "1.25rem",
+            flexWrap: "wrap",
+            gap: "1rem"
           }}
         >
-          {/* Exam Filter Dropdown */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              paddingBottom: "1.25rem",
-              borderBottom: "1px solid #e2e8f0",
-              marginBottom: "1.25rem",
-              flexWrap: "wrap",
-              gap: "1rem"
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
-              <FileSpreadsheet size={18} style={{ color: "#2563eb" }} />
-              <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#334155" }}>
-                Select Exam Paper:
-              </span>
-              <select
-                value={selectedExamId}
-                onChange={(e) => setSelectedExamId(e.target.value)}
-                style={{
-                  padding: "0.45rem 0.85rem",
-                  borderRadius: "8px",
-                  border: "1px solid #cbd5e1",
-                  fontSize: "0.88rem",
-                  fontWeight: 600,
-                  background: "#ffffff"
-                }}
-              >
-                {exams.map((ex) => (
-                  <option key={ex.id} value={ex.id}>
-                    {ex.title} (Max: {ex.max_marks} Marks)
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", flexWrap: "wrap" }}>
+            <FileSpreadsheet size={18} style={{ color: "#2563eb" }} />
+            <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#334155" }}>
+              Exam Paper:
+            </span>
+            <select
+              value={selectedExamId}
+              onChange={(e) => setSelectedExamId(e.target.value)}
+              style={{
+                padding: "0.45rem 0.85rem",
+                borderRadius: "8px",
+                border: "1px solid #cbd5e1",
+                fontSize: "0.88rem",
+                fontWeight: 600,
+                background: "#ffffff"
+              }}
+            >
+              {exams.map((ex) => (
+                <option key={ex.id} value={ex.id}>
+                  {ex.title} (Max: {ex.max_marks} Marks)
+                </option>
+              ))}
+            </select>
+          </div>
 
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
             {activeExam && (
               <div style={{ display: "flex", alignItems: "center", gap: "1rem", fontSize: "0.82rem", color: "#64748b" }}>
                 <span>Max Marks: <strong>{activeExam.max_marks}</strong></span>
-                <span>Passing Marks: <strong>{activeExam.passing_marks}</strong></span>
-                <span>Copies Evaluated: <strong>{examEvaluations.length} / {consolidatedList.length}</strong></span>
+                <span>Passing: <strong>{activeExam.passing_marks}</strong></span>
+                <span>Evaluated: <strong>{examEvaluations.length} / {consolidatedList.length}</strong></span>
               </div>
             )}
+
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.45rem",
+                background: "#f8fafc",
+                border: "1px solid #cbd5e1",
+                borderRadius: "8px",
+                padding: "0.42rem 0.75rem",
+                minWidth: "220px"
+              }}
+            >
+              <Search size={15} style={{ color: "#94a3b8" }} />
+              <input
+                type="text"
+                placeholder="Search name or roll no..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  border: "none",
+                  outline: "none",
+                  background: "transparent",
+                  fontSize: "0.84rem",
+                  width: "100%"
+                }}
+              />
+            </div>
           </div>
+        </div>
 
-          {/* Marksheet Table */}
-          {consolidatedList.length > 0 ? (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
-                <thead>
-                  <tr style={{ background: "#f8fafc", borderBottom: "2px solid #e2e8f0", textAlign: "left" }}>
-                    <th style={{ padding: "0.75rem 1rem", fontWeight: 700, color: "#475569", width: "100px" }}>Roll No</th>
-                    <th style={{ padding: "0.75rem 1rem", fontWeight: 700, color: "#475569" }}>Student Name</th>
-                    <th style={{ padding: "0.75rem 1rem", fontWeight: 700, color: "#475569", width: "90px" }}>Section</th>
-                    <th style={{ padding: "0.75rem 1rem", fontWeight: 700, color: "#475569", width: "120px" }}>Total Marks</th>
-                    <th style={{ padding: "0.75rem 1rem", fontWeight: 700, color: "#475569", width: "110px" }}>Percentage</th>
-                    <th style={{ padding: "0.75rem 1rem", fontWeight: 700, color: "#475569", width: "130px" }}>Result</th>
-                    <th style={{ padding: "0.75rem 1rem", fontWeight: 700, color: "#475569", textAlign: "right" }}>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {consolidatedList.map((g) => {
-                    const ev = evalByStudentId.get(g.primary.id);
-                    const isEvaluated = Boolean(ev);
-                    const score = ev ? ev.total_score : 0;
-                    const maxM = activeExam?.max_marks || 50;
-                    const passM = activeExam?.passing_marks || 20;
-                    const pct = ev ? ev.percentage : 0;
-                    const isPass = score >= passM;
+        {/* Unified Table: Students + Marks */}
+        {filteredConsolidatedList.length > 0 ? (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
+              <thead>
+                <tr style={{ background: "#f8fafc", borderBottom: "2px solid #e2e8f0", textAlign: "left" }}>
+                  <th style={{ padding: "0.75rem 1rem", fontWeight: 700, color: "#475569", width: "100px" }}>Roll No</th>
+                  <th style={{ padding: "0.75rem 1rem", fontWeight: 700, color: "#475569" }}>Student Name</th>
+                  <th style={{ padding: "0.75rem 1rem", fontWeight: 700, color: "#475569", width: "90px" }}>Section</th>
+                  <th style={{ padding: "0.75rem 1rem", fontWeight: 700, color: "#475569", width: "120px" }}>Total Marks</th>
+                  <th style={{ padding: "0.75rem 1rem", fontWeight: 700, color: "#475569", width: "110px" }}>Percentage</th>
+                  <th style={{ padding: "0.75rem 1rem", fontWeight: 700, color: "#475569", width: "130px" }}>Result</th>
+                  <th style={{ padding: "0.75rem 1rem", fontWeight: 700, color: "#475569", textAlign: "right" }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredConsolidatedList.map((g) => {
+                  const ev = evalByStudentId.get(g.primary.id);
+                  const isEvaluated = Boolean(ev);
+                  const score = ev ? ev.total_score : 0;
+                  const maxM = activeExam?.max_marks || 50;
+                  const passM = activeExam?.passing_marks || 20;
+                  const pct = ev ? ev.percentage : 0;
+                  const isPass = score >= passM;
 
-                    return (
-                      <tr
-                        key={g.primary.id}
-                        style={{
-                          borderBottom: "1px solid #f1f5f9",
-                          transition: "background 0.15s ease"
-                        }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                      >
-                        <td style={{ padding: "0.75rem 1rem", fontWeight: 700, color: "#0f172a" }}>
-                          {g.primary.roll_number}
-                        </td>
-                        <td style={{ padding: "0.75rem 1rem" }}>
-                          <div style={{ fontWeight: 600, color: "#0f172a" }}>{g.primary.name}</div>
-                          <div style={{ fontSize: "0.74rem", color: "#64748b" }}>
-                            {g.enrolledSubjects.map((s) => s.name).join(", ") || "General"}
-                          </div>
-                        </td>
-                        <td style={{ padding: "0.75rem 1rem", color: "#64748b" }}>
-                          {g.sections.join(", ") || "A"}
-                        </td>
-                        <td style={{ padding: "0.75rem 1rem", fontWeight: 700 }}>
-                          {isEvaluated ? (
-                            <span style={{ color: "#0f172a" }}>{score} / {maxM}</span>
-                          ) : (
-                            <span style={{ color: "#94a3b8" }}>-- / {maxM}</span>
-                          )}
-                        </td>
-                        <td style={{ padding: "0.75rem 1rem" }}>
-                          {isEvaluated ? (
-                            <span style={{ fontWeight: 600, color: "#334155" }}>{pct.toFixed(1)}%</span>
-                          ) : (
-                            <span style={{ color: "#94a3b8" }}>--</span>
-                          )}
-                        </td>
-                        <td style={{ padding: "0.75rem 1rem" }}>
-                          {isEvaluated ? (
-                            <span
-                              style={{
-                                background: isPass ? "#f0fdf4" : "#fef2f2",
-                                color: isPass ? "#166534" : "#dc2626",
-                                border: `1px solid ${isPass ? "#bbf7d0" : "#fecaca"}`,
-                                padding: "0.2rem 0.55rem",
-                                borderRadius: "9999px",
-                                fontSize: "0.72rem",
-                                fontWeight: 700
-                              }}
-                            >
-                              {isPass ? "PASS" : "RETEST"}
-                            </span>
-                          ) : (
-                            <span
-                              style={{
-                                background: "#f8fafc",
-                                color: "#64748b",
-                                padding: "0.2rem 0.55rem",
-                                borderRadius: "9999px",
-                                fontSize: "0.72rem",
-                                fontWeight: 600
-                              }}
-                            >
-                              PENDING
-                            </span>
-                          )}
-                        </td>
-                        <td style={{ padding: "0.75rem 1rem", textAlign: "right" }}>
+                  return (
+                    <tr
+                      key={g.primary.id}
+                      style={{
+                        borderBottom: "1px solid #f1f5f9",
+                        transition: "background 0.15s ease"
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                    >
+                      <td style={{ padding: "0.75rem 1rem", fontWeight: 700, color: "#0f172a" }}>
+                        {g.primary.roll_number}
+                      </td>
+                      <td style={{ padding: "0.75rem 1rem" }}>
+                        <div
+                          onClick={() => setSelectedStudentForProfile(g.primary)}
+                          style={{ fontWeight: 600, color: "#0f172a", cursor: "pointer" }}
+                          title="Click to view full student profile & parent scorecard"
+                        >
+                          {g.primary.name}
+                        </div>
+                        <div style={{ fontSize: "0.74rem", color: "#64748b" }}>
+                          {g.enrolledSubjects.map((s) => s.name).join(", ") || "General"}
+                        </div>
+                      </td>
+                      <td style={{ padding: "0.75rem 1rem", color: "#64748b" }}>
+                        {g.sections.join(", ") || "A"}
+                      </td>
+                      <td style={{ padding: "0.75rem 1rem", fontWeight: 700 }}>
+                        {isEvaluated ? (
+                          <span style={{ color: "#0f172a" }}>{score} / {maxM}</span>
+                        ) : (
+                          <span style={{ color: "#94a3b8" }}>-- / {maxM}</span>
+                        )}
+                      </td>
+                      <td style={{ padding: "0.75rem 1rem" }}>
+                        {isEvaluated ? (
+                          <span style={{ fontWeight: 600, color: "#334155" }}>{pct.toFixed(1)}%</span>
+                        ) : (
+                          <span style={{ color: "#94a3b8" }}>--</span>
+                        )}
+                      </td>
+                      <td style={{ padding: "0.75rem 1rem" }}>
+                        {isEvaluated ? (
+                          <span
+                            style={{
+                              background: isPass ? "#f0fdf4" : "#fef2f2",
+                              color: isPass ? "#166534" : "#dc2626",
+                              border: `1px solid ${isPass ? "#bbf7d0" : "#fecaca"}`,
+                              padding: "0.2rem 0.55rem",
+                              borderRadius: "9999px",
+                              fontSize: "0.72rem",
+                              fontWeight: 700
+                            }}
+                          >
+                            {isPass ? "PASS" : "RETEST"}
+                          </span>
+                        ) : (
+                          <span
+                            style={{
+                              background: "#f8fafc",
+                              color: "#64748b",
+                              padding: "0.2rem 0.55rem",
+                              borderRadius: "9999px",
+                              fontSize: "0.72rem",
+                              fontWeight: 600
+                            }}
+                          >
+                            PENDING
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ padding: "0.75rem 1rem", textAlign: "right" }}>
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
                           <button
                             type="button"
                             onClick={() => {
@@ -512,116 +523,65 @@ export const StudentsRosterPage: React.FC<StudentsRosterProps> = ({
                           >
                             {isEvaluated ? "View Copy" : "Grade Paper"}
                           </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div style={{ textAlign: "center", padding: "3rem 1rem", color: "#64748b" }}>
-              <Users size={36} style={{ color: "#cbd5e1", margin: "0 auto 0.75rem" }} />
-              <div style={{ fontWeight: 700, color: "#0f172a" }}>No students enrolled yet</div>
-              <div style={{ fontSize: "0.85rem", marginTop: "0.25rem" }}>
-                Switch to the "Students Enrolled" tab to enroll students.
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
-      {/* ================= TAB 2: STUDENT DIRECTORY ================= */}
-      {activeTab === "roster" && (
-        <div
-          style={{
-            background: "#ffffff",
-            border: "1px solid #e2e8f0",
-            borderRadius: "14px",
-            padding: "1.5rem",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.02)"
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1.25rem" }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.45rem",
-                background: "#f8fafc",
-                border: "1px solid #cbd5e1",
-                borderRadius: "8px",
-                padding: "0.45rem 0.75rem",
-                flex: 1
-              }}
-            >
-              <Search size={16} style={{ color: "#94a3b8" }} />
-              <input
-                type="text"
-                placeholder="Search students by name or roll number..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  border: "none",
-                  outline: "none",
-                  background: "transparent",
-                  fontSize: "0.88rem",
-                  width: "100%"
-                }}
-              />
-            </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteGroup(g.rows, g.primary.name)}
+                            title="Remove student"
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              color: "#94a3b8",
+                              cursor: "pointer",
+                              padding: "0.35rem",
+                              display: "inline-flex",
+                              alignItems: "center"
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.color = "#dc2626")}
+                            onMouseLeave={(e) => (e.currentTarget.style.color = "#94a3b8")}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1rem" }}>
-            {consolidatedList.map((g) => (
-              <div
-                key={g.primary.id}
+        ) : (
+          <div style={{ textAlign: "center", padding: "3rem 1rem", color: "#64748b" }}>
+            <Users size={36} style={{ color: "#cbd5e1", margin: "0 auto 0.75rem" }} />
+            <div style={{ fontWeight: 700, color: "#0f172a" }}>
+              {searchQuery.trim() ? "No students matching search query" : "No students enrolled yet"}
+            </div>
+            <div style={{ fontSize: "0.85rem", marginTop: "0.25rem", marginBottom: "1rem" }}>
+              {searchQuery.trim()
+                ? "Try searching with a different name or roll number"
+                : "Add your first student to this register to track grades and exam performance."}
+            </div>
+            {!searchQuery.trim() && (
+              <button
+                type="button"
+                onClick={() => handleOpenAddModal()}
                 style={{
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "10px",
-                  padding: "1rem",
-                  background: "#ffffff",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between"
+                  background: "#2563eb",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "8px",
+                  padding: "0.5rem 1rem",
+                  fontSize: "0.85rem",
+                  fontWeight: 700,
+                  cursor: "pointer"
                 }}
               >
-                <div
-                  onClick={() => setSelectedStudentForProfile(g.primary)}
-                  style={{ cursor: "pointer", flex: 1 }}
-                >
-                  <div style={{ fontWeight: 700, fontSize: "0.92rem", color: "#0f172a" }}>
-                    {g.primary.name}
-                  </div>
-                  <div style={{ fontSize: "0.76rem", color: "#64748b", marginTop: "2px" }}>
-                    Roll: <strong>{g.primary.roll_number}</strong> • Sec: {g.sections.join(", ") || "A"}
-                  </div>
-                  <div style={{ fontSize: "0.72rem", color: "#2563eb", marginTop: "4px" }}>
-                    {g.enrolledSubjects.map((s) => s.name).join(", ") || "Enrolled"}
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => handleDeleteGroup(g.rows, g.primary.name)}
-                  title="Remove student"
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: "#94a3b8",
-                    cursor: "pointer",
-                    padding: "0.35rem"
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = "#dc2626")}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = "#94a3b8")}
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            ))}
+                + Add Student Now
+              </button>
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* MODAL: ADD STUDENT */}
       {showAddModal && (

@@ -4,12 +4,11 @@ import { resolveApiUrl } from "../api/client";
 import { MarkdownQuestionView } from "../components/MarkdownQuestionView";
 import { DoubleTapMarkdownEditor } from "../components/DoubleTapMarkdownEditor";
 import { ExamDetailWorkspace } from "../components/ExamDetailWorkspace";
-import { AnswerKeyFullscreenWorkspace } from "../components/AnswerKeyFullscreenWorkspace";
+import type { AnswerKeyStructuredItem } from "../types/academic";
 import type {
   Subject,
   Exam,
   ExamDetailsResponse,
-  AnswerKeyStructuredItem,
   QuestionItem,
   ClassItem,
   Institution,
@@ -51,20 +50,24 @@ import {
 interface ExamManagementProps {
   initialSubjectId?: string;
   initialMode?: "list" | "detail" | "create" | "answer-key-review";
+  initialExamId?: string;
   onNavigate: (tab: any, params?: any) => void;
 }
 
 export const ExamManagementPage: React.FC<ExamManagementProps> = ({
   initialSubjectId,
   initialMode,
+  initialExamId,
   onNavigate
 }) => {
   // View mode: "list" | "detail" | "create" (3-step editor / review) | "answer-key-review"
   const [viewMode, setViewMode] = useState<"list" | "detail" | "create" | "answer-key-review">(
-    initialMode || "list"
+    initialMode === "answer-key-review" ? "create" : initialMode || "list"
   );
   // Modular Flow Steps: 1 = Upload PDF, 2 = Confirm Meta & Structure, 3 = Split Review & Edit
-  const [step, setStep] = useState<1 | 2 | 3>(initialMode === "create" ? 1 : 1);
+  const [step, setStep] = useState<1 | 2 | 3>(
+    initialMode === "create" || initialMode === "answer-key-review" ? 3 : 1
+  );
 
   const [institutions, setInstitutions] = useState<Institution[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -77,6 +80,9 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
   const [loadingDetails, setLoadingDetails] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
+  const [quickGradingExamId, setQuickGradingExamId] = useState<string>("");
+  const [answerKeyEditorTab, setAnswerKeyEditorTab] = useState<"markdown" | "per_question">("markdown");
+  const keyFileInputRef = useRef<HTMLInputElement>(null);
 
   // Zoom control for question paper preview
   const [paperZoom, setPaperZoom] = useState<number>(75);
@@ -115,7 +121,6 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
       }
     >
   >({});
-  const [answerKeyReturnView, setAnswerKeyReturnView] = useState<"list" | "detail" | "create">("list");
 
   // Inline Quick Add Class in Exam Setup
   const [showInlineClassForm, setShowInlineClassForm] = useState(false);
@@ -242,6 +247,15 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
   useEffect(() => {
     loadExams();
   }, [selectedSubjectId]);
+
+  useEffect(() => {
+    if (initialExamId && exams.length > 0) {
+      const match = exams.find((e) => e.id === initialExamId);
+      if (match) {
+        loadExamIntoEditor(match);
+      }
+    }
+  }, [initialExamId, exams]);
 
   // Non-blocking background job poller so Gemini synthesis never stalls UI or navigation
   useEffect(() => {
@@ -715,6 +729,19 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
     setAnswerKeyText(autoRubrics);
   };
 
+  const handleUploadKeyFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      setAnswerKeyText(text);
+    } catch {
+      alert("Could not read text from the selected file. Please select a valid .txt or .md document.");
+    } finally {
+      e.target.value = "";
+    }
+  };
+
   const handleProceedToStudentCopies = async () => {
     let targetExam = activeExam;
     if (!targetExam) {
@@ -751,10 +778,30 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
       } finally {
         setIsSaving(false);
       }
+    } else {
+      setIsSaving(true);
+      try {
+        await academicApi.updateExamQuestions(targetExam.id, questions);
+        await academicApi.updateExamAnswerKey(targetExam.id, answerKeyText);
+        await academicApi.updateExamMeta(targetExam.id, {
+          title: examTitle.trim(),
+          exam_type: examType,
+          max_marks: totalAllocatedMarks,
+          passing_marks: passingMarks,
+          academic_year: academicYear,
+          target_section: targetSection,
+          exam_date: examDate,
+          correction_deadline: correctionDeadline
+        });
+        await loadExams();
+      } catch (err) {
+        console.warn("Auto-save before navigating to evaluation desk:", err);
+      } finally {
+        setIsSaving(false);
+      }
     }
-    setSheetModalExam(targetExam);
-    setUploadedAnswerFiles([]);
-    setShowAnswerSheetModal(true);
+    // Take directly to student evaluation desk to evaluate copies and view results!
+    onNavigate("evaluation", { examId: targetExam.id });
   };
 
   const handleMarkChange = (index: number, newMarks: number) => {
@@ -941,7 +988,6 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
     setSaveSuccess(false);
 
     try {
-      let savedExamObj: Exam | null = null;
       if (activeExam) {
         const res = await academicApi.updateExamQuestions(activeExam.id, questions, totalAllocatedMarks, {
           paper_id: paperId || undefined,
@@ -952,10 +998,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
           correction_deadline: correctionDeadline || undefined
         });
         if (res?.exam) {
-          savedExamObj = res.exam;
           setActiveExam(res.exam);
-        } else {
-          savedExamObj = activeExam;
         }
         if (answerKeyText) {
           await academicApi.updateExamAnswerKey(activeExam.id, answerKeyText);
@@ -977,15 +1020,10 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
           answer_key_text: answerKeyText,
           questions: questions
         });
-        savedExamObj = created;
         setActiveExam(created);
       }
       setSaveSuccess(true);
       await loadExams();
-      // Jump directly into the Answer Key generation section after saving
-      if (savedExamObj) {
-        await handleOpenAnswerKeyReview(savedExamObj, "create");
-      }
     } catch (err: any) {
       alert("Error saving examination: " + (err?.response?.data?.detail || err.message));
     } finally {
@@ -1063,58 +1101,9 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
     }
   };
 
-  // Open Fullscreen Pure-White Answer Key Workspace (non-blocking — never stalls on mount)
-  const handleOpenAnswerKeyReview = async (exam: Exam, fromView: "list" | "detail" | "create" = "list") => {
-    setAnswerKeyReturnView(fromView);
-    setActiveExam(exam);
-    setPaperId(exam.paper_id || "");
-    setPaperPageCount(exam.paper_page_count || 0);
-    setAnswerKeyText(exam.answer_key_text || "");
-    setStructuredAnswersList(Array.isArray(exam.answer_key_structured) ? exam.answer_key_structured : []);
-    setViewMode("answer-key-review");
-    try {
-      const fresh = await academicApi.getExam(exam.id);
-      setActiveExam(fresh);
-      if (fresh.answer_key_text) setAnswerKeyText(fresh.answer_key_text);
-      if (Array.isArray(fresh.answer_key_structured)) {
-        setStructuredAnswersList(fresh.answer_key_structured);
-      }
-    } catch {
-      // Non-fatal
-    }
-  };
-
-  const handleSaveFullscreenAnswerKey = async (approveAndExit = false) => {
-    if (!activeExam) return;
-    setIsSaving(true);
-    try {
-      let textToSave = answerKeyText.trim();
-      if (!textToSave && structuredAnswersList.length > 0) {
-        textToSave = structuredAnswersList
-          .map((it) => `[${it.q_no}] (${it.marks} Marks)\nModel Answer:\n${it.model_answer || ""}`)
-          .join("\n\n");
-      }
-      if (!textToSave) {
-        textToSave = "Master answer key saved.";
-      }
-      const res = await academicApi.updateExamAnswerKey(activeExam.id, textToSave, structuredAnswersList);
-      if (res?.exam) setActiveExam(res.exam);
-      setAnswerKeyText(textToSave);
-      await loadExams();
-      if (answerKeyReturnView === "detail") {
-        const det = await academicApi.getExamDetails(activeExam.id);
-        setExamDetails(det);
-      }
-      if (approveAndExit) {
-        const targetExam = res?.exam || activeExam;
-        setViewMode("list");
-        onNavigate("evaluation", { examId: targetExam.id });
-      }
-    } catch (err: any) {
-      alert("Failed to save answer key: " + (err?.response?.data?.detail || err.message));
-    } finally {
-      setIsSaving(false);
-    }
+  // Open Unified Answer Key & Questions Editor (nested inside Review & Edit workspace)
+  const handleOpenAnswerKeyReview = async (exam: Exam, _fromView: "list" | "detail" | "create" = "list") => {
+    loadExamIntoEditor(exam);
   };
 
   // Open Answer Sheets Upload Modal (Image 3)
@@ -1440,55 +1429,19 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
   if (viewMode === "list") {
     return (
       <div className="exam-management-page pb-28">
-        {/* Unified Exams & Grading Switcher */}
-        <div style={{ display: "inline-flex", background: "#f1f5f9", padding: "0.25rem", borderRadius: "10px", marginBottom: "1.25rem", border: "1px solid #e2e8f0" }}>
-          <button
-            type="button"
-            style={{
-              background: "#ffffff",
-              color: "#0f172a",
-              border: "none",
-              borderRadius: "8px",
-              padding: "0.45rem 1rem",
-              fontSize: "0.82rem",
-              fontWeight: 700,
-              cursor: "pointer",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.06)"
-            }}
-          >
-            All Exams &amp; Question Papers
-          </button>
-          <button
-            type="button"
-            onClick={() => onNavigate("evaluation")}
-            style={{
-              background: "transparent",
-              color: "#64748b",
-              border: "none",
-              borderRadius: "8px",
-              padding: "0.45rem 1rem",
-              fontSize: "0.82rem",
-              fontWeight: 600,
-              cursor: "pointer"
-            }}
-          >
-            Student Grading Desk
-          </button>
-        </div>
-
         {/* Header Bar */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem", marginBottom: "1.5rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem", marginBottom: "1.25rem" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
               <h1 style={{ fontSize: "1.85rem", fontWeight: 900, color: "#0f172a", letterSpacing: "-0.03em", margin: 0 }}>
-                Examinations & Tests
+                Examinations &amp; Papers
               </h1>
               <span style={{ background: "#e0e7ff", color: "#3730a3", fontSize: "0.78rem", fontWeight: 700, padding: "0.25rem 0.65rem", borderRadius: "9999px" }}>
                 {exams.length} Total Exams
               </span>
             </div>
             <p style={{ color: "#64748b", fontSize: "0.88rem", marginTop: "0.3rem", margin: 0 }}>
-              Exams clustered by classes and subjects. Digitize papers with Gemini, approve answer keys, and track grading deadlines.
+              Digitize question papers, edit rubrics and master answer keys, and evaluate student copies all in one unified desk.
             </p>
           </div>
 
@@ -1501,6 +1454,148 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
             + Create New Exam
           </button>
         </div>
+
+        {/* Evaluation Deadlines & Key Statistics Strip */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+            gap: "0.85rem",
+            marginBottom: "1.25rem"
+          }}
+        >
+          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "0.85rem 1rem", display: "flex", alignItems: "center", gap: "0.75rem", boxShadow: "0 1px 2px rgba(0,0,0,0.02)" }}>
+            <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#eff6ff", color: "#2563eb", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <Calendar size={18} />
+            </div>
+            <div>
+              <div style={{ fontSize: "1.2rem", fontWeight: 800, color: "#0f172a" }}>{exams.length}</div>
+              <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600 }}>Scheduled Exams</div>
+            </div>
+          </div>
+
+          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "0.85rem 1rem", display: "flex", alignItems: "center", gap: "0.75rem", boxShadow: "0 1px 2px rgba(0,0,0,0.02)" }}>
+            <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#f0fdf4", color: "#16a34a", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <CheckCircle2 size={18} />
+            </div>
+            <div>
+              <div style={{ fontSize: "1.2rem", fontWeight: 800, color: "#16a34a" }}>
+                {exams.filter((e) => e.answer_key_text && e.answer_key_text.trim()).length}
+              </div>
+              <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600 }}>Answer Keys Approved</div>
+            </div>
+          </div>
+
+          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "0.85rem 1rem", display: "flex", alignItems: "center", gap: "0.75rem", boxShadow: "0 1px 2px rgba(0,0,0,0.02)" }}>
+            <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#fffbeb", color: "#d97706", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <Clock size={18} />
+            </div>
+            <div>
+              <div style={{ fontSize: "1.2rem", fontWeight: 800, color: "#d97706" }}>
+                {exams.filter((e) => !e.answer_key_text || !e.answer_key_text.trim()).length}
+              </div>
+              <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600 }}>Pending Keys</div>
+            </div>
+          </div>
+
+          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "0.85rem 1rem", display: "flex", alignItems: "center", gap: "0.75rem", boxShadow: "0 1px 2px rgba(0,0,0,0.02)" }}>
+            <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "#f1f5f9", color: "#334155", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <FolderGit2 size={18} />
+            </div>
+            <div>
+              <div style={{ fontSize: "1.2rem", fontWeight: 800, color: "#0f172a" }}>{classes.length}</div>
+              <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600 }}>Classes / Batches</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Fast-Track Student Copies & Rapid Grading Box */}
+        {exams.length > 0 && (
+          <div
+            style={{
+              background: "#ffffff",
+              border: "1.5px dashed #3b82f6",
+              borderRadius: "14px",
+              padding: "1rem 1.25rem",
+              marginBottom: "1.25rem",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: "1rem"
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "0.85rem" }}>
+              <div
+                style={{
+                  width: "42px",
+                  height: "42px",
+                  borderRadius: "10px",
+                  background: "#eff6ff",
+                  color: "#2563eb",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0
+                }}
+              >
+                <UploadCloud size={22} />
+              </div>
+              <div>
+                <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#0f172a" }}>
+                  Fast-Track Student Copies Evaluation
+                </div>
+                <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
+                  Select an examination to drop student booklet PDFs, run automated zero-temperature AI grading, and review student marks.
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+              <select
+                value={quickGradingExamId || (exams[0]?.id || "")}
+                onChange={(e) => setQuickGradingExamId(e.target.value)}
+                style={{
+                  padding: "0.48rem 0.75rem",
+                  borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                  fontSize: "0.82rem",
+                  background: "#ffffff",
+                  color: "#1e293b",
+                  fontWeight: 600,
+                  maxWidth: "260px"
+                }}
+                title="Select Exam to Grade"
+              >
+                {exams.map((ex) => (
+                  <option key={ex.id} value={ex.id}>
+                    {ex.title}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const targetId = quickGradingExamId || exams[0]?.id;
+                  if (targetId) onNavigate("evaluation", { examId: targetId });
+                }}
+                className="btn btn-primary"
+                style={{
+                  fontSize: "0.82rem",
+                  fontWeight: 700,
+                  padding: "0.5rem 0.95rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.4rem"
+                }}
+              >
+                <Sparkles size={14} />
+                Grade Papers &amp; Upload Copies →
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Filter and Search Bar */}
         <div
@@ -1695,57 +1790,52 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                               </div>
                             </div>
 
-                            {/* Action Buttons Row */}
+                            {/* Action Buttons Row: Exactly 2 unified buttons */}
                             <div
                               onClick={(e) => e.stopPropagation()}
-                              style={{ display: "flex", flexDirection: "column", gap: "0.5rem", borderTop: "1px solid #f1f5f9", paddingTop: "0.85rem" }}
+                              style={{
+                                display: "grid",
+                                gridTemplateColumns: "1fr 1.35fr",
+                                gap: "0.55rem",
+                                borderTop: "1px solid #f1f5f9",
+                                paddingTop: "0.85rem"
+                              }}
                             >
-                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
-                                <button
-                                  onClick={() => loadExamIntoEditor(exam)}
-                                  className="btn btn-secondary"
-                                  style={{ fontSize: "0.8rem", padding: "0.45rem", textAlign: "center" }}
-                                >
-                                  Review & Edit
-                                </button>
-                                <button
-                                  onClick={() => handleOpenAnswerSheetsModal(exam)}
-                                  className="btn btn-secondary"
-                                  style={{ fontSize: "0.8rem", padding: "0.45rem", textAlign: "center" }}
-                                >
-                                  Upload Sheets
-                                </button>
-                              </div>
+                              <button
+                                type="button"
+                                onClick={() => loadExamIntoEditor(exam)}
+                                className="btn btn-secondary"
+                                style={{
+                                  fontSize: "0.82rem",
+                                  fontWeight: 700,
+                                  padding: "0.52rem 0.65rem",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  gap: "0.35rem"
+                                }}
+                              >
+                                <Edit3 size={14} style={{ color: "#2563eb" }} />
+                                Edit Questions &amp; Key
+                              </button>
 
-                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
-                                <button
-                                  onClick={() => handleOpenAnswerKeyReview(exam, "list")}
-                                  style={{
-                                    fontSize: "0.8rem",
-                                    padding: "0.45rem",
-                                    background: "#eff6ff",
-                                    border: "1px solid #bfdbfe",
-                                    color: "#1d4ed8",
-                                    borderRadius: "8px",
-                                    fontWeight: 700,
-                                    cursor: "pointer",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    gap: "0.3rem"
-                                  }}
-                                >
-                                  <Sparkles size={13} /> Answer Key
-                                </button>
-
-                                <button
-                                  onClick={() => onNavigate("evaluation", { examId: exam.id })}
-                                  className="btn btn-primary"
-                                  style={{ fontSize: "0.8rem", padding: "0.45rem", textAlign: "center" }}
-                                >
-                                  Grade Papers →
-                                </button>
-                              </div>
+                              <button
+                                type="button"
+                                onClick={() => onNavigate("evaluation", { examId: exam.id })}
+                                className="btn btn-primary"
+                                style={{
+                                  fontSize: "0.82rem",
+                                  fontWeight: 700,
+                                  padding: "0.52rem 0.75rem",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  gap: "0.35rem"
+                                }}
+                              >
+                                <Sparkles size={14} />
+                                Grade Papers &amp; Upload Copies →
+                              </button>
                             </div>
                           </div>
                         );
@@ -1755,6 +1845,143 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                 </div>
               );
             })}
+
+            {/* Other Scheduled Examinations (Unassigned / General) */}
+            {unassignedExams.length > 0 && (
+              <div
+                style={{
+                  background: "#ffffff",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "16px",
+                  overflow: "hidden",
+                  boxShadow: "0 1px 4px rgba(0, 0, 0, 0.04)"
+                }}
+              >
+                <div
+                  style={{
+                    padding: "1.1rem 1.5rem",
+                    background: "#f8fafc",
+                    borderBottom: "1px solid #e2e8f0",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.75rem"
+                  }}
+                >
+                  <div style={{ padding: "0.5rem", background: "#475569", color: "#ffffff", borderRadius: "10px" }}>
+                    <FolderGit2 size={18} />
+                  </div>
+                  <div>
+                    <h2 style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
+                      Other Scheduled Examinations ({unassignedExams.length})
+                    </h2>
+                    <div style={{ fontSize: "0.8rem", color: "#64748b", marginTop: "0.2rem" }}>
+                      Examinations available for grading and paper customization
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ padding: "1.25rem", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: "1.25rem" }}>
+                  {unassignedExams.map((exam) => {
+                    const subj = subjects.find((s) => s.id === exam.subject_id);
+                    const hasAnswerKey = Boolean(exam.answer_key_text && exam.answer_key_text.trim());
+
+                    return (
+                      <div
+                        key={exam.id}
+                        onClick={() => handleOpenExamDetails(exam)}
+                        style={{
+                          background: "#ffffff",
+                          border: "1px solid #e2e8f0",
+                          borderRadius: "14px",
+                          padding: "1.25rem",
+                          display: "flex",
+                          flexDirection: "column",
+                          justifyContent: "space-between",
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                          cursor: "pointer"
+                        }}
+                      >
+                        <div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.4rem", marginBottom: "0.5rem", flexWrap: "wrap" }}>
+                            <span style={{ fontSize: "0.75rem", fontWeight: 700, background: "#f1f5f9", color: "#334155", padding: "0.2rem 0.5rem", borderRadius: "4px" }}>
+                              {subj?.code || "SUBJ"} • {subj?.name || "Subject"}
+                            </span>
+                            <span style={{ fontSize: "0.75rem", fontWeight: 700, color: hasAnswerKey ? "#16a34a" : "#d97706", display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                              {hasAnswerKey ? <CheckCircle2 size={13} /> : <Sparkles size={13} />}
+                              {hasAnswerKey ? "Answer Key Approved" : "Needs Answer Key"}
+                            </span>
+                          </div>
+
+                          <h3 style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a", marginBottom: "0.4rem" }}>
+                            {exam.title}
+                          </h3>
+
+                          <div style={{ fontSize: "0.8rem", color: "#64748b", display: "flex", gap: "0.75rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+                            <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                              <Calendar size={13} /> Date: {exam.exam_date || "Pending"}
+                            </span>
+                            <span style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                              <Clock size={13} /> Due: {exam.correction_deadline || "Upcoming"}
+                            </span>
+                          </div>
+
+                          <div style={{ background: "#f8fafc", borderRadius: "8px", padding: "0.6rem 0.75rem", fontSize: "0.8rem", color: "#475569", marginBottom: "1rem" }}>
+                            <strong>{exam.questions?.length || 0}</strong> Questions • <strong>{exam.max_marks || 60}</strong> Max Marks • Pass: {exam.passing_marks || 24} Marks
+                          </div>
+                        </div>
+
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1.35fr",
+                            gap: "0.55rem",
+                            borderTop: "1px solid #f1f5f9",
+                            paddingTop: "0.85rem"
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => loadExamIntoEditor(exam)}
+                            className="btn btn-secondary"
+                            style={{
+                              fontSize: "0.82rem",
+                              fontWeight: 700,
+                              padding: "0.52rem 0.65rem",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: "0.35rem"
+                            }}
+                          >
+                            <Edit3 size={14} style={{ color: "#2563eb" }} />
+                            Edit Questions &amp; Key
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => onNavigate("evaluation", { examId: exam.id })}
+                            className="btn btn-primary"
+                            style={{
+                              fontSize: "0.82rem",
+                              fontWeight: 700,
+                              padding: "0.52rem 0.75rem",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: "0.35rem"
+                            }}
+                          >
+                            <Sparkles size={14} />
+                            Grade Papers &amp; Upload Copies →
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1793,28 +2020,10 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
   }
 
   // ==========================================
-  // VIEW 2: FULLSCREEN PURE-WHITE ANSWER KEY WORKSPACE
+  // VIEW 2: UNIFIED QUESTIONS & KEY WORKSPACE (No jarring fullscreen modal)
   // ==========================================
   if (viewMode === "answer-key-review" && activeExam) {
-    const subj = subjects.find((s) => s.id === activeExam.subject_id);
-    const activeJob = bgAnswerKeyJobs[activeExam.id];
-    return (
-      <AnswerKeyFullscreenWorkspace
-        exam={activeExam}
-        subject={subj}
-        answerKeyText={answerKeyText}
-        onChangeAnswerKeyText={setAnswerKeyText}
-        structuredAnswers={structuredAnswersList}
-        onChangeStructuredAnswers={setStructuredAnswersList}
-        bgJobStatus={activeJob?.status || "idle"}
-        bgJobError={activeJob?.error || null}
-        bgWarning={activeJob?.warning || null}
-        onStartBackgroundGeneration={() => handleStartBackgroundAnswerKey(activeExam.id)}
-        onSaveAnswerKey={handleSaveFullscreenAnswerKey}
-        isSaving={isSaving}
-        onClose={() => setViewMode(answerKeyReturnView === "create" ? "list" : answerKeyReturnView)}
-      />
-    );
+    loadExamIntoEditor(activeExam);
   }
 
   // ==========================================
@@ -2585,7 +2794,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                 )}
               </div>
 
-              {/* ACCORDION: AI Generated Marking Rubrics & Step Breakdown */}
+              {/* ACCORDION: Master Answer Key & AI Marking Rubrics */}
               <div
                 style={{
                   background: "#ffffff",
@@ -2595,32 +2804,71 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                   overflow: "hidden"
                 }}
               >
+                {/* Hidden file input for uploading Answer Key text / md documents */}
+                <input
+                  ref={keyFileInputRef}
+                  type="file"
+                  accept=".txt,.md,.json,.pdf"
+                  onChange={handleUploadKeyFile}
+                  style={{ display: "none" }}
+                />
+
                 <div
                   style={{
                     padding: "0.9rem 1.25rem",
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: "0.6rem",
                     background: "linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%)",
                     borderBottom: "1px solid #e2e8f0"
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "#0f172a", fontWeight: 800, fontSize: "0.95rem" }}>
-                    <Sparkles size={16} style={{ color: "#2563eb" }} />
-                    AI Generated Marking Rubrics &amp; Step Breakdown
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                    <span style={{ fontSize: "0.72rem", color: "#64748b" }}>
-                      Double-tap to edit · Scrollable
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "#0f172a", fontWeight: 800, fontSize: "0.95rem" }}>
+                      <Sparkles size={16} style={{ color: "#2563eb" }} />
+                      Master Answer Key &amp; Rubrics
+                    </div>
+                    <span
+                      style={{
+                        fontSize: "0.72rem",
+                        fontWeight: 700,
+                        padding: "0.15rem 0.55rem",
+                        borderRadius: "9999px",
+                        background: answerKeyText && answerKeyText.trim() ? "#f0fdf4" : "#fffbeb",
+                        color: answerKeyText && answerKeyText.trim() ? "#16a34a" : "#d97706",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.25rem"
+                      }}
+                    >
+                      {answerKeyText && answerKeyText.trim() ? <CheckCircle2 size={11} /> : <Clock size={11} />}
+                      {answerKeyText && answerKeyText.trim() ? "Key Ready & Approved" : "Key Needed"}
                     </span>
+                    {activeExam && bgAnswerKeyJobs[activeExam.id]?.status === "running" && (
+                      <span style={{ fontSize: "0.72rem", color: "#1d4ed8", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+                        <RefreshCw size={12} className="spin" /> Generating with Gemini...
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap" }}>
                     <button
                       type="button"
-                      onClick={handleGenerateMasterRubrics}
+                      onClick={() => {
+                        if (activeExam) {
+                          handleStartBackgroundAnswerKey(activeExam.id);
+                        } else {
+                          handleGenerateMasterRubrics();
+                        }
+                      }}
+                      disabled={Boolean(activeExam && bgAnswerKeyJobs[activeExam.id]?.status === "running")}
                       style={{
                         background: "#2563eb",
                         color: "#ffffff",
                         border: "none",
-                        padding: "0.28rem 0.65rem",
+                        padding: "0.3rem 0.7rem",
                         borderRadius: "6px",
                         fontSize: "0.75rem",
                         fontWeight: 700,
@@ -2629,45 +2877,202 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
                         alignItems: "center",
                         gap: "0.3rem"
                       }}
+                      title="Synthesize master answers & rubric with Gemini AI"
                     >
                       <Sparkles size={12} />
-                      Generate AI Rubric
+                      Generate with Gemini
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => keyFileInputRef.current?.click()}
+                      style={{
+                        background: "#ffffff",
+                        color: "#334155",
+                        border: "1px solid #cbd5e1",
+                        padding: "0.3rem 0.65rem",
+                        borderRadius: "6px",
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.3rem"
+                      }}
+                      title="Upload an existing answer key file (.txt, .md, .pdf)"
+                    >
+                      <UploadCloud size={12} />
+                      Upload Key File
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleGenerateMasterRubrics}
+                      style={{
+                        background: "#f1f5f9",
+                        color: "#475569",
+                        border: "1px solid #e2e8f0",
+                        padding: "0.3rem 0.65rem",
+                        borderRadius: "6px",
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.3rem"
+                      }}
+                      title="Scaffold from questions list"
+                    >
+                      Scaffold Rubric
                     </button>
                   </div>
                 </div>
 
-                <div style={{ padding: "1.1rem 1.25rem" }}>
-                  <div
+                {/* Sub-tab view switchers: Markdown vs Per-Question */}
+                <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0", background: "#f8fafc", padding: "0 1.25rem" }}>
+                  <button
+                    type="button"
+                    onClick={() => setAnswerKeyEditorTab("markdown")}
                     style={{
-                      maxHeight: "260px",
-                      overflowY: "auto",
-                      background: "#f8fafc",
-                      border: "1px solid #e2e8f0",
-                      borderRadius: "10px",
-                      padding: "0.85rem 1rem",
-                      fontSize: "0.85rem",
-                      lineHeight: 1.6
+                      padding: "0.55rem 0.85rem",
+                      border: "none",
+                      borderBottom: answerKeyEditorTab === "markdown" ? "2px solid #2563eb" : "2px solid transparent",
+                      background: "none",
+                      color: answerKeyEditorTab === "markdown" ? "#2563eb" : "#64748b",
+                      fontWeight: answerKeyEditorTab === "markdown" ? 800 : 600,
+                      fontSize: "0.78rem",
+                      cursor: "pointer"
                     }}
                   >
-                    <DoubleTapMarkdownEditor
-                      value={
-                        answerKeyText ||
-                        (questions.length > 0
-                          ? questions
-                              .map(
-                                (q) =>
-                                  `### ${q.q_no} (${q.marks} Marks)\n- **Marking Breakdown**: Working & steps (${(Number(q.marks) * 0.8).toFixed(1)}M), Final Answer (${(Number(q.marks) * 0.2).toFixed(1)}M)\n- **Rubric**: ${q.rubric || "Award marks for conceptual accuracy."}`
-                              )
-                              .join("\n\n")
-                          : "AI Generated Marking Rubrics & Step Breakdown will appear here. Upload a paper or double-tap to type.")
-                      }
-                      onChange={(newVal) => setAnswerKeyText(newVal)}
-                      minRows={4}
-                      maxRows={12}
-                      placeholder="AI Generated Marking Rubrics & Step Breakdown will appear here. Double-tap to edit..."
-                      emptyHint="No rubrics entered yet. Double-tap to edit."
-                    />
-                  </div>
+                    Master Markdown Rubric
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAnswerKeyEditorTab("per_question")}
+                    style={{
+                      padding: "0.55rem 0.85rem",
+                      border: "none",
+                      borderBottom: answerKeyEditorTab === "per_question" ? "2px solid #2563eb" : "2px solid transparent",
+                      background: "none",
+                      color: answerKeyEditorTab === "per_question" ? "#2563eb" : "#64748b",
+                      fontWeight: answerKeyEditorTab === "per_question" ? 800 : 600,
+                      fontSize: "0.78rem",
+                      cursor: "pointer"
+                    }}
+                  >
+                    Per-Question Model Solutions ({questions.length})
+                  </button>
+                </div>
+
+                <div style={{ padding: "1.1rem 1.25rem" }}>
+                  {answerKeyEditorTab === "markdown" ? (
+                    <div>
+                      <div style={{ fontSize: "0.74rem", color: "#64748b", marginBottom: "0.5rem" }}>
+                        Double-tap to edit the master markdown answer key. Math formulas using LaTeX are fully rendered.
+                      </div>
+                      <div
+                        style={{
+                          maxHeight: "320px",
+                          overflowY: "auto",
+                          background: "#f8fafc",
+                          border: "1px solid #e2e8f0",
+                          borderRadius: "10px",
+                          padding: "0.85rem 1rem",
+                          fontSize: "0.85rem",
+                          lineHeight: 1.6
+                        }}
+                      >
+                        <DoubleTapMarkdownEditor
+                          value={
+                            answerKeyText ||
+                            (questions.length > 0
+                              ? questions
+                                  .map(
+                                    (q) =>
+                                      `### ${q.q_no} (${q.marks} Marks)\n- **Model Answer**: ${q.ideal_answer || "Conceptual explanation and step working."}\n- **Marking Breakdown**: Working & steps (${(Number(q.marks) * 0.8).toFixed(1)}M), Final Answer (${(Number(q.marks) * 0.2).toFixed(1)}M)\n- **Rubric**: ${q.rubric || "Award marks for conceptual accuracy."}`
+                                  )
+                                  .join("\n\n")
+                              : "Master Answer Key & Rubrics will appear here. Click 'Generate with Gemini' or double-tap to write.")
+                          }
+                          onChange={(newVal) => setAnswerKeyText(newVal)}
+                          minRows={6}
+                          maxRows={16}
+                          placeholder="Type or paste master answer key here. Double-tap to edit..."
+                          emptyHint="No rubrics entered yet. Double-tap to edit or click Generate with Gemini."
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", maxHeight: "320px", overflowY: "auto" }}>
+                      {structuredAnswersList.length > 0 && (
+                        <div style={{ padding: "0.45rem 0.75rem", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "8px", fontSize: "0.74rem", color: "#1d4ed8", fontWeight: 700 }}>
+                          AI Gemini Structured Solutions Active ({structuredAnswersList.length} items parsed)
+                        </div>
+                      )}
+                      {questions.length === 0 ? (
+                        <div style={{ padding: "1.5rem", textAlign: "center", color: "#64748b", fontSize: "0.82rem" }}>
+                          No questions defined yet. Add questions below or upload a question paper.
+                        </div>
+                      ) : (
+                        questions.map((q, qIdx) => (
+                          <div
+                            key={q.id || qIdx}
+                            style={{
+                              background: "#f8fafc",
+                              border: "1px solid #e2e8f0",
+                              borderRadius: "8px",
+                              padding: "0.75rem 0.95rem"
+                            }}
+                          >
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
+                              <span style={{ fontSize: "0.78rem", fontWeight: 800, color: "#1e3a8a" }}>
+                                {q.q_no || `Question ${qIdx + 1}`} ({q.marks} Marks)
+                              </span>
+                              <span style={{ fontSize: "0.7rem", color: "#64748b" }}>
+                                Double-tap to edit
+                              </span>
+                            </div>
+
+                            <div style={{ marginBottom: "0.45rem" }}>
+                              <div style={{ fontSize: "0.7rem", fontWeight: 700, color: "#475569", marginBottom: "0.2rem" }}>
+                                Model / Ideal Answer:
+                              </div>
+                              <DoubleTapMarkdownEditor
+                                value={q.ideal_answer || ""}
+                                onChange={(val) => {
+                                  const updated = [...questions];
+                                  updated[qIdx] = { ...updated[qIdx], ideal_answer: val };
+                                  setQuestions(updated);
+                                }}
+                                minRows={2}
+                                maxRows={6}
+                                placeholder="Double-tap to enter model solution..."
+                                emptyHint="Click or double-tap to enter model solution."
+                              />
+                            </div>
+
+                            <div>
+                              <div style={{ fontSize: "0.7rem", fontWeight: 700, color: "#475569", marginBottom: "0.2rem" }}>
+                                Step-by-Step Marking Rubric:
+                              </div>
+                              <DoubleTapMarkdownEditor
+                                value={q.rubric || ""}
+                                onChange={(val) => {
+                                  const updated = [...questions];
+                                  updated[qIdx] = { ...updated[qIdx], rubric: val };
+                                  setQuestions(updated);
+                                }}
+                                minRows={2}
+                                maxRows={6}
+                                placeholder="Double-tap to enter evaluation criteria..."
+                                emptyHint="Click or double-tap to enter evaluation criteria."
+                              />
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 

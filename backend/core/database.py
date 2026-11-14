@@ -280,6 +280,233 @@ class SQLiteDatabase:
         except sqlite3.IntegrityError:
             return None
 
+    def list_users(self, institution_id: Optional[str] = None, role: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Lists registered users (excluding password hashes) with workload stats.
+        Optionally filtered by institution_id or role.
+        """
+        query = """
+            SELECT id, username, full_name, email, role, department, institution_id, created_at
+            FROM users WHERE 1=1
+        """
+        params: List[Any] = []
+        if institution_id:
+            query += " AND (institution_id = ? OR institution_id = '' OR institution_id IS NULL)"
+            params.append(institution_id)
+        if role:
+            query += " AND LOWER(role) = LOWER(?)"
+            params.append(role)
+        query += " ORDER BY id ASC"
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, tuple(params))
+            results = []
+            for r in cursor.fetchall():
+                d = dict(r)
+                # Count assigned subjects
+                c2 = conn.cursor()
+                c2.execute("SELECT COUNT(*) FROM subjects WHERE user_id = ?", (d["id"],))
+                d["subjects_count"] = c2.fetchone()[0]
+                results.append(d)
+            return results
+
+    def admin_update_user_role(self, user_id: int, new_role: str, department: Optional[str] = None) -> bool:
+        """
+        Updates a user's role (e.g. Teacher, HOD, Coordinator, Admin) and optional department.
+        """
+        updates = ["role = ?"]
+        params: List[Any] = [new_role]
+        if department is not None:
+            updates.append("department = ?")
+            params.append(department)
+        params.append(user_id)
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", tuple(params))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def admin_reassign_teacher_subjects(self, from_user_id: int, to_user_id: int) -> int:
+        """
+        Transfers all subjects from one faculty member to another.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE subjects SET user_id = ? WHERE user_id = ?", (to_user_id, from_user_id))
+            conn.commit()
+            return cursor.rowcount
+
+    def admin_reassign_subject_teacher(self, subject_id: str, new_user_id: int) -> bool:
+        """
+        Assigns a specific subject to a teacher.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE subjects SET user_id = ? WHERE id = ?", (new_user_id, subject_id))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def admin_reset_user_password(self, user_id: int, new_password_hash: str) -> bool:
+        """
+        Resets user password hash.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_password_hash, user_id))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def admin_delete_user(self, user_id: int) -> bool:
+        """
+        Removes a user account. Any assigned subjects become orphaned (user_id = 0) so course data is preserved.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE subjects SET user_id = 0 WHERE user_id = ?", (user_id,))
+            cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def admin_transfer_student(self, student_id: str, to_class_id: str, to_section: Optional[str] = None) -> bool:
+        """
+        Moves a student to a different class cohort and optionally updates section.
+        """
+        updates = ["class_id = ?"]
+        params: List[Any] = [to_class_id]
+        if to_section is not None:
+            updates.append("section = ?")
+            params.append(to_section)
+        params.append(student_id)
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"UPDATE students SET {', '.join(updates)} WHERE id = ?", tuple(params))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def admin_get_system_health(self, institution_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Computes comprehensive diagnostic metrics and highlights operational bottlenecks.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            # 1. Faculty stats
+            cursor.execute("SELECT COUNT(*) FROM users")
+            total_users = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM users WHERE LOWER(role) LIKE '%admin%'")
+            total_admins = cursor.fetchone()[0]
+            total_faculty = total_users - total_admins
+
+            # 2. Student stats
+            cursor.execute("SELECT COUNT(*) FROM students")
+            total_students = cursor.fetchone()[0]
+
+            # 3. Class and Subject stats
+            cursor.execute("SELECT COUNT(*) FROM classes")
+            total_classes = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM subjects")
+            total_subjects = cursor.fetchone()[0]
+
+            # 4. Exams & Evaluations stats
+            cursor.execute("SELECT COUNT(*) FROM exams")
+            total_exams = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM academic_evaluations")
+            total_evaluations = cursor.fetchone()[0]
+
+            # 5. Overdue / bottleneck exams
+            today_str = datetime.date.today().strftime("%Y-%m-%d")
+            cursor.execute("""
+                SELECT e.id, e.title, e.subject_id, e.exam_date, e.correction_deadline,
+                       (SELECT COUNT(*) FROM academic_evaluations ae WHERE ae.exam_id = e.id) as evals_count
+                FROM exams e
+                WHERE e.correction_deadline != '' AND e.correction_deadline < ?
+                ORDER BY e.correction_deadline ASC
+            """, (today_str,))
+            overdue_exams = [dict(r) for r in cursor.fetchall()]
+
+            # 6. Exams missing question paper or answer key
+            cursor.execute("""
+                SELECT id, title, subject_id, exam_date,
+                       (question_paper_filename = '' OR question_paper_filename IS NULL) as missing_paper,
+                       (answer_key_text = '' AND (answer_key_json = '{}' OR answer_key_json = '' OR answer_key_json IS NULL)) as missing_key
+                FROM exams
+                WHERE (question_paper_filename = '' OR question_paper_filename IS NULL)
+                   OR (answer_key_text = '' AND (answer_key_json = '{}' OR answer_key_json = '' OR answer_key_json IS NULL))
+            """)
+            incomplete_exams = [dict(r) for r in cursor.fetchall()]
+
+            # 7. Orphaned subjects (assigned to user_id = 0 or user that does not exist)
+            cursor.execute("""
+                SELECT s.id, s.name, s.code, s.class_id, s.institution_id, s.user_id
+                FROM subjects s
+                LEFT JOIN users u ON s.user_id = u.id
+                WHERE u.id IS NULL OR s.user_id = 0
+            """)
+            orphaned_subjects = [dict(r) for r in cursor.fetchall()]
+
+            # 8. Empty classes (0 enrolled students)
+            cursor.execute("""
+                SELECT c.id, c.name, c.code, c.department
+                FROM classes c
+                WHERE (SELECT COUNT(*) FROM students s WHERE s.class_id = c.id) = 0
+            """)
+            empty_classes = [dict(r) for r in cursor.fetchall()]
+
+            return {
+                "total_users": total_users,
+                "total_faculty": total_faculty,
+                "total_admins": total_admins,
+                "total_students": total_students,
+                "total_classes": total_classes,
+                "total_subjects": total_subjects,
+                "total_exams": total_exams,
+                "total_evaluations": total_evaluations,
+                "overdue_exams": overdue_exams,
+                "incomplete_exams": incomplete_exams,
+                "orphaned_subjects": orphaned_subjects,
+                "empty_classes": empty_classes,
+                "healthy": len(overdue_exams) == 0 and len(orphaned_subjects) == 0
+            }
+
+    def admin_fix_orphans(self, fallback_user_id: int) -> int:
+        """
+        Reassigns all orphaned subjects to the fallback admin/faculty user.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE subjects SET user_id = ?
+                WHERE user_id = 0 OR user_id NOT IN (SELECT id FROM users)
+            """, (fallback_user_id,))
+            conn.commit()
+            return cursor.rowcount
+
+    def update_institution(self, inst_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Updates organization parameters (name, code, type, config).
+        """
+        allowed = ["name", "code", "type"]
+        fields = []
+        values = []
+        for k in allowed:
+            if k in updates and updates[k] is not None:
+                fields.append(f"{k} = ?")
+                values.append(updates[k])
+        if "config" in updates and updates["config"] is not None:
+            fields.append("config_json = ?")
+            values.append(json.dumps(updates["config"]))
+
+        if fields:
+            values.append(inst_id)
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(f"UPDATE institutions SET {', '.join(fields)} WHERE id = ?", tuple(values))
+                conn.commit()
+        return self.get_institution(inst_id)
+
     # --- Institution operations ---
 
     def list_institutions(self) -> List[Dict[str, Any]]:

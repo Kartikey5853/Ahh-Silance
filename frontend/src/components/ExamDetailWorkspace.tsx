@@ -10,7 +10,6 @@ import {
   Clock,
   Edit3,
   FileCheck2,
-  Maximize2,
   RefreshCw,
   Save,
   Sparkles,
@@ -40,7 +39,7 @@ export const ExamDetailWorkspace: React.FC<ExamDetailWorkspaceProps> = ({
   onSelectTargetSection,
   onEditPaperQuestions,
   onOpenFullscreenAnswerKey,
-  onOpenUploadSheets,
+  onOpenUploadSheets: _onOpenUploadSheets,
   onSaveManualAnswerKey,
   onStartBackgroundAnswerKey,
   bgJobStatus,
@@ -193,44 +192,17 @@ export const ExamDetailWorkspace: React.FC<ExamDetailWorkspaceProps> = ({
               type="button"
               onClick={() => onEditPaperQuestions(exam)}
               className="btn btn-secondary"
-              style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", fontSize: "0.82rem" }}
+              style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", fontSize: "0.82rem", fontWeight: 700 }}
             >
-              <Edit3 size={14} /> Edit Questions &amp; Paper
-            </button>
-            <button
-              type="button"
-              onClick={() => onOpenFullscreenAnswerKey(exam)}
-              style={{
-                background: "#eff6ff",
-                border: "1px solid #bfdbfe",
-                color: "#1d4ed8",
-                padding: "0.48rem 0.85rem",
-                borderRadius: "8px",
-                fontSize: "0.82rem",
-                fontWeight: 700,
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.35rem"
-              }}
-            >
-              <Maximize2 size={14} /> Answer Key Fullscreen
-            </button>
-            <button
-              type="button"
-              onClick={() => onOpenUploadSheets(exam)}
-              className="btn btn-secondary"
-              style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", fontSize: "0.82rem" }}
-            >
-              <UploadCloud size={14} /> Upload Sheets
+              <Edit3 size={14} style={{ color: "#2563eb" }} /> Edit Questions &amp; Key
             </button>
             <button
               type="button"
               onClick={() => onNavigateEvaluation(exam.id)}
               className="btn btn-primary"
-              style={{ fontSize: "0.82rem" }}
+              style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", fontSize: "0.82rem", fontWeight: 700 }}
             >
-              Grade Papers →
+              <Sparkles size={14} /> Grade Papers &amp; Upload Copies →
             </button>
           </div>
         </div>
@@ -451,7 +423,7 @@ export const ExamDetailWorkspace: React.FC<ExamDetailWorkspaceProps> = ({
 
                   <button
                     type="button"
-                    onClick={() => onOpenFullscreenAnswerKey(exam)}
+                    onClick={() => onEditPaperQuestions(exam)}
                     style={{
                       background: "#2563eb",
                       border: "none",
@@ -466,7 +438,7 @@ export const ExamDetailWorkspace: React.FC<ExamDetailWorkspaceProps> = ({
                       gap: "0.35rem"
                     }}
                   >
-                    <Maximize2 size={14} /> Open Fullscreen Studio
+                    <Edit3 size={14} /> Edit Questions &amp; Key Workspace
                   </button>
                 </div>
               </div>

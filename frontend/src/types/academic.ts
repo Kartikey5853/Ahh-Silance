@@ -20,6 +20,8 @@ export interface Institution {
     board?: string;
     classes?: string[];
     target?: string;
+    academic_year?: string;
+    [key: string]: any;
   };
   created_at?: string;
 }
@@ -313,4 +315,66 @@ export interface AcademicEvaluation {
   breakdown: EvaluationBreakdownItem[];
   teacher_feedback: string;
   created_at: string;
+}
+
+export interface TeacherUser {
+  id: number;
+  username: string;
+  full_name: string;
+  email: string;
+  role: string;
+  department: string;
+  institution_id: string;
+  subjects_count?: number;
+  created_at: string;
+}
+
+export interface OverdueExam {
+  id: string;
+  title: string;
+  subject_id: string;
+  exam_date: string;
+  correction_deadline: string;
+  evals_count: number;
+}
+
+export interface IncompleteExam {
+  id: string;
+  title: string;
+  subject_id: string;
+  exam_date: string;
+  missing_paper: number | boolean;
+  missing_key: number | boolean;
+}
+
+export interface OrphanedSubject {
+  id: string;
+  name: string;
+  code: string;
+  class_id: string;
+  institution_id: string;
+  user_id: number;
+}
+
+export interface EmptyClass {
+  id: string;
+  name: string;
+  code: string;
+  department: string;
+}
+
+export interface AdminSystemHealth {
+  total_users: number;
+  total_faculty: number;
+  total_admins: number;
+  total_students: number;
+  total_classes: number;
+  total_subjects: number;
+  total_exams: number;
+  total_evaluations: number;
+  overdue_exams: OverdueExam[];
+  incomplete_exams: IncompleteExam[];
+  orphaned_subjects: OrphanedSubject[];
+  empty_classes: EmptyClass[];
+  healthy: boolean;
 }

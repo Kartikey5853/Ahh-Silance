@@ -11,7 +11,6 @@
 
 import React, { useState, useEffect } from "react";
 import { LoginPage } from "./pages/LoginPage";
-import { Navbar } from "./components/Navbar";
 import { LeftDock, type NavTab } from "./components/LeftDock";
 import { AcademicDashboardPage } from "./pages/AcademicDashboardPage";
 import { AcademicsHierarchyPage } from "./pages/AcademicsHierarchyPage";
@@ -20,12 +19,14 @@ import { ExamManagementPage } from "./pages/ExamManagementPage";
 import { StrictEvaluationPage } from "./pages/StrictEvaluationPage";
 import { TeacherProfilePage } from "./pages/TeacherProfilePage";
 import { SubjectDetailPage } from "./pages/SubjectDetailPage";
+import { AdminDashboardPage } from "./pages/AdminDashboardPage";
 import { authApi } from "./api/authApi";
 import { academicApi } from "./api/academicApi";
 
 export const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [userName, setUserName] = useState<string>("Faculty");
+  const [userRole, setUserRole] = useState<string>("Teacher");
   const [userOrgName, setUserOrgName] = useState<string>("");
   const [activeTab, setActiveTab] = useState<NavTab>("dashboard");
   const [navigationParams, setNavigationParams] = useState<any>({});
@@ -38,6 +39,9 @@ export const App: React.FC = () => {
       if (p) {
         setIsAuthenticated(true);
         setUserName(p.full_name || p.username);
+        if (p.role) {
+          setUserRole(p.role);
+        }
         if (p.institution_id && insts?.length > 0) {
           const match = insts.find((i: any) => i.id === p.institution_id);
           if (match) setUserOrgName(match.name);
@@ -102,6 +106,7 @@ export const App: React.FC = () => {
         onTabChange={handleNavigate}
         onLogout={handleLogout}
         userName={userName}
+        userRole={userRole}
         institutionName={userOrgName}
         onOpenQuickCheck={() => handleNavigate("exams", { mode: "create" })}
       />
@@ -116,18 +121,11 @@ export const App: React.FC = () => {
           flexDirection: "column"
         }}
       >
-        <Navbar
-          activeTab={activeTab}
-          onSelectTab={handleNavigate}
-          onLogout={handleLogout}
-          userName={userName}
-        />
-
         <main
           className="niera-page-body"
           style={{
             flex: 1,
-            padding: "1.5rem 2rem 5rem 2rem",
+            padding: "1.25rem 2rem 5rem 2rem",
             maxWidth: "1600px",
             width: "100%",
             margin: "0 auto"
@@ -162,6 +160,7 @@ export const App: React.FC = () => {
             <ExamManagementPage
               initialSubjectId={navigationParams.subjectId}
               initialMode={navigationParams.mode}
+              initialExamId={navigationParams.examId}
               onNavigate={handleNavigate}
             />
           )}
@@ -173,6 +172,10 @@ export const App: React.FC = () => {
               initialEvalId={navigationParams.evalId}
               onNavigate={handleNavigate}
             />
+          )}
+
+          {activeTab === "admin" && (
+            <AdminDashboardPage onNavigate={handleNavigate} />
           )}
 
           {activeTab === "profile" && (

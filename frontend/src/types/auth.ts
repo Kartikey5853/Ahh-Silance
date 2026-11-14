@@ -35,6 +35,9 @@ export interface AuthResponse {
   username: string;
   /** Database primary key identifier */
   user_id: number;
+  full_name?: string;
+  role?: string;
+  institution_id?: string;
 }
 
 export interface UserProfile {
@@ -42,6 +45,11 @@ export interface UserProfile {
   id: number;
   /** Unique username string */
   username: string;
+  full_name?: string;
+  email?: string;
+  role?: string;
+  department?: string;
+  institution_id?: string;
   /** Account creation timestamp string */
   created_at: string;
 }

@@ -102,6 +102,11 @@ async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] =
     return {
         "id": user["id"],
         "username": user["username"],
+        "full_name": user.get("full_name") or user["username"],
+        "email": user.get("email") or "",
+        "role": user.get("role") or "Teacher",
+        "department": user.get("department") or "",
+        "institution_id": user.get("institution_id") or "",
         "created_at": user["created_at"]
     }
 
@@ -119,7 +124,16 @@ async def get_optional_current_user(credentials: Optional[HTTPAuthorizationCrede
             return None
         user = db.get_user_by_username(username)
         if user:
-            return {"id": user["id"], "username": user["username"]}
+            return {
+                "id": user["id"],
+                "username": user["username"],
+                "full_name": user.get("full_name") or user["username"],
+                "email": user.get("email") or "",
+                "role": user.get("role") or "Teacher",
+                "department": user.get("department") or "",
+                "institution_id": user.get("institution_id") or "",
+                "created_at": user.get("created_at")
+            }
     except Exception:
         return None
     return None

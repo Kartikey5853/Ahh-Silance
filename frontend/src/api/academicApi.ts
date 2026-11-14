@@ -21,7 +21,9 @@ import type {
   QuestionItem,
   ExamScanResponse,
   RefineQuestionResponse,
-  BackgroundJobStatus
+  BackgroundJobStatus,
+  TeacherUser,
+  AdminSystemHealth
 } from "../types/academic";
 
 export const academicApi = {
@@ -379,6 +381,82 @@ export const academicApi = {
 
   getEvaluation: async (evalId: string): Promise<AcademicEvaluation> => {
     const res = await apiClient.get<AcademicEvaluation>(`/academic/evaluations/${evalId}`);
+    return res.data;
+  },
+
+  // Admin Management Endpoints
+  listAdminTeachers: async (institutionId?: string, role?: string): Promise<TeacherUser[]> => {
+    const params: any = {};
+    if (institutionId) params.institution_id = institutionId;
+    if (role) params.role = role;
+    const res = await apiClient.get<TeacherUser[]>("/academic/admin/teachers", { params });
+    return res.data;
+  },
+
+  updateTeacherRole: async (userId: number, role: string, department?: string): Promise<any> => {
+    const res = await apiClient.put(`/academic/admin/teachers/${userId}/role`, { role, department });
+    return res.data;
+  },
+
+  reassignTeacherSubjects: async (fromUserId: number, toUserId: number): Promise<any> => {
+    const res = await apiClient.post("/academic/admin/teachers/reassign", {
+      from_user_id: fromUserId,
+      to_user_id: toUserId
+    });
+    return res.data;
+  },
+
+  resetTeacherPassword: async (userId: number, newPassword: string): Promise<any> => {
+    const res = await apiClient.put(`/academic/admin/teachers/${userId}/reset-password`, {
+      new_password: newPassword
+    });
+    return res.data;
+  },
+
+  deleteTeacher: async (userId: number): Promise<any> => {
+    const res = await apiClient.delete(`/academic/admin/teachers/${userId}`);
+    return res.data;
+  },
+
+  assignSubjectTeacher: async (subjectId: string, userId: number): Promise<any> => {
+    const res = await apiClient.put(`/academic/admin/subjects/${subjectId}/teacher`, {
+      user_id: userId
+    });
+    return res.data;
+  },
+
+  listAdminStudents: async (search?: string, classId?: string): Promise<Student[]> => {
+    const params: any = {};
+    if (search) params.search = search;
+    if (classId) params.class_id = classId;
+    const res = await apiClient.get<Student[]>("/academic/admin/students", { params });
+    return res.data;
+  },
+
+  transferStudentClass: async (studentId: string, toClassId: string, toSection?: string): Promise<any> => {
+    const res = await apiClient.put(`/academic/admin/students/${studentId}/transfer`, {
+      to_class_id: toClassId,
+      to_section: toSection || "A"
+    });
+    return res.data;
+  },
+
+  getAdminHealth: async (institutionId?: string): Promise<AdminSystemHealth> => {
+    const params: any = {};
+    if (institutionId) params.institution_id = institutionId;
+    const res = await apiClient.get<AdminSystemHealth>("/academic/admin/health", { params });
+    return res.data;
+  },
+
+  fixOrphans: async (fallbackUserId?: number): Promise<any> => {
+    const res = await apiClient.post("/academic/admin/fix-orphans", {
+      fallback_user_id: fallbackUserId
+    });
+    return res.data;
+  },
+
+  updateInstitution: async (institutionId: string, data: Partial<Institution>): Promise<any> => {
+    const res = await apiClient.put(`/academic/admin/institutions/${institutionId}`, data);
     return res.data;
   }
 };

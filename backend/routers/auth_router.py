@@ -48,6 +48,9 @@ class AuthResponse(BaseModel):
     token_type: str = "bearer"
     username: str
     user_id: int
+    full_name: Optional[str] = ""
+    role: Optional[str] = "Teacher"
+    institution_id: Optional[str] = ""
 
 
 class UserProfileResponse(BaseModel):
@@ -56,6 +59,11 @@ class UserProfileResponse(BaseModel):
     """
     id: int
     username: str
+    full_name: Optional[str] = ""
+    email: Optional[str] = ""
+    role: Optional[str] = "Teacher"
+    department: Optional[str] = ""
+    institution_id: Optional[str] = ""
     created_at: str
 
 
@@ -82,7 +90,10 @@ async def login(credentials: LoginRequest) -> AuthResponse:
         access_token=token,
         token_type="bearer",
         username=user["username"],
-        user_id=user["id"]
+        user_id=user["id"],
+        full_name=user.get("full_name") or user["username"],
+        role=user.get("role") or "Teacher",
+        institution_id=user.get("institution_id") or ""
     )
 
 
@@ -143,7 +154,10 @@ async def register(payload: RegisterRequest) -> AuthResponse:
         access_token=token,
         token_type="bearer",
         username=payload.username,
-        user_id=user_id
+        user_id=user_id,
+        full_name=payload.full_name or payload.username,
+        role=payload.role or "Teacher",
+        institution_id=inst_id
     )
 
 
@@ -155,7 +169,12 @@ async def get_current_user_profile(current_user: Dict[str, Any] = Depends(get_cu
     return UserProfileResponse(
         id=current_user["id"],
         username=current_user["username"],
-        created_at=str(current_user["created_at"])
+        full_name=current_user.get("full_name") or current_user["username"],
+        email=current_user.get("email") or "",
+        role=current_user.get("role") or "Teacher",
+        department=current_user.get("department") or "",
+        institution_id=current_user.get("institution_id") or "",
+        created_at=str(current_user.get("created_at") or "")
     )
 
 

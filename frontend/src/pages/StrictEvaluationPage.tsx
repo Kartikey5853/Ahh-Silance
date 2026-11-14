@@ -34,6 +34,7 @@ import {
   Sparkles,
   Users,
   FileText,
+  Edit3,
   X
 } from "lucide-react";
 
@@ -2250,39 +2251,27 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
       {renderLiveScannerModal()}
       {renderEvaluatingAllModal()}
 
-      {/* Unified Exams & Grading Switcher */}
-      <div style={{ display: "inline-flex", background: "#f1f5f9", padding: "0.25rem", borderRadius: "10px", marginBottom: "1.25rem", border: "1px solid #e2e8f0" }}>
+      {/* Quick Navigation Back to Unified Exams Desk */}
+      <div style={{ marginBottom: "1rem" }}>
         <button
           type="button"
           onClick={() => onNavigate("exams")}
           style={{
-            background: "transparent",
-            color: "#64748b",
-            border: "none",
-            borderRadius: "8px",
-            padding: "0.45rem 1rem",
-            fontSize: "0.82rem",
-            fontWeight: 600,
-            cursor: "pointer"
-          }}
-        >
-          All Exams &amp; Question Papers
-        </button>
-        <button
-          type="button"
-          style={{
             background: "#ffffff",
+            border: "1px solid #cbd5e1",
             color: "#0f172a",
-            border: "none",
             borderRadius: "8px",
-            padding: "0.45rem 1rem",
+            padding: "0.45rem 0.85rem",
             fontSize: "0.82rem",
             fontWeight: 700,
             cursor: "pointer",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.06)"
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.4rem",
+            boxShadow: "0 1px 2px rgba(0,0,0,0.03)"
           }}
         >
-          Student Grading Desk
+          <ArrowLeft size={14} /> Back to Exams &amp; Papers
         </button>
       </div>
 
@@ -2450,14 +2439,14 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
                       </div>
                     </div>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1.25fr", gap: "0.5rem" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1.3fr", gap: "0.5rem" }}>
                       <button
                         type="button"
-                        onClick={() => handleOpenAnswerKeyStudio(ex)}
+                        onClick={() => onNavigate("exams", { examId: ex.id })}
                         style={{
-                          background: "#eff6ff",
-                          border: "1px solid #bfdbfe",
-                          color: "#1d4ed8",
+                          background: "#f8fafc",
+                          border: "1px solid #cbd5e1",
+                          color: "#0f172a",
                           borderRadius: "8px",
                           fontSize: "0.8rem",
                           fontWeight: 700,
@@ -2466,10 +2455,10 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          gap: "0.3rem"
+                          gap: "0.35rem"
                         }}
                       >
-                        <Sparkles size={13} /> Answer Key &amp; Rubrics
+                        <Edit3 size={13} style={{ color: "#2563eb" }} /> Edit Questions &amp; Key
                       </button>
 
                       <button
@@ -2477,7 +2466,7 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
                         className="btn btn-primary"
                         style={{ width: "100%", fontSize: "0.82rem", padding: "0.52rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.35rem" }}
                       >
-                        Select &amp; Grade →
+                        <Sparkles size={13} /> Grade Papers &amp; Upload Copies →
                       </button>
                     </div>
                   </div>

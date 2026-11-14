@@ -8,7 +8,8 @@ import {
   Menu,
   X,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ShieldCheck
 } from "lucide-react";
 import { academicApi } from "../api/academicApi";
 import type { Institution } from "../types/academic";
@@ -20,13 +21,15 @@ export type NavTab =
   | "exams"
   | "evaluation"
   | "profile"
-  | "subject-detail";
+  | "subject-detail"
+  | "admin";
 
 interface LeftDockProps {
   activeTab: NavTab;
   onTabChange: (tab: NavTab) => void;
   onLogout: () => void;
   userName?: string;
+  userRole?: string;
   institutionName?: string;
   onOpenQuickCheck?: () => void;
 }
@@ -36,9 +39,11 @@ export const LeftDock: React.FC<LeftDockProps> = ({
   onTabChange,
   onLogout,
   userName = "Faculty",
+  userRole,
   institutionName: propInstitutionName
 }) => {
   const [localInstitutionName, setLocalInstitutionName] = useState<string>("");
+  const [localUserRole, setLocalUserRole] = useState<string>("");
   const [mobileOpen, setMobileOpen] = useState<boolean>(false);
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
 
@@ -47,6 +52,9 @@ export const LeftDock: React.FC<LeftDockProps> = ({
       academicApi.getProfile().catch(() => null),
       academicApi.listInstitutions().catch(() => [])
     ]).then(([prof, insts]: [any, Institution[]]) => {
+      if (prof?.role) {
+        setLocalUserRole(prof.role);
+      }
       if (prof?.institution_id && insts?.length > 0) {
         const found = insts.find((i) => i.id === prof.institution_id);
         if (found) {
@@ -61,6 +69,8 @@ export const LeftDock: React.FC<LeftDockProps> = ({
   }, []);
 
   const displayOrgName = propInstitutionName || localInstitutionName || "Academic Portal";
+  const effectiveRole = userRole || localUserRole || "";
+  const isAdmin = effectiveRole.toLowerCase().includes("admin");
 
   // Unified, uncluttered navigation items
   const navItems: {
@@ -75,7 +85,7 @@ export const LeftDock: React.FC<LeftDockProps> = ({
     },
     {
       id: "exams",
-      label: "Exams & Grading",
+      label: "Exams & Papers",
       icon: <FileSpreadsheet size={19} />
     },
     {
@@ -83,6 +93,15 @@ export const LeftDock: React.FC<LeftDockProps> = ({
       label: "Marks Register",
       icon: <Users size={19} />
     },
+    ...(isAdmin
+      ? [
+          {
+            id: "admin" as NavTab,
+            label: "Admin Console",
+            icon: <ShieldCheck size={19} />
+          }
+        ]
+      : []),
     {
       id: "profile",
       label: "Settings",

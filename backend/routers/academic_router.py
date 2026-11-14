@@ -23,7 +23,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from backend.core.database import db
-from backend.core.auth import get_optional_current_user
+from backend.core.auth import get_optional_current_user, hash_password
 from backend.services.gemini_academic_service import GeminiAcademicService
 from backend.services.page_storage_service import PageStorageService
 from backend.services.magic_ink_service import MagicInkService
@@ -178,6 +178,40 @@ class AnswerKeyUpdateRequest(BaseModel):
 class EvaluationUpdateRequest(BaseModel):
     breakdown: Optional[List[Dict[str, Any]]] = None
     teacher_feedback: Optional[str] = None
+
+
+class TeacherRoleUpdateRequest(BaseModel):
+    role: str
+    department: Optional[str] = None
+
+
+class TeacherReassignRequest(BaseModel):
+    from_user_id: int
+    to_user_id: int
+
+
+class SubjectTeacherAssignRequest(BaseModel):
+    user_id: int
+
+
+class PasswordResetRequest(BaseModel):
+    new_password: str
+
+
+class StudentTransferRequest(BaseModel):
+    to_class_id: str
+    to_section: Optional[str] = "A"
+
+
+class InstitutionUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    code: Optional[str] = None
+    type: Optional[str] = None
+    config: Optional[Dict[str, Any]] = None
+
+
+class FixOrphansRequest(BaseModel):
+    fallback_user_id: Optional[int] = None
 
 
 # --- Endpoints ---
@@ -1221,3 +1255,127 @@ def get_evaluation_magic_ink(eval_id: str):
         "grade": evaluation.get("grade", "Passed"),
         "magic_ink": magic_ink
     }
+
+
+# =========================================================================
+# 11. ADMIN MANAGEMENT & SYSTEM HEALTH ENDPOINTS
+# =========================================================================
+
+@router.get("/admin/teachers")
+def admin_list_teachers(institution_id: Optional[str] = Query(None), role: Optional[str] = Query(None)):
+    """Lists all faculty members and teachers with workload and assigned subject stats."""
+    return db.list_users(institution_id=institution_id, role=role)
+
+
+@router.put("/admin/teachers/{user_id}/role")
+def admin_update_teacher_role(user_id: int, req: TeacherRoleUpdateRequest):
+    """Updates faculty role (Teacher, HOD, Exam Coordinator, Admin) and department."""
+    ok = db.admin_update_user_role(user_id, req.role, req.department)
+    if not ok:
+        raise HTTPException(status_code=404, detail="User not found or role update failed")
+    return {"status": "success", "user": db.get_user_by_id(user_id)}
+
+
+@router.post("/admin/teachers/reassign")
+def admin_reassign_teacher_subjects(req: TeacherReassignRequest):
+    """Reassigns all subjects from one teacher to another."""
+    from_user = db.get_user_by_id(req.from_user_id)
+    to_user = db.get_user_by_id(req.to_user_id)
+    if not from_user or not to_user:
+        raise HTTPException(status_code=404, detail="Target faculty member not found")
+    count = db.admin_reassign_teacher_subjects(req.from_user_id, req.to_user_id)
+    return {"status": "success", "reassigned_subjects_count": count}
+
+
+@router.put("/admin/teachers/{user_id}/reset-password")
+def admin_reset_teacher_password(user_id: int, req: PasswordResetRequest):
+    """Resets password for a faculty member."""
+    if len(req.new_password) < 4:
+        raise HTTPException(status_code=400, detail="Password must be at least 4 characters")
+    pwd_hash = hash_password(req.new_password)
+    ok = db.admin_reset_user_password(user_id, pwd_hash)
+    if not ok:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"status": "success", "message": "Password reset successfully"}
+
+
+@router.delete("/admin/teachers/{user_id}")
+def admin_delete_teacher(user_id: int):
+    """Removes a teacher account. Any assigned subjects are marked as unassigned."""
+    ok = db.admin_delete_user(user_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"status": "success", "message": "Teacher removed"}
+
+
+@router.put("/admin/subjects/{subject_id}/teacher")
+def admin_assign_subject_teacher(subject_id: str, req: SubjectTeacherAssignRequest):
+    """Assigns a subject to a faculty member."""
+    user = db.get_user_by_id(req.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Teacher not found")
+    ok = db.admin_reassign_subject_teacher(subject_id, req.user_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    return {"status": "success", "subject": db.get_subject(subject_id)}
+
+
+@router.get("/admin/students")
+def admin_list_students(
+    search: Optional[str] = Query(None),
+    class_id: Optional[str] = Query(None)
+):
+    """Global institution-wide student directory with search across roll number, name, parent phone, etc."""
+    all_students = db.list_students(class_id=class_id)
+    if search:
+        s_lower = search.strip().lower()
+        all_students = [
+            s for s in all_students
+            if s_lower in (s.get("name") or "").lower()
+            or s_lower in (s.get("roll_number") or "").lower()
+            or s_lower in (s.get("email") or "").lower()
+            or s_lower in (s.get("phone") or "").lower()
+            or s_lower in (s.get("parent_name") or "").lower()
+            or s_lower in (s.get("parent_phone") or "").lower()
+        ]
+    return all_students
+
+
+@router.put("/admin/students/{student_id}/transfer")
+def admin_transfer_student(student_id: str, req: StudentTransferRequest):
+    """Transfers a student to another class cohort and section."""
+    target_class = db.get_class(req.to_class_id)
+    if not target_class:
+        raise HTTPException(status_code=404, detail="Target class cohort not found")
+    ok = db.admin_transfer_student(student_id, req.to_class_id, req.to_section)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Student not found")
+    return {"status": "success", "student": db.get_student(student_id)}
+
+
+@router.get("/admin/health")
+def admin_get_system_health(institution_id: Optional[str] = Query(None)):
+    """Computes comprehensive health, overdue deadlines, and diagnostic stats."""
+    return db.admin_get_system_health(institution_id=institution_id)
+
+
+@router.post("/admin/fix-orphans")
+def admin_fix_orphans(req: FixOrphansRequest, current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)):
+    """Reassigns all orphaned subjects to the active admin or specified fallback user."""
+    fallback_id = req.fallback_user_id
+    if not fallback_id and current_user:
+        fallback_id = current_user.get("id")
+    if not fallback_id:
+        fallback_id = 1
+    count = db.admin_fix_orphans(fallback_id)
+    return {"status": "success", "reassigned_orphans_count": count}
+
+
+@router.put("/admin/institutions/{institution_id}")
+def admin_update_institution(institution_id: str, req: InstitutionUpdateRequest):
+    """Updates institution metadata (name, code, type, config)."""
+    updates = req.model_dump(exclude_unset=True)
+    inst = db.update_institution(institution_id, updates)
+    if not inst:
+        raise HTTPException(status_code=404, detail="Institution not found")
+    return {"status": "success", "institution": inst}
