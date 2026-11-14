@@ -27,6 +27,7 @@ interface LeftDockProps {
   onTabChange: (tab: NavTab) => void;
   onLogout: () => void;
   userName?: string;
+  institutionName?: string;
   onOpenQuickCheck?: () => void;
 }
 
@@ -35,29 +36,31 @@ export const LeftDock: React.FC<LeftDockProps> = ({
   onTabChange,
   onLogout,
   userName = "Faculty",
+  institutionName: propInstitutionName,
   onOpenQuickCheck
 }) => {
-  const [institutionName, setInstitutionName] = useState<string>("");
-  const [institutionType, setInstitutionType] = useState<string>("");
+  const [localInstitutionName, setLocalInstitutionName] = useState<string>("");
   const [mobileOpen, setMobileOpen] = useState<boolean>(false);
 
   useEffect(() => {
-    academicApi
-      .listInstitutions()
-      .then((insts: Institution[]) => {
-        if (insts && insts.length > 0) {
-          setInstitutionName(insts[0].name);
-          setInstitutionType(
-            insts[0].type === "college"
-              ? "College"
-              : insts[0].type === "school"
-              ? "School"
-              : "Competitive"
-          );
+    Promise.all([
+      academicApi.getProfile().catch(() => null),
+      academicApi.listInstitutions().catch(() => [])
+    ]).then(([prof, insts]: [any, Institution[]]) => {
+      if (prof?.institution_id && insts?.length > 0) {
+        const found = insts.find((i) => i.id === prof.institution_id);
+        if (found) {
+          setLocalInstitutionName(found.name);
+          return;
         }
-      })
-      .catch(() => {});
+      }
+      if (insts && insts.length > 0) {
+        setLocalInstitutionName(insts[0].name);
+      }
+    }).catch(() => {});
   }, []);
+
+  const displayOrgName = propInstitutionName || localInstitutionName || "Academic Portal";
 
   const navItems: {
     id: NavTab;
@@ -178,18 +181,15 @@ export const LeftDock: React.FC<LeftDockProps> = ({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "#ffffff"
+                color: "#ffffff",
+                overflow: "hidden"
               }}
             >
               <img
                 src="/niera-logo.png"
                 alt="Niera"
-                style={{ width: "22px", height: "22px", objectFit: "contain" }}
-                onError={(e) => {
-                  (e.target as HTMLElement).style.display = "none";
-                }}
+                style={{ width: "24px", height: "24px", objectFit: "contain" }}
               />
-              <span style={{ fontSize: "1.1rem", fontWeight: 800 }}>N</span>
             </div>
             <div>
               <div
@@ -203,21 +203,21 @@ export const LeftDock: React.FC<LeftDockProps> = ({
               >
                 Niera
               </div>
-              {institutionName && (
-                <div
-                  style={{
-                    fontSize: "0.7rem",
-                    color: "#64748b",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    maxWidth: "170px"
-                  }}
-                  title={institutionName}
-                >
-                  {institutionName}
-                </div>
-              )}
+              <div
+                style={{
+                  fontSize: "0.72rem",
+                  color: "#64748b",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  maxWidth: "170px",
+                  marginTop: "0.1rem",
+                  fontWeight: 600
+                }}
+                title={displayOrgName}
+              >
+                {displayOrgName}
+              </div>
             </div>
           </div>
 
@@ -371,7 +371,7 @@ export const LeftDock: React.FC<LeftDockProps> = ({
                   {userName}
                 </div>
                 <div style={{ fontSize: "0.68rem", color: "#64748b" }}>
-                  {institutionType || "Faculty"}
+                  Educator
                 </div>
               </div>
             </div>

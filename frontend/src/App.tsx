@@ -26,8 +26,31 @@ import { academicApi } from "./api/academicApi";
 export const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [userName, setUserName] = useState<string>("Faculty");
+  const [userOrgName, setUserOrgName] = useState<string>("");
   const [activeTab, setActiveTab] = useState<NavTab>("dashboard");
   const [navigationParams, setNavigationParams] = useState<any>({});
+
+  const loadUserData = () => {
+    Promise.all([
+      academicApi.getProfile().catch(() => null),
+      academicApi.listInstitutions().catch(() => [])
+    ]).then(([p, insts]) => {
+      if (p) {
+        setIsAuthenticated(true);
+        setUserName(p.full_name || p.username);
+        if (p.institution_id && insts?.length > 0) {
+          const match = insts.find((i: any) => i.id === p.institution_id);
+          if (match) setUserOrgName(match.name);
+          else if (insts[0]) setUserOrgName(insts[0].name);
+        } else if (insts?.length > 0) {
+          setUserOrgName(insts[0].name);
+        }
+      }
+    }).catch(() => {
+      authApi.logout();
+      setIsAuthenticated(false);
+    });
+  };
 
   useEffect(() => {
     const token = localStorage.getItem("auth_token");
@@ -35,24 +58,12 @@ export const App: React.FC = () => {
       setIsAuthenticated(false);
       return;
     }
-    academicApi
-      .getProfile()
-      .then((p) => {
-        setIsAuthenticated(true);
-        setUserName(p.full_name || p.username);
-      })
-      .catch(() => {
-        authApi.logout();
-        setIsAuthenticated(false);
-      });
+    loadUserData();
   }, []);
 
   const handleLoginSuccess = () => {
     setIsAuthenticated(true);
-    academicApi
-      .getProfile()
-      .then((p) => setUserName(p.full_name || p.username))
-      .catch(() => {});
+    loadUserData();
     setActiveTab("dashboard");
   };
 
@@ -91,6 +102,7 @@ export const App: React.FC = () => {
         onTabChange={handleNavigate}
         onLogout={handleLogout}
         userName={userName}
+        institutionName={userOrgName}
         onOpenQuickCheck={() => handleNavigate("exams", { mode: "create" })}
       />
 
