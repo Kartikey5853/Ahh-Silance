@@ -24,7 +24,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from backend.core.database import db
-from backend.core.auth import get_optional_current_user, hash_password
+from backend.core.auth import get_optional_current_user, get_current_user, hash_password
 from backend.services.gemini_academic_service import (
     GeminiAcademicService,
     get_gemini_client,
@@ -295,41 +295,52 @@ def update_profile(req: ProfileUpdateRequest, current_user: Optional[Dict[str, A
 
 # 2. Institutions
 @router.get("/institutions")
-def list_institutions():
-    """Lists all configured academic institutions (College, School, Competitive)."""
-    return db.list_institutions()
+def list_institutions(current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)):
+    """Lists configured academic institutions. For non-admins, strictly scoped to their own affiliated institution."""
+    all_insts = db.list_institutions()
+    if not current_user:
+        return all_insts
+    user_inst_id = current_user.get("institution_id") or ""
+    user_role = (current_user.get("role") or "").strip().lower()
+    if user_role in ["admin"]:
+        return all_insts
+    if user_inst_id:
+        return [i for i in all_insts if i["id"] == user_inst_id]
+    return all_insts
 
 
 @router.post("/institutions")
 def create_institution(req: InstitutionCreateRequest, current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)):
     """Creates a new institution / organization and associates it with the active user."""
-    if current_user and current_user.get("username"):
-        u = db.get_user_by_username(current_user["username"])
-        if u:
-            u_role = (u.get("role") or "").strip().lower()
-            if u_role not in ["admin"]:
-                raise HTTPException(status_code=403, detail="Teachers cannot create or change organizations. Contact your administrator.")
-
     inst_id = f"inst-{uuid.uuid4().hex[:8]}"
     created = db.create_institution(inst_id, req.name, req.type, req.code or "", req.config or {})
     if current_user and current_user.get("username"):
         u = db.get_user_by_username(current_user["username"])
-        if u and (u.get("role") or "").strip().lower() == "admin":
+        if u and not u.get("institution_id"):
             db.update_user_profile(u["id"], {"institution_id": inst_id})
     return created
 
 
 # 2.1 Classes (Organization -> Class -> Subject)
 @router.get("/classes")
-def list_classes(institution_id: Optional[str] = Query(None)):
-    """Lists classes for an institution."""
-    return db.list_classes(institution_id=institution_id)
+def list_classes(
+    institution_id: Optional[str] = Query(None),
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)
+):
+    """Lists classes for an institution, strictly scoped to user's organization."""
+    target_inst = institution_id
+    if current_user and current_user.get("institution_id"):
+        target_inst = target_inst or current_user["institution_id"]
+    return db.list_classes(institution_id=target_inst)
 
 
 @router.post("/classes")
-def create_class(req: ClassCreateRequest):
+def create_class(req: ClassCreateRequest, current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)):
     """Creates a new class under an institution."""
-    return db.create_class(req.model_dump())
+    data = req.model_dump()
+    if current_user and current_user.get("institution_id") and not data.get("institution_id"):
+        data["institution_id"] = current_user["institution_id"]
+    return db.create_class(data)
 
 
 @router.get("/classes/{class_id}")
@@ -386,15 +397,33 @@ def add_student_to_class(class_id: str, req: StudentCreateRequest):
 
 # 3. Subjects
 @router.get("/subjects")
-def list_subjects(institution_id: Optional[str] = Query(None), class_id: Optional[str] = Query(None)):
-    """Lists all subjects with credit counts, chapters, and enrolled student totals."""
-    return db.list_subjects(institution_id=institution_id, class_id=class_id)
+def list_subjects(
+    institution_id: Optional[str] = Query(None),
+    class_id: Optional[str] = Query(None),
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)
+):
+    """Lists subjects strictly scoped to the teacher and their affiliated institution."""
+    target_inst = institution_id
+    user_id = None
+    if current_user:
+        u_role = (current_user.get("role") or "").strip().lower()
+        if current_user.get("institution_id"):
+            target_inst = target_inst or current_user["institution_id"]
+        # Non-admin faculty only see their own subjects
+        if u_role not in ["admin"]:
+            user_id = current_user.get("id")
+    return db.list_subjects(user_id=user_id, institution_id=target_inst, class_id=class_id)
 
 
 @router.post("/subjects")
-def create_subject(req: SubjectCreateRequest):
+def create_subject(req: SubjectCreateRequest, current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)):
     """Creates a new subject under the selected institution hierarchy."""
     data = req.model_dump()
+    if current_user:
+        if current_user.get("id") and "user_id" not in data:
+            data["user_id"] = current_user["id"]
+        if current_user.get("institution_id") and not data.get("institution_id"):
+            data["institution_id"] = current_user["institution_id"]
     subject = db.create_subject(data)
     return subject
 
@@ -410,15 +439,30 @@ def get_subject(subject_id: str):
 
 # 4. Students (One-by-one enrollment)
 @router.get("/students")
-def list_all_students(class_id: Optional[str] = Query(None), subject_id: Optional[str] = Query(None)):
-    """Lists students optionally filtered by class_id or subject_id."""
-    return db.list_students(subject_id=subject_id, class_id=class_id)
+def list_all_students(
+    class_id: Optional[str] = Query(None),
+    subject_id: Optional[str] = Query(None),
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)
+):
+    """Lists students strictly scoped to organization and user permissions."""
+    inst_id = current_user.get("institution_id") if current_user else None
+    user_id = None
+    if current_user:
+        u_role = (current_user.get("role") or "").strip().lower()
+        if u_role not in ["admin"]:
+            user_id = current_user.get("id")
+    return db.list_students(subject_id=subject_id, class_id=class_id, institution_id=inst_id, user_id=user_id)
 
 
 @router.get("/subjects/{subject_id}/students")
-def list_students(subject_id: str, class_id: Optional[str] = Query(None)):
+def list_students(
+    subject_id: str,
+    class_id: Optional[str] = Query(None),
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)
+):
     """Lists all students enrolled in a specific subject or class."""
-    return db.list_students(subject_id=subject_id, class_id=class_id)
+    inst_id = current_user.get("institution_id") if current_user else None
+    return db.list_students(subject_id=subject_id, class_id=class_id, institution_id=inst_id)
 
 
 @router.post("/subjects/{subject_id}/students")
@@ -772,9 +816,18 @@ async def refine_exam_question(
 
 
 @router.get("/exams")
-def list_exams(subject_id: Optional[str] = Query(None)):
-    """Lists all scheduled or completed examinations."""
-    return db.list_exams(subject_id=subject_id)
+def list_exams(
+    subject_id: Optional[str] = Query(None),
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)
+):
+    """Lists scheduled or completed examinations strictly scoped to teacher and organization."""
+    inst_id = current_user.get("institution_id") if current_user else None
+    user_id = None
+    if current_user:
+        u_role = (current_user.get("role") or "").strip().lower()
+        if u_role not in ["admin"]:
+            user_id = current_user.get("id")
+    return db.list_exams(subject_id=subject_id, user_id=user_id, institution_id=inst_id)
 
 
 @router.post("/exams")
@@ -1365,10 +1418,17 @@ async def evaluate_all_students(
 @router.get("/evaluations")
 def list_evaluations(
     exam_id: Optional[str] = Query(None),
-    student_id: Optional[str] = Query(None)
+    student_id: Optional[str] = Query(None),
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)
 ):
-    """Lists all academic evaluations, optionally filtered by examination ID or student ID."""
-    return db.list_academic_evaluations(exam_id=exam_id, student_id=student_id)
+    """Lists academic evaluations strictly scoped to user and institution."""
+    inst_id = current_user.get("institution_id") if current_user else None
+    user_id = None
+    if current_user:
+        u_role = (current_user.get("role") or "").strip().lower()
+        if u_role not in ["admin"]:
+            user_id = current_user.get("id")
+    return db.list_academic_evaluations(exam_id=exam_id, student_id=student_id, user_id=user_id, institution_id=inst_id)
 
 
 @router.get("/evaluations/{eval_id}")
@@ -1442,9 +1502,16 @@ def get_evaluation_magic_ink(eval_id: str):
 # =========================================================================
 
 @router.get("/admin/teachers")
-def admin_list_teachers(institution_id: Optional[str] = Query(None), role: Optional[str] = Query(None)):
-    """Lists all faculty members and teachers with workload and assigned subject stats."""
-    return db.list_users(institution_id=institution_id, role=role)
+def admin_list_teachers(
+    institution_id: Optional[str] = Query(None),
+    role: Optional[str] = Query(None),
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)
+):
+    """Lists faculty members strictly scoped to the admin's institution."""
+    target_inst = institution_id
+    if current_user and current_user.get("institution_id"):
+        target_inst = target_inst or current_user["institution_id"]
+    return db.list_users(institution_id=target_inst, role=role)
 
 
 @router.put("/admin/teachers/{user_id}/role")
@@ -1503,10 +1570,12 @@ def admin_assign_subject_teacher(subject_id: str, req: SubjectTeacherAssignReque
 @router.get("/admin/students")
 def admin_list_students(
     search: Optional[str] = Query(None),
-    class_id: Optional[str] = Query(None)
+    class_id: Optional[str] = Query(None),
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)
 ):
-    """Global institution-wide student directory with search across roll number, name, parent phone, etc."""
-    all_students = db.list_students(class_id=class_id)
+    """Global institution-wide student directory with search, scoped to admin's institution."""
+    inst_id = current_user.get("institution_id") if current_user else None
+    all_students = db.list_students(class_id=class_id, institution_id=inst_id)
     if search:
         s_lower = search.strip().lower()
         all_students = [
@@ -1534,9 +1603,15 @@ def admin_transfer_student(student_id: str, req: StudentTransferRequest):
 
 
 @router.get("/admin/health")
-def admin_get_system_health(institution_id: Optional[str] = Query(None)):
-    """Computes comprehensive health, overdue deadlines, and diagnostic stats."""
-    return db.admin_get_system_health(institution_id=institution_id)
+def admin_get_system_health(
+    institution_id: Optional[str] = Query(None),
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_current_user)
+):
+    """Computes comprehensive health, overdue deadlines, and diagnostic stats scoped to institution."""
+    target_inst = institution_id
+    if current_user and current_user.get("institution_id"):
+        target_inst = target_inst or current_user["institution_id"]
+    return db.admin_get_system_health(institution_id=target_inst)
 
 
 @router.post("/admin/fix-orphans")

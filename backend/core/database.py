@@ -291,7 +291,7 @@ class SQLiteDatabase:
         """
         params: List[Any] = []
         if institution_id:
-            query += " AND (institution_id = ? OR institution_id = '' OR institution_id IS NULL)"
+            query += " AND institution_id = ?"
             params.append(institution_id)
         if role:
             query += " AND LOWER(role) = LOWER(?)"
@@ -390,69 +390,144 @@ class SQLiteDatabase:
         """
         Computes comprehensive diagnostic metrics and highlights operational bottlenecks.
         """
+        inst_id = institution_id or ""
         with self.get_connection() as conn:
             cursor = conn.cursor()
 
             # 1. Faculty stats
-            cursor.execute("SELECT COUNT(*) FROM users")
-            total_users = cursor.fetchone()[0]
-            cursor.execute("SELECT COUNT(*) FROM users WHERE LOWER(role) LIKE '%admin%'")
-            total_admins = cursor.fetchone()[0]
+            if inst_id:
+                cursor.execute("SELECT COUNT(*) FROM users WHERE institution_id = ?", (inst_id,))
+                total_users = cursor.fetchone()[0]
+                cursor.execute("SELECT COUNT(*) FROM users WHERE institution_id = ? AND LOWER(role) LIKE '%admin%'", (inst_id,))
+                total_admins = cursor.fetchone()[0]
+            else:
+                cursor.execute("SELECT COUNT(*) FROM users")
+                total_users = cursor.fetchone()[0]
+                cursor.execute("SELECT COUNT(*) FROM users WHERE LOWER(role) LIKE '%admin%'")
+                total_admins = cursor.fetchone()[0]
             total_faculty = total_users - total_admins
 
             # 2. Student stats
-            cursor.execute("SELECT COUNT(*) FROM students")
-            total_students = cursor.fetchone()[0]
+            if inst_id:
+                cursor.execute("""
+                    SELECT COUNT(DISTINCT st.id) FROM students st
+                    LEFT JOIN classes c ON st.class_id = c.id
+                    LEFT JOIN subjects s ON st.subject_id = s.id
+                    WHERE c.institution_id = ? OR s.institution_id = ?
+                """, (inst_id, inst_id))
+                total_students = cursor.fetchone()[0]
+            else:
+                cursor.execute("SELECT COUNT(*) FROM students")
+                total_students = cursor.fetchone()[0]
 
             # 3. Class and Subject stats
-            cursor.execute("SELECT COUNT(*) FROM classes")
-            total_classes = cursor.fetchone()[0]
-            cursor.execute("SELECT COUNT(*) FROM subjects")
-            total_subjects = cursor.fetchone()[0]
+            if inst_id:
+                cursor.execute("SELECT COUNT(*) FROM classes WHERE institution_id = ?", (inst_id,))
+                total_classes = cursor.fetchone()[0]
+                cursor.execute("SELECT COUNT(*) FROM subjects WHERE institution_id = ?", (inst_id,))
+                total_subjects = cursor.fetchone()[0]
+            else:
+                cursor.execute("SELECT COUNT(*) FROM classes")
+                total_classes = cursor.fetchone()[0]
+                cursor.execute("SELECT COUNT(*) FROM subjects")
+                total_subjects = cursor.fetchone()[0]
 
             # 4. Exams & Evaluations stats
-            cursor.execute("SELECT COUNT(*) FROM exams")
-            total_exams = cursor.fetchone()[0]
-            cursor.execute("SELECT COUNT(*) FROM academic_evaluations")
-            total_evaluations = cursor.fetchone()[0]
+            if inst_id:
+                cursor.execute("""
+                    SELECT COUNT(e.id) FROM exams e
+                    JOIN subjects s ON e.subject_id = s.id
+                    WHERE s.institution_id = ?
+                """, (inst_id,))
+                total_exams = cursor.fetchone()[0]
+                cursor.execute("""
+                    SELECT COUNT(ae.id) FROM academic_evaluations ae
+                    JOIN exams e ON ae.exam_id = e.id
+                    JOIN subjects s ON e.subject_id = s.id
+                    WHERE s.institution_id = ?
+                """, (inst_id,))
+                total_evaluations = cursor.fetchone()[0]
+            else:
+                cursor.execute("SELECT COUNT(*) FROM exams")
+                total_exams = cursor.fetchone()[0]
+                cursor.execute("SELECT COUNT(*) FROM academic_evaluations")
+                total_evaluations = cursor.fetchone()[0]
 
             # 5. Overdue / bottleneck exams
             today_str = datetime.date.today().strftime("%Y-%m-%d")
-            cursor.execute("""
-                SELECT e.id, e.title, e.subject_id, e.exam_date, e.correction_deadline,
-                       (SELECT COUNT(*) FROM academic_evaluations ae WHERE ae.exam_id = e.id) as evals_count
-                FROM exams e
-                WHERE e.correction_deadline != '' AND e.correction_deadline < ?
-                ORDER BY e.correction_deadline ASC
-            """, (today_str,))
+            if inst_id:
+                cursor.execute("""
+                    SELECT e.id, e.title, e.subject_id, e.exam_date, e.correction_deadline,
+                           (SELECT COUNT(*) FROM academic_evaluations ae WHERE ae.exam_id = e.id) as evals_count
+                    FROM exams e
+                    JOIN subjects s ON e.subject_id = s.id
+                    WHERE e.correction_deadline != '' AND e.correction_deadline < ? AND s.institution_id = ?
+                    ORDER BY e.correction_deadline ASC
+                """, (today_str, inst_id))
+            else:
+                cursor.execute("""
+                    SELECT e.id, e.title, e.subject_id, e.exam_date, e.correction_deadline,
+                           (SELECT COUNT(*) FROM academic_evaluations ae WHERE ae.exam_id = e.id) as evals_count
+                    FROM exams e
+                    WHERE e.correction_deadline != '' AND e.correction_deadline < ?
+                    ORDER BY e.correction_deadline ASC
+                """, (today_str,))
             overdue_exams = [dict(r) for r in cursor.fetchall()]
 
             # 6. Exams missing question paper or answer key
-            cursor.execute("""
-                SELECT id, title, subject_id, exam_date,
-                       (question_paper_filename = '' OR question_paper_filename IS NULL) as missing_paper,
-                       (answer_key_text = '' AND (answer_key_json = '{}' OR answer_key_json = '' OR answer_key_json IS NULL)) as missing_key
-                FROM exams
-                WHERE (question_paper_filename = '' OR question_paper_filename IS NULL)
-                   OR (answer_key_text = '' AND (answer_key_json = '{}' OR answer_key_json = '' OR answer_key_json IS NULL))
-            """)
+            if inst_id:
+                cursor.execute("""
+                    SELECT e.id, e.title, e.subject_id, e.exam_date,
+                           (e.question_paper_filename = '' OR e.question_paper_filename IS NULL) as missing_paper,
+                           (e.answer_key_text = '' AND (e.answer_key_json = '{}' OR e.answer_key_json = '' OR e.answer_key_json IS NULL)) as missing_key
+                    FROM exams e
+                    JOIN subjects s ON e.subject_id = s.id
+                    WHERE ((e.question_paper_filename = '' OR e.question_paper_filename IS NULL)
+                       OR (e.answer_key_text = '' AND (e.answer_key_json = '{}' OR e.answer_key_json = '' OR e.answer_key_json IS NULL)))
+                       AND s.institution_id = ?
+                """, (inst_id,))
+            else:
+                cursor.execute("""
+                    SELECT id, title, subject_id, exam_date,
+                           (question_paper_filename = '' OR question_paper_filename IS NULL) as missing_paper,
+                           (answer_key_text = '' AND (answer_key_json = '{}' OR answer_key_json = '' OR answer_key_json IS NULL)) as missing_key
+                    FROM exams
+                    WHERE (question_paper_filename = '' OR question_paper_filename IS NULL)
+                       OR (answer_key_text = '' AND (answer_key_json = '{}' OR answer_key_json = '' OR answer_key_json IS NULL))
+                """)
             incomplete_exams = [dict(r) for r in cursor.fetchall()]
 
             # 7. Orphaned subjects (assigned to user_id = 0 or user that does not exist)
-            cursor.execute("""
-                SELECT s.id, s.name, s.code, s.class_id, s.institution_id, s.user_id
-                FROM subjects s
-                LEFT JOIN users u ON s.user_id = u.id
-                WHERE u.id IS NULL OR s.user_id = 0
-            """)
+            if inst_id:
+                cursor.execute("""
+                    SELECT s.id, s.name, s.code, s.class_id, s.institution_id, s.user_id
+                    FROM subjects s
+                    LEFT JOIN users u ON s.user_id = u.id
+                    WHERE (u.id IS NULL OR s.user_id = 0) AND s.institution_id = ?
+                """, (inst_id,))
+            else:
+                cursor.execute("""
+                    SELECT s.id, s.name, s.code, s.class_id, s.institution_id, s.user_id
+                    FROM subjects s
+                    LEFT JOIN users u ON s.user_id = u.id
+                    WHERE u.id IS NULL OR s.user_id = 0
+                """)
             orphaned_subjects = [dict(r) for r in cursor.fetchall()]
 
             # 8. Empty classes (0 enrolled students)
-            cursor.execute("""
-                SELECT c.id, c.name, c.code, c.department
-                FROM classes c
-                WHERE (SELECT COUNT(*) FROM students s WHERE s.class_id = c.id) = 0
-            """)
+            if inst_id:
+                cursor.execute("""
+                    SELECT c.id, c.name, c.code, c.department
+                    FROM classes c
+                    WHERE (SELECT COUNT(*) FROM students s WHERE s.class_id = c.id) = 0
+                      AND c.institution_id = ?
+                """, (inst_id,))
+            else:
+                cursor.execute("""
+                    SELECT c.id, c.name, c.code, c.department
+                    FROM classes c
+                    WHERE (SELECT COUNT(*) FROM students s WHERE s.class_id = c.id) = 0
+                """)
             empty_classes = [dict(r) for r in cursor.fetchall()]
 
             return {
@@ -726,22 +801,33 @@ class SQLiteDatabase:
             d["semester_records"] = []
         return d
 
-    def list_students(self, subject_id: Optional[str] = None, class_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_students(self, subject_id: Optional[str] = None, class_id: Optional[str] = None, institution_id: Optional[str] = None, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
         query = """
-            SELECT id, subject_id, class_id, name, roll_number, email, section,
-                   phone, parent_name, parent_phone, dob, blood_group,
-                   attendance_percentage, cgpa_or_percentage, admission_year, status, notes,
-                   semester_records_json, created_at
-            FROM students WHERE 1=1
+            SELECT DISTINCT st.id, st.subject_id, st.class_id, st.name, st.roll_number, st.email, st.section,
+                   st.phone, st.parent_name, st.parent_phone, st.dob, st.blood_group,
+                   st.attendance_percentage, st.cgpa_or_percentage, st.admission_year, st.status, st.notes,
+                   st.semester_records_json, st.created_at
+            FROM students st
+            LEFT JOIN classes c ON st.class_id = c.id
+            LEFT JOIN subjects s ON st.subject_id = s.id
+            WHERE 1=1
         """
         params: List[Any] = []
         if subject_id:
-            query += " AND subject_id = ?"
+            query += " AND st.subject_id = ?"
             params.append(subject_id)
         if class_id:
-            query += " AND class_id = ?"
+            query += " AND st.class_id = ?"
             params.append(class_id)
-        query += " ORDER BY roll_number ASC"
+        if user_id:
+            query += " AND (s.user_id = ? OR st.class_id IN (SELECT class_id FROM subjects WHERE user_id = ?))"
+            params.append(user_id)
+            params.append(user_id)
+        if institution_id:
+            query += " AND (c.institution_id = ? OR s.institution_id = ?)"
+            params.append(institution_id)
+            params.append(institution_id)
+        query += " ORDER BY st.roll_number ASC"
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(query, tuple(params))
@@ -913,17 +999,26 @@ class SQLiteDatabase:
         d["target_section"] = d.get("target_section") or ""
         return d
 
-    def list_exams(self, subject_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_exams(self, subject_id: Optional[str] = None, user_id: Optional[int] = None, institution_id: Optional[str] = None) -> List[Dict[str, Any]]:
         query = (
-            "SELECT id, subject_id, title, exam_type, max_marks, passing_marks, academic_year, "
-            "exam_date, correction_deadline, question_paper_filename, paper_id, paper_page_count, "
-            "target_section, answer_key_text, answer_key_json, questions_json, created_at FROM exams"
+            "SELECT e.id, e.subject_id, e.title, e.exam_type, e.max_marks, e.passing_marks, e.academic_year, "
+            "e.exam_date, e.correction_deadline, e.question_paper_filename, e.paper_id, e.paper_page_count, "
+            "e.target_section, e.answer_key_text, e.answer_key_json, e.questions_json, e.created_at "
+            "FROM exams e "
+            "LEFT JOIN subjects s ON e.subject_id = s.id "
+            "WHERE 1=1"
         )
         params: List[Any] = []
         if subject_id:
-            query += " WHERE subject_id = ?"
+            query += " AND e.subject_id = ?"
             params.append(subject_id)
-        query += " ORDER BY created_at DESC"
+        if user_id:
+            query += " AND s.user_id = ?"
+            params.append(user_id)
+        if institution_id:
+            query += " AND s.institution_id = ?"
+            params.append(institution_id)
+        query += " ORDER BY e.created_at DESC"
 
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -1150,24 +1245,30 @@ class SQLiteDatabase:
                 return d
         return None
 
-    def list_academic_evaluations(self, exam_id: Optional[str] = None, student_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_academic_evaluations(self, exam_id: Optional[str] = None, student_id: Optional[str] = None, user_id: Optional[int] = None, institution_id: Optional[str] = None) -> List[Dict[str, Any]]:
         query = """
-            SELECT id, exam_id, student_id, roll_number, student_name, answer_sheet_filename,
-                   total_score, max_score, percentage, grade, breakdown_json, teacher_feedback,
-                   page_count, magic_ink_json, pages_dir, structured_transcription_json, created_at
-            FROM academic_evaluations
+            SELECT DISTINCT ae.id, ae.exam_id, ae.student_id, ae.roll_number, ae.student_name, ae.answer_sheet_filename,
+                   ae.total_score, ae.max_score, ae.percentage, ae.grade, ae.breakdown_json, ae.teacher_feedback,
+                   ae.page_count, ae.magic_ink_json, ae.pages_dir, ae.structured_transcription_json, ae.created_at
+            FROM academic_evaluations ae
+            LEFT JOIN exams e ON ae.exam_id = e.id
+            LEFT JOIN subjects s ON e.subject_id = s.id
+            WHERE 1=1
         """
         params: List[Any] = []
-        conditions: List[str] = []
         if exam_id:
-            conditions.append("exam_id = ?")
+            query += " AND ae.exam_id = ?"
             params.append(exam_id)
         if student_id:
-            conditions.append("student_id = ?")
+            query += " AND ae.student_id = ?"
             params.append(student_id)
-        if conditions:
-            query += " WHERE " + " AND ".join(conditions)
-        query += " ORDER BY created_at DESC"
+        if user_id:
+            query += " AND s.user_id = ?"
+            params.append(user_id)
+        if institution_id:
+            query += " AND s.institution_id = ?"
+            params.append(institution_id)
+        query += " ORDER BY ae.created_at DESC"
 
         with self.get_connection() as conn:
             cursor = conn.cursor()
