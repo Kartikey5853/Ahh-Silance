@@ -80,7 +80,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
   const [loadingDetails, setLoadingDetails] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
-  const [quickGradingExamId, setQuickGradingExamId] = useState<string>("");
+
   const [answerKeyEditorTab, setAnswerKeyEditorTab] = useState<"markdown" | "per_question">("markdown");
   const keyFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -1482,93 +1482,7 @@ export const ExamManagementPage: React.FC<ExamManagementProps> = ({
           </div>
         </div>
 
-        {/* Fast-Track Student Copies & Rapid Grading Bar */}
-        {exams.length > 0 && (
-          <div
-            style={{
-              background: "#ffffff",
-              border: "1.5px dashed #3b82f6",
-              borderRadius: "10px",
-              padding: "0.55rem 0.85rem",
-              marginBottom: "0.75rem",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              flexWrap: "wrap",
-              gap: "0.65rem"
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-              <div
-                style={{
-                  width: "30px",
-                  height: "30px",
-                  borderRadius: "7px",
-                  background: "#eff6ff",
-                  color: "#2563eb",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0
-                }}
-              >
-                <UploadCloud size={16} />
-              </div>
-              <div>
-                <div style={{ fontSize: "0.86rem", fontWeight: 800, color: "#0f172a" }}>
-                  Fast-Track Student Copies Evaluation
-                </div>
-                <div style={{ fontSize: "0.74rem", color: "#64748b" }}>
-                  Select an exam to drop booklet PDFs and evaluate student marks.
-                </div>
-              </div>
-            </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-              <select
-                value={quickGradingExamId || (exams[0]?.id || "")}
-                onChange={(e) => setQuickGradingExamId(e.target.value)}
-                style={{
-                  padding: "0.38rem 0.65rem",
-                  borderRadius: "6px",
-                  border: "1px solid #cbd5e1",
-                  fontSize: "0.78rem",
-                  background: "#ffffff",
-                  color: "#1e293b",
-                  fontWeight: 600,
-                  maxWidth: "240px"
-                }}
-                title="Select Exam to Grade"
-              >
-                {exams.map((ex) => (
-                  <option key={ex.id} value={ex.id}>
-                    {ex.title}
-                  </option>
-                ))}
-              </select>
-
-              <button
-                type="button"
-                onClick={() => {
-                  const targetId = quickGradingExamId || exams[0]?.id;
-                  if (targetId) onNavigate("evaluation", { examId: targetId });
-                }}
-                className="btn btn-primary"
-                style={{
-                  fontSize: "0.78rem",
-                  fontWeight: 700,
-                  padding: "0.4rem 0.8rem",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.35rem"
-                }}
-              >
-                <Sparkles size={13} />
-                Grade Papers &amp; Upload Copies →
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Filter and Search Bar */}
         <div
