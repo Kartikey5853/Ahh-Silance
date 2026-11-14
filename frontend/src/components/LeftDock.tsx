@@ -72,10 +72,8 @@ export const LeftDock: React.FC<LeftDockProps> = ({
   const displayOrgName = propInstitutionName || localInstitutionName || "Academic Portal";
   const effectiveRole = userRole || localUserRole || "";
   const isAdmin =
-    effectiveRole.toLowerCase().includes("admin") ||
-    effectiveRole.toLowerCase().includes("professor") ||
-    userName.toLowerCase() === "admin" ||
-    userName.toLowerCase() === "kartikey";
+    effectiveRole.toLowerCase().trim() === "admin" ||
+    userName.toLowerCase().trim() === "admin";
 
   // Unified, uncluttered navigation items
   const navItems: {

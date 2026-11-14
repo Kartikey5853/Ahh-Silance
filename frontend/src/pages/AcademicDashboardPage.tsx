@@ -656,6 +656,33 @@ export const AcademicDashboardPage: React.FC<AcademicDashboardProps> = ({
         /* MAIN DASHBOARD: CLASSES OVERVIEW & HERO PAPER UPLOAD           */
         /* ============================================================== */
         <div>
+          {/* Welcome Banner */}
+          <div
+            style={{
+              background: "#ffffff",
+              border: "1px solid #e2e8f0",
+              borderRadius: "14px",
+              padding: "1.25rem 1.5rem",
+              marginBottom: "1.25rem",
+              boxShadow: "0 1px 3px rgba(0, 0, 0, 0.02)"
+            }}
+          >
+            <h1
+              style={{
+                fontSize: "1.45rem",
+                fontWeight: 800,
+                color: "#0f172a",
+                letterSpacing: "-0.03em",
+                margin: 0
+              }}
+            >
+              Namaste, {profile?.full_name || profile?.username || "Faculty"}
+            </h1>
+            <p style={{ color: "#64748b", fontSize: "0.85rem", margin: "0.25rem 0 0 0" }}>
+              {institutions.find((i) => i.id === profile?.institution_id)?.name || institutions[0]?.name || "Delhi Public School (CBSE)"}
+            </p>
+          </div>
+
           {/* Clean Drag and Drop / Upload Question Paper Section */}
           <div
             onClick={() => onNavigate("exams", { mode: "create" })}
