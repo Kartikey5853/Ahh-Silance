@@ -271,67 +271,6 @@ export const AnswerKeyFullscreenWorkspace: React.FC<AnswerKeyFullscreenWorkspace
             </button>
           </div>
 
-          <label
-            style={{
-              background: "#ffffff",
-              border: "1px solid #cbd5e1",
-              color: "#334155",
-              padding: "0.42rem 0.8rem",
-              borderRadius: "8px",
-              fontSize: "0.78rem",
-              fontWeight: 700,
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.35rem"
-            }}
-          >
-            <UploadCloud size={14} /> Upload Key (.txt/.md)
-            <input type="file" accept=".txt,.md" onChange={handleUploadManualFile} style={{ display: "none" }} />
-          </label>
-
-          <button
-            type="button"
-            onClick={onStartBackgroundGeneration}
-            disabled={bgJobStatus === "running"}
-            style={{
-              background: bgJobStatus === "running" ? "#eff6ff" : "#0f172a",
-              border: bgJobStatus === "running" ? "1px solid #93c5fd" : "none",
-              color: bgJobStatus === "running" ? "#1d4ed8" : "#ffffff",
-              padding: "0.44rem 0.9rem",
-              borderRadius: "8px",
-              fontSize: "0.78rem",
-              fontWeight: 700,
-              cursor: bgJobStatus === "running" ? "default" : "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.35rem"
-            }}
-          >
-            {bgJobStatus === "running" ? <RefreshCw size={14} className="spin" /> : <Sparkles size={14} />}
-            {bgJobStatus === "running" ? "Generating in Background..." : "Generate with Gemini"}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleDownloadKey}
-            style={{
-              background: "#ffffff",
-              border: "1px solid #cbd5e1",
-              color: "#334155",
-              padding: "0.42rem 0.75rem",
-              borderRadius: "8px",
-              fontSize: "0.78rem",
-              fontWeight: 600,
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.3rem"
-            }}
-          >
-            <Download size={14} /> Export
-          </button>
-
           <button
             type="button"
             onClick={() => onSaveAnswerKey(false)}
@@ -361,14 +300,19 @@ export const AnswerKeyFullscreenWorkspace: React.FC<AnswerKeyFullscreenWorkspace
               background: "#2563eb",
               border: "none",
               color: "#ffffff",
-              padding: "0.46rem 1.05rem",
+              padding: "0.46rem 1.15rem",
               borderRadius: "8px",
-              fontSize: "0.8rem",
+              fontSize: "0.82rem",
               fontWeight: 800,
-              cursor: "pointer"
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.4rem",
+              boxShadow: "0 2px 6px rgba(37,99,235,0.25)"
             }}
           >
-            Approve & Use for Grading
+            <CheckCircle2 size={15} />
+            <span>Approve for Grading →</span>
           </button>
         </div>
       </div>
@@ -421,6 +365,93 @@ export const AnswerKeyFullscreenWorkspace: React.FC<AnswerKeyFullscreenWorkspace
             gap: "1rem"
           }}
         >
+          {/* Unified Answer Key Tools Box */}
+          <div
+            style={{
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              borderRadius: "10px",
+              padding: "0.85rem 1rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: "0.75rem"
+            }}
+          >
+            <div>
+              <div style={{ fontSize: "0.82rem", fontWeight: 800, color: "#0f172a", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                <Sparkles size={14} style={{ color: "#2563eb" }} />
+                Answer Key Tools &amp; Actions
+              </div>
+              <div style={{ fontSize: "0.74rem", color: "#64748b", marginTop: "0.15rem" }}>
+                Generate rubrics with Gemini AI, upload faculty answer notes, or export the compiled key.
+              </div>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={onStartBackgroundGeneration}
+                disabled={bgJobStatus === "running"}
+                style={{
+                  background: bgJobStatus === "running" ? "#eff6ff" : "#0f172a",
+                  border: bgJobStatus === "running" ? "1px solid #93c5fd" : "none",
+                  color: bgJobStatus === "running" ? "#1d4ed8" : "#ffffff",
+                  padding: "0.4rem 0.8rem",
+                  borderRadius: "7px",
+                  fontSize: "0.77rem",
+                  fontWeight: 700,
+                  cursor: bgJobStatus === "running" ? "default" : "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.35rem"
+                }}
+              >
+                {bgJobStatus === "running" ? <RefreshCw size={13} className="spin" /> : <Sparkles size={13} />}
+                {bgJobStatus === "running" ? "Generating..." : "Generate with Gemini"}
+              </button>
+
+              <label
+                style={{
+                  background: "#ffffff",
+                  border: "1px solid #cbd5e1",
+                  color: "#334155",
+                  padding: "0.4rem 0.75rem",
+                  borderRadius: "7px",
+                  fontSize: "0.77rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.35rem"
+                }}
+              >
+                <UploadCloud size={13} /> Upload Key (.txt/.md)
+                <input type="file" accept=".txt,.md" onChange={handleUploadManualFile} style={{ display: "none" }} />
+              </label>
+
+              <button
+                type="button"
+                onClick={handleDownloadKey}
+                style={{
+                  background: "#ffffff",
+                  border: "1px solid #cbd5e1",
+                  color: "#334155",
+                  padding: "0.4rem 0.7rem",
+                  borderRadius: "7px",
+                  fontSize: "0.77rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.3rem"
+                }}
+              >
+                <Download size={13} /> Export Key
+              </button>
+            </div>
+          </div>
           {editorMode === "manual" ? (
             <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: "0.75rem" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>

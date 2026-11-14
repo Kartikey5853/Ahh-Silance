@@ -4,6 +4,7 @@ import { resolveApiUrl } from "../api/client";
 import { AnswerKeyFullscreenWorkspace } from "../components/AnswerKeyFullscreenWorkspace";
 import { DoubleTapMarkdownEditor } from "../components/DoubleTapMarkdownEditor";
 import { MarkdownQuestionView } from "../components/MarkdownQuestionView";
+import { StudentProfileModal } from "../components/StudentProfileModal";
 import { useAnswerKeyStudio } from "../hooks/useAnswerKeyStudio";
 import type { Exam, Student, AcademicEvaluation, Subject, ClassItem, AnswerRegionItem } from "../types/academic";
 import {
@@ -30,7 +31,8 @@ import {
   Layers,
   RefreshCw,
   ScanLine,
-  Sparkles
+  Sparkles,
+  Users
 } from "lucide-react";
 
 interface ScanningJobState {
@@ -72,6 +74,7 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
 
   // Active evaluation report (White Theme)
   const [activeScorecard, setActiveScorecard] = useState<AcademicEvaluation | null>(null);
+  const [profileModalStudent, setProfileModalStudent] = useState<Student | null>(null);
   const [hideAnswerSheet, setHideAnswerSheet] = useState(false);
   const [sheetZoom, setSheetZoom] = useState(100);
   const [magicInk, setMagicInk] = useState(true);
@@ -935,6 +938,36 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={() => {
+                const matched = students.find((s) => s.id === activeScorecard.student_id);
+                setProfileModalStudent(matched || ({
+                  id: activeScorecard.student_id,
+                  name: activeScorecard.student_name,
+                  roll_number: activeScorecard.roll_number,
+                  subject_id: activeExam?.subject_id || "",
+                  section: "A"
+                } as Student));
+              }}
+              style={{
+                background: "#f0fdf4",
+                border: "1px solid #bbf7d0",
+                color: "#166534",
+                padding: "0.5rem 0.95rem",
+                borderRadius: "8px",
+                fontSize: "0.82rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.4rem"
+              }}
+            >
+              <Users size={14} />
+              <span>Student &amp; Parent Profile</span>
+            </button>
+
             {isSavingInline && (
               <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#2563eb", background: "#eff6ff", padding: "0.3rem 0.65rem", borderRadius: "8px" }}>
                 Saving edits...
@@ -2729,6 +2762,13 @@ export const StrictEvaluationPage: React.FC<StrictEvaluationProps> = ({
             </table>
           </div>
         </div>
+      )}
+
+      {profileModalStudent && (
+        <StudentProfileModal
+          student={profileModalStudent}
+          onClose={() => setProfileModalStudent(null)}
+        />
       )}
     </div>
   );

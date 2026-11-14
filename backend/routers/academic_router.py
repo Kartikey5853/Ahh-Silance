@@ -291,6 +291,42 @@ def delete_class(class_id: str):
     return {"status": "success" if success else "failed"}
 
 
+@router.get("/classes/{class_id}/students")
+def list_class_students(class_id: str):
+    """Lists all students enrolled in a specific class."""
+    return db.list_students(class_id=class_id)
+
+
+@router.post("/classes/{class_id}/students")
+def add_student_to_class(class_id: str, req: StudentCreateRequest):
+    """Adds a new student directly to a class."""
+    c = db.get_class(class_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Class not found")
+    subjs = db.list_subjects(class_id=class_id)
+    subj_id = subjs[0]["id"] if subjs else f"subj-{class_id}"
+    student = db.add_student(
+        subject_id=subj_id,
+        name=req.name,
+        roll_number=req.roll_number,
+        email=req.email or "",
+        section=req.section or "A",
+        class_id=class_id,
+        phone=req.phone or "",
+        parent_name=req.parent_name or "",
+        parent_phone=req.parent_phone or "",
+        dob=req.dob or "",
+        blood_group=req.blood_group or "",
+        attendance_percentage=float(req.attendance_percentage or 85.0),
+        cgpa_or_percentage=float(req.cgpa_or_percentage or 0.0),
+        admission_year=req.admission_year or "2024",
+        status=req.status or "Active",
+        notes=req.notes or "",
+        semester_records=req.semester_records or []
+    )
+    return student
+
+
 # 3. Subjects
 @router.get("/subjects")
 def list_subjects(institution_id: Optional[str] = Query(None), class_id: Optional[str] = Query(None)):

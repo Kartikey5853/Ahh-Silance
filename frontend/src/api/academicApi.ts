@@ -76,6 +76,16 @@ export const academicApi = {
     await apiClient.delete(`/academic/classes/${classId}`);
   },
 
+  listClassStudents: async (classId: string): Promise<Student[]> => {
+    const res = await apiClient.get<Student[]>(`/academic/classes/${classId}/students`);
+    return res.data;
+  },
+
+  addStudentToClass: async (classId: string, data: any): Promise<Student> => {
+    const res = await apiClient.post<Student>(`/academic/classes/${classId}/students`, data);
+    return res.data;
+  },
+
   // Subjects
   listSubjects: async (institutionId?: string, classId?: string): Promise<Subject[]> => {
     const params: any = {};
